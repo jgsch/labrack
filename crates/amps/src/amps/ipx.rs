@@ -29,12 +29,16 @@ use self::protocol::{Address, Ctrl, DISCOVERY_PORT, Env, Frame, FrameParser, Mai
 use self::structs::{
     DeviceState, StoredPreset, SystemAttributes, cstr, parse_preset_names, parse_valid_presets,
 };
-use crate::amp::Amp;
+use crate::amp::{Amp, check_preset_name};
 use crate::error::{Error, Result};
 use crate::model::*;
 
 /// Reads of a written value before giving up (each waits the client timeout).
 const READ_BACK_TRIES: u32 = 3;
+
+/// Reads of a stored preset after SETPRESET, and the wait before each.
+const STORE_CHECKS: u32 = 8;
+const STORE_CHECK_EVERY: Duration = Duration::from_millis(250);
 
 /// The amp counts presets 0-49 on the wire (slot 50 gets no reply); like the vendor app, the API shows
 /// index + 1 (BEH-6).
@@ -268,6 +272,31 @@ impl Amp for IpxAmp {
     async fn recall_preset(&self, slot: u32) -> Result<()> {
         let index = wire_index(slot)?;
         self.client.send_ctrl(Ctrl::RECALLPRESET, &index.to_le_bytes()).await
+    }
+
+    async fn store_preset(&self, slot: u32, name: &str) -> Result<()> {
+        let index = wire_index(slot)?;
+        // char[16] without a guaranteed terminator on the wire: keep one byte for the NUL
+        let name = check_preset_name(name, 15)?;
+        let read_only = self.sync().await?.device.read_only_preset_range;
+        if slot <= read_only {
+            return Err(Error::Denied(format!("presets 1 to {read_only} are protected")));
+        }
+        let mut payload = name.as_bytes().to_vec();
+        payload.resize(16, 0);
+        payload.extend(index.to_le_bytes());
+        // verified on an IPX 1200: SETPRESET with this payload stores the current settings, no reply
+        self.client.send_ctrl(Ctrl::SETPRESET, &payload).await?;
+        for _ in 0..STORE_CHECKS {
+            tokio::time::sleep(STORE_CHECK_EVERY).await;
+            if let Ok(p) = self.stored_preset(slot).await
+                && p.index == index
+                && p.name == name
+            {
+                return Ok(());
+            }
+        }
+        Err(Error::NotConfirmed(format!("preset {slot}: the amp did not store {name:?}")))
     }
 
     fn meters(&self) -> Meters {

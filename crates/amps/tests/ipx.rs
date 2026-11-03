@@ -10,7 +10,7 @@ use labgruppen::amps::ipx::protocol::{
     Address, Ctrl, Env, FrameParser, Main, build_frame, ctrl_sub, xor_password,
 };
 use labgruppen::amps::ipx::structs::{
-    DeviceState, Meters, StoredPreset, SystemAttributes, audio_bytes, audio_dword, parse_preset_names,
+    DeviceState, Meters, StoredPreset, SystemAttributes, audio_bytes, audio_dword, cstr, parse_preset_names,
     parse_valid_presets,
 };
 use labgruppen::amps::ipx::{Discovered, IpxAmp};
@@ -316,6 +316,12 @@ struct State {
     silent: bool,
     /// Do not answer the next GETPRM of these addresses (once per entry).
     drop_reads: Vec<Address>,
+    /// SETPRESET payloads as received.
+    store_payloads: Vec<Vec<u8>>,
+    /// Presets stored by SETPRESET: wire index -> name.
+    stored: std::collections::HashMap<u32, String>,
+    /// Receive SETPRESET but do not store anything.
+    ignore_store: bool,
 }
 
 struct FakeAmp {
@@ -434,7 +440,23 @@ fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> V
                     (0..50u32).flat_map(|i| u32::from(matches!(i, 1 | 2 | 3 | 5)).to_le_bytes()).collect();
                 reply(Main::SYSCTRL, &valid)
             }
-            Ctrl::GETPRESET => reply(Main::SYSCTRL, &fixture("getpreset_1.bin")),
+            Ctrl::GETPRESET => {
+                let mut p = fixture("getpreset_1.bin");
+                let index = u32::from_le_bytes(fr.payload[..4].try_into().unwrap());
+                if let Some(name) = st.stored.get(&index) {
+                    p[4..20].copy_from_slice(&padded(name, 16));
+                    p[20..24].copy_from_slice(&index.to_le_bytes());
+                }
+                reply(Main::SYSCTRL, &p)
+            }
+            Ctrl::SETPRESET => {
+                st.store_payloads.push(fr.payload.clone());
+                if !st.ignore_store && fr.payload.len() == 20 {
+                    let index = u32::from_le_bytes(fr.payload[16..20].try_into().unwrap());
+                    st.stored.insert(index, cstr(&fr.payload[..16]));
+                }
+                vec![]
+            }
             Ctrl::RECALLPRESET => {
                 st.recalled.push(u32::from_le_bytes(fr.payload[..4].try_into().unwrap()));
                 vec![]
@@ -591,6 +613,47 @@ async fn status_presets_and_recall() {
     assert_eq!(amp.device_name().await.unwrap(), "Stage Left");
     assert_eq!(amp.stored_preset(2).await.unwrap().name, "base");
     assert!(matches!(amp.stored_preset(0).await, Err(Error::InvalidValue(_))));
+}
+
+/// BEH-37. SETPRESET payload (verified on an IPX 1200): char[16] name + u32 wire index, no reply.
+#[tokio::test]
+async fn store_preset() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+
+    amp.store_preset(50, "Stage").await.unwrap();
+    let mut want = padded("Stage", 16);
+    want.extend(49u32.to_le_bytes());
+    assert_eq!(fake.state().store_payloads, [want]);
+    let p = amp.stored_preset(50).await.unwrap();
+    assert_eq!((p.name.as_str(), p.index), ("Stage", 49));
+    assert_eq!(amp.stored_preset(2).await.unwrap().name, "base");
+
+    amp.store_preset(5, "fifteen chars!!").await.unwrap();
+    assert_eq!(fake.state().store_payloads.len(), 2);
+
+    // invalid slot or name: nothing is sent
+    for slot in [0, 51] {
+        assert!(matches!(amp.store_preset(slot, "x").await, Err(Error::InvalidValue(_))), "slot {slot}");
+    }
+    for name in ["", "   ", "Empty", "empty", "sixteen chars!!!", "tab\there", "ünï"] {
+        assert!(matches!(amp.store_preset(6, name).await, Err(Error::InvalidValue(_))), "{name:?}");
+    }
+    assert_eq!(fake.state().store_payloads.len(), 2);
+
+    // slots up to the read-only range (DEVCFG field 6) are refused
+    let o = DeviceState::parse(&fake.state().sync).unwrap().device.read_only_preset_range;
+    let range_at = 0x62C + 6 * 4;
+    assert_eq!(o, 1, "fixture is from an amp with range 1");
+    assert!(matches!(amp.store_preset(1, "x").await, Err(Error::Denied(_))));
+    fake.state().sync[range_at..range_at + 4].copy_from_slice(&3u32.to_le_bytes());
+    assert!(matches!(amp.store_preset(3, "x").await, Err(Error::Denied(_))));
+    amp.store_preset(4, "Free").await.unwrap();
+    assert_eq!(fake.state().store_payloads.len(), 3);
+
+    // the amp did not take it
+    fake.state().ignore_store = true;
+    assert!(matches!(amp.store_preset(10, "Lost").await, Err(Error::NotConfirmed(_))));
 }
 
 async fn next_event<T>(

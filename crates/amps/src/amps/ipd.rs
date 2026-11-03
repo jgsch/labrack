@@ -21,7 +21,7 @@ use tokio::time::timeout;
 use self::client::{Client, ClientEvent, Options, RawMeters};
 use self::params::{Slot, from_wire, slot, to_wire};
 use self::protocol::*;
-use crate::amp::Amp;
+use crate::amp::{Amp, check_preset_name};
 use crate::error::{Error, Result};
 use crate::model::*;
 
@@ -29,6 +29,13 @@ pub use self::protocol::Announcement;
 
 /// The amp has 100 slots; the app uses the first 50 (BEH-6).
 const PRESET_SLOTS: RangeInclusive<u32> = 1..=50;
+
+/// Reads of the saved name after the save command, and the wait between them.
+const STORE_CHECKS: u32 = 10;
+const STORE_CHECK_EVERY: Duration = Duration::from_millis(500);
+
+/// CURRENT_USER value of the Developer level; higher values have fewer rights.
+const USER_DEVELOPER: i64 = 2;
 
 const fn global(member: u8) -> Key {
     Key::new(S_GLOBAL, member, 0, 0)
@@ -304,6 +311,38 @@ impl Amp for IpdAmp {
         }
         self.client.set_raw(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(index as i64), None).await?;
         self.client.command(CMD_LOAD_PRESET).await
+    }
+
+    async fn store_preset(&self, slot: u32, name: &str) -> Result<()> {
+        if !PRESET_SLOTS.contains(&slot) {
+            return Err(Error::InvalidValue(format!("preset {slot} (valid: 1..=50)")));
+        }
+        let name = check_preset_name(name, 16)?;
+        if !self.access_rights().await?.save_preset {
+            return Err(Error::Denied("the current user level may not save presets".into()));
+        }
+        // As the vendor app: slots 1..=range are read-only below Developer level. Without the
+        // setting (it is not always answered) assume no protected range.
+        let startup = self.client.get_raw(global(M_STARTUP_PRESET), None).await.ok().and_then(|r| r.int());
+        let read_only = (startup.unwrap_or(0) as u32 & 0xFF00) >> 8;
+        let level = self.client.get_raw(global(M_CURRENT_USER), None).await?.int().unwrap_or(-1);
+        if slot <= read_only && level > USER_DEVELOPER {
+            return Err(Error::Denied(format!("presets 1 to {read_only} are protected")));
+        }
+        // The amp saves the current settings to the current preset number, under the current name.
+        self.client.set_raw(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(slot as i64), None).await?;
+        self.client.set_raw(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text(name.clone()), None).await?;
+        self.client.command(CMD_SAVE_PRESET).await?;
+        let key = Key::new(S_PRESET, M_SHORT_NAME, slot as u8, 0);
+        for _ in 0..STORE_CHECKS {
+            if let Ok(Raw::Text(t)) = self.client.get_raw(key, None).await
+                && t.trim() == name
+            {
+                return Ok(());
+            }
+            tokio::time::sleep(STORE_CHECK_EVERY).await;
+        }
+        Err(Error::NotConfirmed(format!("preset {slot}: the amp did not store {name:?}")))
     }
 
     fn meters(&self) -> Meters {

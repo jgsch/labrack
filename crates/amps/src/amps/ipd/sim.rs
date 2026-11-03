@@ -224,6 +224,19 @@ impl SimAmp {
                     .unwrap_or(Raw::Text(String::new()));
                 self.values.insert(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), name);
             }
+            CMD_SAVE_PRESET => {
+                let n = self
+                    .values
+                    .get(&Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0))
+                    .and_then(Raw::int)
+                    .unwrap_or(0);
+                let name = self
+                    .values
+                    .get(&Key::new(S_PRESET, M_SHORT_NAME, 0, 0))
+                    .cloned()
+                    .unwrap_or(Raw::Text(String::new()));
+                self.values.insert(Key::new(S_PRESET, M_SHORT_NAME, n as u8, 0), name);
+            }
             CMD_GOTO_STANDBY => {
                 self.values.insert(hw, Raw::Int(status | 4));
             }

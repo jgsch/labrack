@@ -195,7 +195,7 @@ Carried in every data reply as fragments 01, 02, 07, 08, 0B, 0C (see Opcodes); s
 
 ## Presets and control commands
 
-Slots 1..100, names via GET (9, 16, n). Load: SET (9, 18, 0, 0) = n, then command 1. Save: command 2.
+Slots 1..100, names via GET (9, 16, n). Load: SET (9, 18, 0, 0) = n, then command 1. Save (vendor app, decompiled; not tried on hardware): SET (9, 18, 0, 0) = target slot, SET (9, 16, 0, 0) = the name, command 2 (the app sets it to 1, waits 0.5 s, sets it to 0), then reads (9, 16, slot) until it shows the name, resending the command every few tries. The app refuses to save when ACCESS_RIGHTS lacks the save bit, and to slots 1..range below Developer level, with range = (STARTUP_PRESET (13, 43) & 0xFF00) >> 8.
 Commands: SET Key(11, 26, 0, cmd) = 1:
 
 | cmd | Action | cmd | Action |

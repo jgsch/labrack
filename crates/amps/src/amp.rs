@@ -9,6 +9,23 @@ use tokio::sync::broadcast;
 use crate::error::{Error, Result};
 use crate::model::*;
 
+/// Check a preset name for both families (the vendor apps refuse "Empty" and odd characters) and
+/// return it trimmed. `max` is the most characters the amp can hold.
+pub(crate) fn check_preset_name(name: &str, max: usize) -> Result<String> {
+    let name = name.trim();
+    let bad = |why: &str| Error::InvalidValue(format!("preset name {name:?}: {why}"));
+    if name.is_empty() || name.eq_ignore_ascii_case("empty") {
+        return Err(bad("must not be empty or \"Empty\""));
+    }
+    if name.len() > max {
+        return Err(bad(&format!("longer than {max} characters")));
+    }
+    if !name.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+        return Err(bad("only printable ASCII characters"));
+    }
+    Ok(name.to_string())
+}
+
 /// A connected amplifier.
 ///
 /// Drivers translate the common [`Param`] vocabulary to their wire protocol. Anything a driver does
@@ -49,6 +66,14 @@ pub trait Amp: Send + Sync {
     /// Load a stored preset. This changes the audio settings, including mutes.
     /// Slots outside [`Amp::preset_slots`] are rejected with [`Error::InvalidValue`].
     async fn recall_preset(&self, index: u32) -> Result<()>;
+
+    /// Store the amp's current settings in `slot` under `name`, replacing what is there. Returns once
+    /// the amp lists the new name.
+    ///
+    /// Errors: [`Error::InvalidValue`] for a slot outside [`Amp::preset_slots`] or a name the amp
+    /// cannot hold, [`Error::Denied`] for a protected slot or missing access right,
+    /// [`Error::NotConfirmed`] when the amp does not take it.
+    async fn store_preset(&self, slot: u32, name: &str) -> Result<()>;
 
     /// Latest meter readings.
     fn meters(&self) -> Meters;

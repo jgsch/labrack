@@ -50,6 +50,9 @@ impl Amp for Recorder {
     async fn recall_preset(&self, _: u32) -> Result<()> {
         Ok(())
     }
+    async fn store_preset(&self, _: u32, _: &str) -> Result<()> {
+        Ok(())
+    }
     fn meters(&self) -> Meters {
         Meters::default()
     }

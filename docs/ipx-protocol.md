@@ -182,18 +182,20 @@ TEMPERATURE (env 22) is pushed as one i32; ALL_TEMPERATURES (env 28) returns an 
 |---|---|---|---|---|
 | 1 | HEARTBEAT | none | none awaited | sent every 2 s by the client |
 | 3 | GETPRESET | u32 index | sub echoed; u32 ?, char[16] name @4, u32 index @0x14, audio config @0x48; an empty slot returns 0xFF bytes; index 50 gets no reply | verified |
-| 4 | RECALLPRESET | u32 index (wire) | none | untested (changes live audio incl. mutes) |
+| 2 | SETPRESET | char[16] name (NUL padded) + u32 index (wire), 20 bytes | none | verified: stores the current settings in the slot; the amp then reports that slot as its current preset (status shows its name and index) |
+| 4 | RECALLPRESET | u32 index (wire) | none | verified (index 1 loads "base"; changes live audio incl. mutes) |
 | 18 | GETALLPRESETNAME | none | N x char[16] (N = 50 on the test amp; the array index is the wire preset index 0-49, the other commands use the same index) | verified |
 | 19 | GETVALIDPRESETS | none | N x u32, non-zero = slot used | verified |
 
 Preset slots are indexed from the same list (index 1 = "base" on the test amp).
-Defined in the app but not used here: 2 SETPRESET, 5 DELETEPRESET, 6 QUERYSTATUS, 7 DEVICE_REBOOT, 8 SETDEV_FACTORYINFO, 9-12 UPGRADE_*, 13 USER_LOGIN, 14 DEL_ALLUSERPRESET, 15 DEL_ALLFACTPRESET, 16 ACK, 17 FPLEDFLASH, 20 STOREONEPRESET_PKG, 21 PC_STORE_PRESET, 22 PC_RECALL_PRESET, 23/24 SET/GET_HARDWARE_CFG, 25 FORCE_FAN_ON, 26-28 INSTALL/GET/DEL_KEY, 29 PC_RECALL_PRESET_VLOCK, 30-33 FIR data, 34 GET_LOG.
+Defined in the app but not used here: 5 DELETEPRESET (tried on a stored slot with a u32 index and with the 20-byte store payload: no reply, preset stays; the vendor app only offers 14 DEL_ALLUSERPRESET, which erases everything and was not tried), 6 QUERYSTATUS, 7 DEVICE_REBOOT, 8 SETDEV_FACTORYINFO, 9-12 UPGRADE_*, 13 USER_LOGIN, 14 DEL_ALLUSERPRESET, 15 DEL_ALLFACTPRESET, 16 ACK, 17 FPLEDFLASH, 20 STOREONEPRESET_PKG, 21 PC_STORE_PRESET, 22 PC_RECALL_PRESET, 23/24 SET/GET_HARDWARE_CFG, 25 FORCE_FAN_ON, 26-28 INSTALL/GET/DEL_KEY, 29 PC_RECALL_PRESET_VLOCK, 30-33 FIR data, 34 GET_LOG.
 The firmware upgrade and key commands should not be sent without understanding them.
 
 ## Session behaviour and quirks
 
 - No handshake. After TCP connect the client may read an unsolicited frame; the app first requests DEV_PRM_SYNC.
 - A busy amp accepts the connection and closes it immediately (EOF on first read, within about 0.5 s).
+- A new connection opened within roughly 20 s of closing the previous one often gets no reply to its first GETPRM (timeout), even though nothing else is connected; the next attempt after a pause works. Seen when running one CLI command after another.
 - SETPRM is never acknowledged; read back with GETPRM to confirm.
 - Replies are matched by (main, sub). Meters and temperature arrive interleaved with replies and must be filtered out.
 - Changes made elsewhere (front panel) arrive as GETPRM or DEVPRMCHAGE frames carrying the address and the new value.
@@ -211,8 +213,8 @@ The firmware upgrade and key commands should not be sent without understanding t
 | framing, checksum, trailer; GETPRM/SETPRM on all block fields (re-verified with the Rust client: 288-parameter bulk dump, writes of float/int/enum/bool fields, full restore) | UDP discovery payload (broadcasts were never seen on the test network) |
 | DEV_PRM_SYNC layout, password XOR decoding | meter indices 6-11 |
 | single-client behaviour, no login needed | DELAY unit enum, ALL_TEMPERATURES layout |
-| meters 0-5, temperature push | RECALLPRESET, USERPASSWORD item/field usage, SWITCH_USER |
-| GETPRESET, GETALLPRESETNAME, GETVALIDPRESETS | DEVPRMCHAGE behaviour, all other SYSCTRL commands |
+| meters 0-5, temperature push | USERPASSWORD item/field usage, SWITCH_USER |
+| GETPRESET, GETALLPRESETNAME, GETVALIDPRESETS, SETPRESET (store), RECALLPRESET | DEVPRMCHAGE behaviour, all other SYSCTRL commands |
 
 ## Security notes
 

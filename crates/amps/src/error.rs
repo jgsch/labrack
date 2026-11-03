@@ -19,6 +19,9 @@ pub enum Error {
     Unsupported(String),
     #[error("invalid value: {0}")]
     InvalidValue(String),
+    /// The amp's access rights or a read-only area do not allow the action.
+    #[error("not allowed: {0}")]
+    Denied(String),
     /// A write was not echoed / read back with the value that was sent.
     #[error("write not confirmed: {0}")]
     NotConfirmed(String),

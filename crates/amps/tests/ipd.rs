@@ -208,6 +208,49 @@ async fn client_against_simulator_mk1() {
     exercise(false).await;
 }
 
+/// BEH-37: store the current settings to a slot under a name.
+#[tokio::test(flavor = "multi_thread")]
+async fn store_preset_on_simulator() {
+    let (_srv, amp) = connect(true).await;
+    let names = |p: Vec<labgruppen::PresetInfo>| p.into_iter().map(|p| (p.index, p.name)).collect::<Vec<_>>();
+
+    amp.store_preset(7, "Stage").await.unwrap();
+    let got = names(amp.presets().await.unwrap());
+    assert_eq!(got, [(1, "Default".into()), (2, "Sub".into()), (3, "Top".into()), (7, "Stage".into())]);
+
+    // overwrite
+    amp.store_preset(7, "Stage 2").await.unwrap();
+    assert_eq!(names(amp.presets().await.unwrap())[3], (7, "Stage 2".into()));
+
+    // bad slot or name
+    for slot in [0, 51] {
+        assert!(matches!(amp.store_preset(slot, "x").await, Err(labgruppen::Error::InvalidValue(_))));
+    }
+    for name in ["", "   ", "Empty", "this name is too long", "ünï"] {
+        assert!(
+            matches!(amp.store_preset(8, name).await, Err(labgruppen::Error::InvalidValue(_))),
+            "{name:?}"
+        );
+    }
+
+    // BEH-14: no save-preset right
+    let rights = Key::new(S_GLOBAL, M_ACCESS_RIGHTS, 0, 0);
+    amp.client().set_raw(rights, Raw::Int(0x4), None).await.unwrap();
+    assert!(matches!(amp.store_preset(8, "x").await, Err(labgruppen::Error::Denied(_))));
+    amp.client().set_raw(rights, Raw::Int(0xFFFF_FFFF), None).await.unwrap();
+
+    // slots 1..=range are read-only below Developer level (the sim is at User level)
+    let startup = Key::new(S_GLOBAL, M_STARTUP_PRESET, 0, 0);
+    amp.client().set_raw(startup, Raw::Int(3 << 8), None).await.unwrap();
+    assert!(matches!(amp.store_preset(3, "x").await, Err(labgruppen::Error::Denied(_))));
+    amp.store_preset(4, "Free").await.unwrap();
+
+    let got = names(amp.presets().await.unwrap());
+    assert_eq!(got.iter().map(|p| p.0).collect::<Vec<_>>(), [1, 2, 3, 4, 7]);
+    assert_eq!(got[2].1, "Top");
+    amp.close().await;
+}
+
 /// BEH-14: the access rights the UI needs, decoded from the amp's bit mask.
 #[tokio::test(flavor = "multi_thread")]
 async fn access_rights_are_decoded() {

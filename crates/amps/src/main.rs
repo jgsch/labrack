@@ -72,6 +72,8 @@ enum Cmd {
     Presets,
     /// Load a stored preset (changes the audio, including mutes)
     Recall { index: u32 },
+    /// Store the current settings in a preset slot, replacing what is there
+    Store { index: u32, name: String },
     /// IPD-only actions
     #[cfg(feature = "ipd")]
     Ipd {
@@ -322,6 +324,10 @@ async fn amp_command(cli: &Cli, amp: &dyn Amp) -> Res<()> {
         Cmd::Recall { index } => {
             amp.recall_preset(*index).await?;
             println!("recalled preset {index}");
+        }
+        Cmd::Store { index, name } => {
+            amp.store_preset(*index, name).await?;
+            println!("stored preset {index} '{name}'");
         }
         #[cfg(feature = "ipd")]
         Cmd::Ipd { cmd } => ipd_command(amp, cmd).await?,

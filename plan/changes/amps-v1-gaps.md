@@ -26,7 +26,7 @@ No spec change; this change makes the library able to satisfy:
 - [x] Failing test: `check` with NaN / ±inf on Float and Int, with and without a range; fix
 - [x] Preset numbering: `Amp::preset_slots()` (1–50 on both); `presets()` lists only those,
       `recall_preset` rejects other slots
-- [ ] `store_preset(index, name)` on the `Amp` trait; implement for IPD and IPX; simulator and
+- [x] `store_preset(slot, name)` on the `Amp` trait; implement for IPD and IPX; simulator and
       fake IPX support it
 - [x] `IpdAmp::access_rights()` returning the decoded `M_ACCESS_RIGHTS` bits
 - [ ] Faster IPD `presets()` for 50 slots (currently up to 60 s for 100)
@@ -42,5 +42,7 @@ No spec change; this change makes the library able to satisfy:
   app (decompiled: combo box item i is labelled "Preset" + (i + 1), read-only when item index <
   ReadOnlyPresetRange) shows wire 0–49 as presets 1–50, so "base" is slot 2 and slot 1 is the
   read-only one on this amp (DEVCFG read-only range 1).
-- The IPX store command (SETPRESET 2 or PC_STORE_PRESET 21) is unused and untested; capture the
-  vendor app or test on hardware with outputs muted.
+- IPX store: SETPRESET (cmd 2), payload char[16] name + u32 wire index, verified on the IPX 1200
+  (slot 50). The amp makes the stored slot its current preset. DELETEPRESET did not remove it, so a
+  preset named "zz-test" is left in slot 50 of the test amp.
+- IPD store follows the decompiled vendor app and is only tested against the simulator.
