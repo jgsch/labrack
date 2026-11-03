@@ -1,0 +1,635 @@
+{
+  "format": 1,
+  "pages": [
+    {
+      "id": "25dee102-4d62-41e2-bf02-8b7de428e6a7",
+      "file": "boards/01-a-rack-amplifiers.html",
+      "resources": [
+        {
+          "id": "60f3f6bd-d3f4-4229-90e7-becd5fecc680",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "8c365c6a-e5d8-48d5-ba12-ab9ca85ea288",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "9ddf5ef2-526b-49bf-ac51-dbb6e4575cb7",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "c3627628-8367-4410-ab9d-33fad921f95b",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "1f2831b2-c885-4d33-b5a8-955a30cce187",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "5019500c-0dde-46d6-8df3-d55f40a6c577",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "2bce3b10-9435-5398-a19d-8211a4891b64",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "6af30d05-9209-538c-b0df-cfb1ef38ccbc",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "9e0d4b37-dd19-545c-b790-891c8791fd32",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "17cd3d0b-174c-4c45-8083-a578130ee976",
+      "file": "boards/02-mix-eq-mixer-tab.html",
+      "resources": [
+        {
+          "id": "f20b3ac5-10f6-49bf-b4cc-8fccff853038",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "040d38f2-2dfb-44a0-8551-67b0a097c843",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "f35b750c-09bb-47f0-a274-70879a04faa2",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "f9d2b073-e49b-460f-9945-ad97a0d0dabd",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "35a80e22-74bb-4136-8315-5c54ba438bfa",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "5ee8ce29-b069-4baf-8df6-71a175aacfb7",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "c8995492-33af-58c7-a9a4-3947717ae42b",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "04ed2dd5-640a-508d-83ff-8344abc5ff08",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "054e1081-1c24-54ad-a0c1-c0c0c80bf466",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "27dc8478-4b23-43b6-83cd-9bb196025dea",
+      "file": "boards/03-mix-eq-levels-tab.html",
+      "resources": [
+        {
+          "id": "13cb8396-cfbe-4393-8138-766c7f78dfbc",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "86b9bc25-896f-4972-bbfc-72c84fe0bde4",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "a1618bed-8049-477a-ab57-5c50feeb879a",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "fbfc65a3-4c89-413b-af07-ac1a5d4823ed",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "3baef65c-1972-4a18-8bf9-8f7429c43a9a",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "d68a96d4-996b-4193-b98a-d8b5b3c57cc7",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "c2e119fd-0223-55b1-8179-e262f30fea4f",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "0c1237ff-53da-5f20-b659-73d0dc30f75e",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "dcec8530-4af8-5dde-9523-843bd60d9b9b",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "c9851d8c-4367-4749-8fc6-3370b962c143",
+      "file": "boards/04-mix-eq-inputs-eq-tab.html",
+      "resources": [
+        {
+          "id": "2b550e64-d522-47be-8b94-6bac715647e3",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "b8602029-5c02-4c79-ba8c-454dba867f8d",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "5e77394a-c4d3-49f4-bdef-b31749ffa9ef",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "a9b704cb-f1d5-4002-9e43-ce37f4d784c5",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "dcd1bbbc-298d-4866-9a37-0ee0ac54f5c0",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "d06daf5e-721e-4e57-abfc-9636405555eb",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "75cd228f-6ca5-502d-8250-2b82ea83efb9",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "412d65b2-c37c-56d7-ab08-1aef213be336",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "118c8be8-9e03-5009-aca5-89f890057a6e",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "11fa79a9-69d9-493c-a747-0b146990829c",
+      "file": "boards/05-mix-eq-outputs-eq-filters-delay-tab.html",
+      "resources": [
+        {
+          "id": "7bf403e2-0ea6-4ddb-b7e5-053a096f985d",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "5e561f0e-015a-40bb-bf6c-ac4c58e3bce2",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "46fc808c-1a7a-42f5-9f53-1fbd0526905b",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "d26075d2-6e69-4cc3-8899-72f350d67a7c",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "f7fb08c4-a095-429e-a69c-2eed3976fd9e",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "22f12627-4a69-4c62-9bc4-9159d7718c31",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "1b6b6224-ec03-5862-84e0-08ac68e97641",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "ef568d20-174c-58ae-9019-ec741fc26bc2",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "47712569-80f8-5bcf-b738-35b05b017300",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "afe72955-6d94-42ff-a040-2b683f32036a",
+      "file": "boards/06-search-add-amplifiers.html",
+      "resources": [
+        {
+          "id": "b2a9dd54-f255-4505-b9c5-534fb9d2ac7e",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "f13388ed-6666-436a-b816-bcc1f30013a9",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "eadf3cc5-2696-4d42-8b8d-fc877162c8a9",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "2dbd5a96-5597-4f59-8e1b-2a74837e93e6",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "3b0c5b0a-c201-438d-933b-5e8c7b6646d3",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "ce676150-97ac-4333-ab45-d44e9be36cfa",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "65a9c0b0-1770-5bd7-ba6a-1f86d4747f01",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "4df4a603-940d-578a-b8f9-e4d3688640ec",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "0466cbd5-a64c-53fc-bf99-d5aaced526ab",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "39af7658-79f9-48cc-92a3-20c11fa6ed5c",
+      "file": "boards/07-link-on-levels-tab.html",
+      "resources": [
+        {
+          "id": "0e734346-b374-4b0f-a851-929a17ede482",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "6d4b65bb-0fdf-4653-b6c2-0a294dee44ad",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "5841fbc3-7140-4ab3-a5d4-77d03b3c4b6c",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "770d1c08-ba1a-41ac-ad18-c8cc41058752",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "4947c5d7-970a-4cb4-941b-bb280ce939bf",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "90955e7a-817d-4c36-85ea-85588cdb856a",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "eced9734-f908-50c0-86e9-6d80f9e25c95",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "df75ec74-dd8b-57ff-8b72-8f24b7864fc8",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "ebba3d4b-aec7-5329-b59d-1850e4d59860",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "bdab159f-e9e6-4abe-86f5-052f9919a137",
+      "file": "boards/08-link-on-one-inputs-eq-tab.html",
+      "resources": [
+        {
+          "id": "d9468ef2-3f16-408f-a433-4842f1d40d1c",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "cd832b1e-950e-4323-a247-1790d2b7ee8a",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "a12c77d4-d80d-45b7-88b1-7f5609298ad8",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "1fa24dbe-e753-4b15-849c-f6faa2ef9c27",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "db8d6bf2-d1ab-4607-885a-aaf38c303018",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "1fa0a14b-72da-4f62-827b-f1bedbbe1e13",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "a8dd1f10-4404-5be2-aeba-8761771bd45b",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "2820f7b4-347f-5142-b831-66402cdd1853",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "b3617e0f-dc34-56ef-85fd-565f41cc63ab",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    },
+    {
+      "id": "739ba415-5ff6-4bc3-ac4c-b150141ce169",
+      "file": "boards/09-link-on-one-outputs-eq-tab.html",
+      "resources": [
+        {
+          "id": "8d72e5ca-62de-4a7e-8160-c7d6c53a0001",
+          "file": "assets/dc-runtime.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "dbcc0fb7-caff-45fd-b053-b076492c26ad",
+          "file": "assets/react.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "f75da970-0b0e-40cd-aab0-bab5df2f1ea8",
+          "file": "assets/react-dom.production.min.js",
+          "mime": "text/javascript",
+          "compressed": true
+        },
+        {
+          "id": "e87fd68b-f340-4637-bc7c-1b1413a2b027",
+          "file": "assets/barlow-condensed-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "023cee87-6928-4c65-a459-c7d57ddcb829",
+          "file": "assets/barlow-condensed-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "9e235257-6398-4345-973f-6f9bbdb91af9",
+          "file": "assets/barlow-condensed-700-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "1643e900-1e1a-5583-a333-a311c176b81a",
+          "file": "assets/ibm-plex-mono-400-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "45b9f0e4-3083-5ec8-8c7f-34fbaaaa2163",
+          "file": "assets/ibm-plex-mono-500-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        },
+        {
+          "id": "daf83623-e915-50a8-8bcf-31ae35cda46c",
+          "file": "assets/ibm-plex-mono-600-latin.woff2",
+          "mime": "font/woff2",
+          "compressed": false
+        }
+      ],
+      "ext": [
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js",
+          "file": "assets/react.production.min.js"
+        },
+        {
+          "id": "https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js",
+          "file": "assets/react-dom.production.min.js"
+        }
+      ]
+    }
+  ]
+}

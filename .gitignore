@@ -26,6 +26,7 @@ Thumbs.db
 
 # Build output
 target/
+__pycache__/
 
 # Vendor installers used by re/
 re/installers/

@@ -23,7 +23,9 @@ UI reference: `spec/mockup.html` (render it with `mise run mockup`).
 - **UX-8** Meters: green #a6e3a1, yellow #f9e2af, red #f38ba8 (clip), gain reduction peach
   #fab387. Pressed MUTE: maroon #eba0ac.
 - **UX-9** Typography: Barlow Condensed for the title, subtitle and large indexes; IBM Plex Mono
-  for everything else. Both fonts ship with the app (no network needed, see `PERF-4`).
+  for everything else. Both fonts ship with the app (no network needed, see `PERF-4`): the Latin
+  WOFF2 files are in `spec/mockup/assets/` (Barlow Condensed 500, 600, 700; IBM Plex Mono 400, 500,
+  600) and their licences (SIL OFL 1.1) in `spec/mockup/licenses.txt`.
 - **UX-10** Layout: 1200 px wide boards, 40 px side padding, 12 to 20 px gaps.
 
 ## Amplifiers page

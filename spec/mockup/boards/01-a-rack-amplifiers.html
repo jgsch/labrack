@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Rack — Amplifiers</title>
+<script src="assets/dc-runtime.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4-Lwz3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4-Lwz3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/barlow-condensed-500-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/barlow-condensed-600-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/barlow-condensed-700-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iIq129k.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1isq129k.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iAq129k.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iEq129k.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-400-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl1FgtIU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwlRFgtIU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl9FgtIU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl5FgtIU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-500-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl1FgtIU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwlRFgtIU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl9FgtIU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl5FgtIU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-600-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+button:hover,a.tab:hover{filter:brightness(1.18)}
+button:disabled{cursor:not-allowed;filter:none;opacity:0.4}
+button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #11111b; color: #cdd6f4; font-family: 'IBM Plex Mono', ui-monospace, monospace; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 20px">
+
+  <header style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 18px 32px; min-height: 60px">
+    <div style="display: flex; flex-direction: column; gap: 6px; width: max-content">
+      <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1">Lab.Rack</h1>
+      <div aria-label="DSP CONTROLLER" style="width: 0; min-width: 100%; display: flex; justify-content: space-between; font-family: 'Barlow Condensed', sans-serif; font-weight: 500; font-size: 21px; line-height: 1; color: #a6adc8"><span>D</span><span>S</span><span>P</span><span style="flex: 0 0 0.5em"></span><span>C</span><span>O</span><span>N</span><span>T</span><span>R</span><span>O</span><span>L</span><span>L</span><span>E</span><span>R</span></div>
+    </div>
+    <nav style="display: flex; gap: 8px">
+      <a class="tab" href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #b4befe; color: #11111b; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Amplifiers</a>
+      <a class="tab" href="A-Mix.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #313244; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Mix &amp; EQ</a>
+      <a class="tab" href="A-Search.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #313244; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Search</a>
+    </nav>
+    <button sc-camel-on-click="{{toggleAll}}" aria-pressed="{{allMuted}}" style="justify-self: end; min-height: 52px; padding: 0 28px; border-radius: 4px; font-size: 14px; font-weight: 600; letter-spacing: 0.1em; {{allSty}}">{{allLabel}}</button>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <sc-if value="{{noAmps}}" hint-placeholder-val="{{ false }}">
+      <div style="padding: 28px 18px; text-align: center; font-size: 13px; color: #a6adc8; background: #1e1e2e; border: 1px dashed #585b70; border-radius: 6px">No amplifier yet. Open the Search tab to find amplifiers on the network, or add one manually.</div>
+    </sc-if>
+    <sc-for list="{{amps}}" as="amp" hint-placeholder-count="3">
+      <section style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 14px 18px">
+        <div style="flex: 0 0 320px; width: 320px; min-width: 0; display: flex; align-items: center; gap: 14px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 46px; line-height: 1; color: #b4befe; width: 54px">{{amp.idx}}</span>
+          <div style="flex: 1 1 0; display: flex; flex-direction: column; gap: 6px; min-width: 0">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0"><span style="flex: 1 1 0; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{amp.name}}</span><sc-if value="{{amp.canConn}}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{amp.conn}}" aria-label="{{amp.connAria}}" style="flex: 0 0 auto; min-height: 26px; padding: 0 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; background: #313244; color: #cdd6f4; border: 1px solid #585b70">{{amp.connTxt}}</button></sc-if></div>
+            <span style="display: flex; align-items: center; gap: 7px; font-size: 11px; color: {{amp.stC}}; letter-spacing: 0.08em"><span style="display: block; width: 8px; height: 8px; border-radius: 50%; background: {{amp.stC}}"></span>{{amp.status}}</span>
+            <div style="display: flex; align-items: center; gap: 8px; min-height: 28px">
+              <span style="flex: 0 0 auto; font-size: 10px; letter-spacing: 0.1em; color: #a6adc8">IP</span>
+              <input type="text" inputmode="decimal" autocomplete="off" value="{{amp.ip}}" sc-camel-on-change="{{amp.setIp}}" aria-label="IP address of {{amp.name}}" style="flex: 1 1 0; min-width: 0; height: 28px; box-sizing: border-box; padding: 0; border: 0; background: transparent; color: #cdd6f4; font-family: inherit; font-size: 12px; font-weight: 600; {{amp.ipSty}}">
+            </div>
+            <a class="tab" href="A-Mix.dc.html" aria-label="Loaded preset of {{amp.name}}, open Mix and EQ" style="display: flex; align-items: center; gap: 8px; min-height: 28px; min-width: 0; max-width: 100%; font-size: 12px; color: #cdd6f4"><span style="flex: 0 0 auto; font-size: 10px; letter-spacing: 0.1em; color: #a6adc8">PRESET</span><span style="min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{amp.preset}}</span><span style="display: {{amp.modDisp}}; flex: 0 0 auto; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: #11111b; background: #b4befe; border-radius: 3px; padding: 1px 5px">MODIFIED</span></a>
+          </div>
+        </div>
+        <div style="flex: 1 1 360px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px">
+          <sc-for list="{{amp.channels}}" as="ch" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+                <div style="display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: #a6adc8"><span>{{ch.label}}</span><span>{{ch.txt}}</span></div>
+                <div style="position: relative; height: 14px; background: linear-gradient(to right, #a6e3a1 0%, #a6e3a1 60%, #f9e2af 60%, #f9e2af 85%, #f38ba8 85%, #f38ba8 100%)">
+                  <div style="position: absolute; top: 0; bottom: 0; right: 0; width: {{ch.rest}}; background: #313244; transition: width 0.09s linear"></div>
+                  <div style="position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 5px, #1e1e2e 5px 7px)"></div>
+                </div>
+                <div style="position: relative; height: 7px; background: #313244">
+                  <div style="position: absolute; top: 0; bottom: 0; right: 0; width: {{ch.gr}}; background: #fab387; transition: width 0.09s linear"></div>
+                </div>
+              </div>
+              <button sc-camel-on-click="{{ch.toggle}}" disabled="{{ch.dis}}" aria-pressed="{{ch.muted}}" aria-label="{{ch.aria}}" style="flex: 0 0 44px; width: 44px; height: 44px; border-radius: 4px; font-size: 13px; font-weight: 600; {{ch.sty}}">M</button>
+            </div>
+          </sc-for>
+        </div>
+        <button sc-camel-on-click="{{amp.toggle}}" disabled="{{amp.dis}}" aria-pressed="{{amp.muted}}" style="flex: 0 0 116px; min-height: 48px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.1em; {{amp.sty}}">{{amp.label}}</button>
+      </section>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;live&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true},&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = {
+    t: 0,
+    amps: [
+      { name: 'FOH Main L', proto: 'IPD', ip: '192.168.1.21', src: 'AUTO', preset: '02 · Show', mod: true, since: -9 },
+      { name: 'FOH Main R', proto: 'IPD', ip: '192.168.1.22', src: 'AUTO', preset: '02 · Show', mod: false, since: -9 },
+      { name: 'Subs', proto: 'IPX', ip: '192.168.1.31', src: 'AUTO', preset: '05 · Subs cardioid end-fire long name test', mod: false, since: -9 },
+      { name: 'Delays', proto: 'IPD', ip: '192.168.1.24', src: 'MANUAL', preset: '—', mod: false, since: -9 },
+      { name: 'Monitors', proto: 'IPX', ip: '192.168.1.34', src: 'AUTO', preset: '—', mod: false, since: -9 }
+    ],
+    m: [[false, false], [true, true], [false, false], [false, false], [false, false]],
+    arm: '', armT: 0,
+    useIPD: true, useIPX: true, scanUntil: 0, scanMsg: '',
+    adding: false, settings: false, fName: '', fProto: 'IPD', fIp: '', fErr: ''
+  };
+  pool = [
+    { name: 'Front fill', proto: 'IPX', ip: '192.168.1.32' },
+    { name: 'Side fill', proto: 'IPD', ip: '192.168.1.23' },
+    { name: 'Stage monitors', proto: 'IPX', ip: '192.168.1.33' }
+  ];
+  // simulated network: who answers at an address. Anything else does not answer.
+  net = { '192.168.1.21': 'ok', '192.168.1.22': 'ok', '192.168.1.31': 'ok', '192.168.1.32': 'ok', '192.168.1.23': 'ok', '192.168.1.33': 'ok', '192.168.1.34': 'busy' };
+  // INVALID IP, DISCONNECTED (released by the user), CONNECTING (until it succeeds or fails),
+  // BUSY (an IPX already has another controller), UNREACHABLE (no answer, retrying), ONLINE.
+  // RECONNECTING is shown after a lost connection; this mockup does not simulate losing one.
+  conn(am, t) {
+    if (!this.ipOk(am.ip)) return 'invalid';
+    if (am.off) return 'off';
+    if (t - am.since < 1.5) return 'connecting';
+    const r = this.net[am.ip];
+    return r === 'ok' ? 'online' : r === 'busy' ? 'busy' : 'unreachable';
+  }
+  online(a) { return this.conn(this.state.amps[a], this.state.t) === 'online'; }
+  toggleConn(a) {
+    const S = this.state;
+    this.setState({ amps: S.amps.map((x, k) => (k === a ? { ...x, off: !x.off, since: S.t } : x)) });
+  }
+  armed(k) { return this.state.arm === k && this.state.t - this.state.armT < 3; }
+  ipOk(v) { return /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(String(v).trim()); }
+  componentDidMount() {
+    this.iv = setInterval(() => {
+      if (this.props.live === false) return;
+      const t = this.state.t + 0.1;
+      if (this.state.scanUntil && t >= this.state.scanUntil) this.finishScan(t);
+      else this.setState({ t });
+    }, 100);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  lvl(s, t) {
+    const base = 0.5 + 0.16 * Math.sin(s * 1.7);
+    const v = base + 0.16 * Math.sin(t * 0.9 + s) + 0.1 * Math.sin(t * 2.3 + s * 2.1) + 0.05 * Math.sin(t * 5.1 + s * 0.7);
+    return Math.max(0.04, Math.min(0.99, v));
+  }
+  gr(s, t) {
+    const over = this.lvl(s, t) - (0.72 + 0.03 * (s % 3));
+    return over > 0 ? Math.min(1, over * 5) : 0;
+  }
+  toggleCh(a, c) {
+    const m = this.state.m.map((r) => r.slice());
+    m[a][c] = !m[a][c];
+    this.setState({ m });
+  }
+  toggleAmp(a) {
+    const m = this.state.m.map((r) => r.slice());
+    const all = m[a].every(Boolean);
+    m[a] = m[a].map(() => !all);
+    this.setState({ m });
+  }
+  // MUTE ALL / UNMUTE ALL act on the amps that are online; unmuting needs a second click within 3 s
+  toggleAll() {
+    const S = this.state, on = S.amps.map((_, a) => this.online(a));
+    const all = on.some(Boolean) && S.m.every((r, a) => !on[a] || r.every(Boolean));
+    if (all && !this.armed('all')) { this.setState({ arm: 'all', armT: S.t }); return; }
+    this.setState({ m: S.m.map((r, a) => (on[a] ? r.map(() => !all) : r)), arm: '' });
+  }
+  // discovery: a protocol that is switched off is never searched
+  enabled(p) { return p === 'IPD' ? this.state.useIPD : this.state.useIPX; }
+  startScan() { this.setState({ scanUntil: this.state.t + 2, scanMsg: '' }); }
+  finishScan(t) {
+    const S = this.state, have = new Set(S.amps.map((x) => x.ip));
+    const found = this.pool.filter((p) => this.enabled(p.proto) && !have.has(p.ip));
+    const amps = S.amps.concat(found.map((p) => ({ ...p, src: 'AUTO', preset: '01 · Factory default', mod: false, since: t })));
+    const m = S.m.concat(found.map(() => [false, false]));
+    this.setState({ t, amps, m, scanUntil: 0, scanMsg: found.length ? 'Found ' + found.length + ' new: ' + found.map((p) => p.name).join(', ') : 'No new amplifier found' });
+  }
+  toggleProto(p) {
+    const key = p === 'IPD' ? 'useIPD' : 'useIPX', on = !this.state[key];
+    this.setState({ [key]: on, scanMsg: on ? '' : p + ' search is off' });
+    if (on) this.setState({ scanUntil: this.state.t + 2 });
+  }
+  addAmp() {
+    const S = this.state, ip = S.fIp.trim(), name = S.fName.trim() || 'Amp ' + (S.amps.length + 1);
+    if (!this.ipOk(ip)) { this.setState({ fErr: 'Enter a valid IPv4 address, for example 192.168.1.50' }); return; }
+    if (S.amps.some((x) => x.ip === ip)) { this.setState({ fErr: 'An amplifier with this IP is already in the list' }); return; }
+    this.setState({
+      amps: S.amps.concat([{ name, proto: S.fProto, ip, src: 'MANUAL', preset: '01 · Factory default', mod: false, since: S.t }]),
+      m: S.m.concat([[false, false]]), adding: false, fName: '', fIp: '', fErr: '', scanMsg: name + ' added manually'
+    });
+  }
+  removeAmp(i) {
+    const S = this.state;
+    this.setState({ amps: S.amps.filter((_, k) => k !== i), m: S.m.filter((_, k) => k !== i), scanMsg: S.amps[i].name + ' removed' });
+  }
+  setIp(i, v) { this.setState({ amps: this.state.amps.map((x, k) => (k === i ? { ...x, ip: v.trim(), since: this.state.t } : x)) }); }
+  renderVals() {
+    const S = this.state, t = S.t, m = S.m;
+    const offSty = 'background: #313244; color: #cdd6f4; border: 1px solid #585b70';
+    const onSty = 'background: #eba0ac; color: #11111b; border: 1px solid #eba0ac';
+    const GREEN = '#a6e3a1', PEACH = '#fab387', RED = '#f38ba8';
+    const scanning = S.scanUntil > 0;
+    const YELLOW = '#f9e2af', GRAY = '#a6adc8';
+    const ST = {
+      online: ['ONLINE', GREEN], connecting: ['CONNECTING…', PEACH], reconnecting: ['RECONNECTING…', PEACH],
+      busy: ['BUSY · OTHER CONTROLLER', YELLOW], unreachable: ['UNREACHABLE · RETRYING', RED],
+      invalid: ['CHECK IP · INVALID ADDRESS', RED], off: ['DISCONNECTED', GRAY]
+    };
+    const amps = S.amps.map((am, a) => {
+      const st = this.conn(am, t), live = st === 'online', ok = st !== 'invalid';
+      const channels = [0, 1].map((c) => {
+        const muted = live && m[a][c], s = a * 2 + c;
+        const l = muted || !live ? 0 : this.lvl(s, t), g = muted || !live ? 0 : this.gr(s, t);
+        return {
+          label: 'OUT ' + (c + 1), muted, dis: !live,
+          rest: ((1 - l) * 100).toFixed(1) + '%', gr: (g * 100).toFixed(1) + '%',
+          txt: !live ? 'no signal' : muted ? 'MUTED' : (l * 60 - 60).toFixed(1) + ' dB · GR ' + (g * 12).toFixed(1),
+          aria: (muted ? 'Unmute' : 'Mute') + ' output ' + (c + 1) + ' of ' + am.name,
+          sty: muted ? onSty : offSty, toggle: () => this.toggleCh(a, c)
+        };
+      });
+      const muted = live && m[a].every(Boolean);
+      return {
+        name: am.name, channels, muted, proto: am.proto, ip: am.ip, src: am.src,
+        protoSty: am.proto === 'IPD' ? 'background: rgba(203, 166, 247, 0.16); color: #cba6f7; border: 1px solid #cba6f7' : 'background: rgba(116, 199, 236, 0.16); color: #74c7ec; border: 1px solid #74c7ec',
+        ipSty: st === 'invalid' || st === 'unreachable' ? 'color: ' + RED : 'color: #cdd6f4',
+        status: ST[st][0], stC: ST[st][1], dis: !live,
+        canConn: ok, connTxt: st === 'off' ? 'CONNECT' : 'DISCONNECT',
+        connAria: (st === 'off' ? 'Connect to ' : 'Disconnect from ') + am.name + (st === 'off' ? '' : ' and release it for other controllers'),
+        conn: () => this.toggleConn(a),
+        setIp: (e) => this.setIp(a, e.target.value),
+        remove: () => this.removeAmp(a),
+        preset: am.preset, modDisp: am.mod ? 'inline-block' : 'none',
+        idx: String(a + 1).padStart(2, '0'),
+        label: muted ? 'UNMUTE' : 'MUTE', sty: muted ? onSty : offSty,
+        toggle: () => this.toggleAmp(a)
+      };
+    });
+    const onl = S.amps.map((_, a) => this.online(a)), online = onl.filter(Boolean).length;
+    const allMuted = online > 0 && m.every((r, a) => !onl[a] || r.every(Boolean));
+    const count = (p) => S.amps.filter((x) => x.proto === p).length;
+    const protos = ['IPD', 'IPX'].map((p) => {
+      const on = this.enabled(p), n = count(p);
+      return {
+        name: p + ' amplifiers', on,
+        status: on ? (scanning ? 'Scanning the network…' : 'Searching · ' + n + ' found') : 'Off · not searching · ' + n + ' listed',
+        aria: (on ? 'Stop searching for ' : 'Search for ') + p + ' amplifiers',
+        sty: on ? 'background: rgba(180, 190, 254, 0.12); color: #cdd6f4; border: 1px solid #b4befe' : 'background: #181825; color: #a6adc8; border: 1px solid #585b70',
+        trk: on ? '#b4befe' : '#585b70', knob: on ? '18px' : '2px', knobC: on ? '#11111b' : '#cdd6f4',
+        toggle: () => this.toggleProto(p)
+      };
+    });
+    const none = !S.useIPD && !S.useIPX;
+    return {
+      summary: S.amps.length + ' amplifier' + (S.amps.length === 1 ? '' : 's') + ' · ' + S.amps.length * 2 + ' outputs · ' + online + ' online' + (S.scanMsg ? ' · ' + S.scanMsg : ''),
+      amps, noAmps: S.amps.length === 0, protos,
+      scanOff: none, scanTxt: scanning ? 'SCANNING…' : 'SCAN NOW',
+      scanSty: none || scanning ? 'background: #181825; color: #6c7086; border: 1px solid #45475a; cursor: default' : 'background: #313244; color: #cdd6f4; border: 1px solid #585b70',
+      scan: () => { if (!none && !scanning) this.startScan(); },
+      adding: S.adding, fName: S.fName, fIp: S.fIp, fErr: S.fErr,
+      fprotos: ['IPD', 'IPX'].map((p) => ({ txt: p, on: S.fProto === p, sty: S.fProto === p ? 'background: #b4befe; color: #11111b; border: 1px solid #b4befe' : offSty, pick: () => this.setState({ fProto: p }) })),
+      openAdd: () => this.setState({ adding: !S.adding, settings: false, fErr: '' }),
+      settings: S.settings, toggleSettings: () => this.setState({ settings: !S.settings }),
+      gearSty: S.settings ? 'background: #b4befe; color: #11111b; border: 1px solid #b4befe' : offSty,
+      closeAdd: () => this.setState({ adding: false, fErr: '', fName: '', fIp: '' }),
+      setName: (e) => this.setState({ fName: e.target.value }),
+      setFIp: (e) => this.setState({ fIp: e.target.value, fErr: '' }),
+      addAmp: () => this.addAmp(),
+      allMuted,
+      allLabel: allMuted ? (this.armed('all') ? 'CONFIRM UNMUTE ALL' : 'UNMUTE ALL') : 'MUTE ALL',
+      allSty: allMuted ? 'background: #11111b; color: #eba0ac; border: 2px solid #eba0ac' : 'background: #b4befe; color: #11111b; border: 2px solid #b4befe',
+      toggleAll: () => this.toggleAll()
+    };
+  }
+}
+</script>
+
+
+</body></html>

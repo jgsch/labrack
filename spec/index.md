@@ -16,6 +16,11 @@ only the files your task touches.
 | `security.md`      | `SEC`  | Safety rules for writing to amps, network assumptions    | Touching anything that writes to an amp  |
 | `performance.md`   | `PERF` | Platforms, meter and startup budgets, offline use        | Changing hot paths or dependencies       |
 | `mockup.html`      |        | UI reference boards (`mise run mockup`)                  | Changing anything user-facing            |
+| `mockup/`          |        | The same mockup as plain files, fonts and licences       | Looking at a board's markup or CSS       |
+
+`mockup/` is the source and `mockup.html` the single-file form built from it (`mise run
+mockup-pack`). Edit the board templates in `mockup/boards/`, then pack. `mise run mockup-unpack`
+goes the other way for a new export of the mockup. `scripts/mockup.py` describes the layout.
 
 ## Conventions
 

@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Rack — Mix and EQ</title>
+<script src="assets/dc-runtime.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4-Lwz3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4-Lwz3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/barlow-condensed-500-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/barlow-condensed-600-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3nWuZEC.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3jWuZEC.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/barlow-condensed-700-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iIq129k.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1isq129k.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iAq129k.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1iEq129k.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-400-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl1FgtIU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwlRFgtIU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl9FgtIU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwl5FgtIU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-500-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl1FgtIU.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwlRFgtIU.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl9FgtIU.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAOwl5FgtIU.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/ibm-plex-mono-600-latin.woff2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button,select{font-family:inherit;cursor:pointer}
+button:hover,a.tab:hover{filter:brightness(1.18)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #cdd6f4;outline-offset:2px}
+.filebtn:focus-within{outline:2px solid #cdd6f4;outline-offset:2px}
+input::placeholder{color:#a6adc8;opacity:1}
+button:disabled{cursor:not-allowed}
+input[type=range]{width:100%;height:44px;margin:0;background:transparent}
+.vf{writing-mode:vertical-lr;direction:rtl}
+.fw:focus-within{outline:2px solid #cdd6f4;outline-offset:2px}
+select{min-height:44px;border-radius:4px;background:#313244;color:#cdd6f4;border:1px solid #585b70;font-size:13px;padding:0 8px;width:100%;box-sizing:border-box}
+</style>
+</helmet>
+<div style="min-height: 1060px; box-sizing: border-box; background: #11111b; color: #cdd6f4; font-family: 'IBM Plex Mono', ui-monospace, monospace; padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 16px">
+
+  <header style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 18px 32px; min-height: 60px">
+    <div style="display: flex; flex-direction: column; gap: 6px; width: max-content">
+      <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1">Lab.Rack</h1>
+      <div aria-label="DSP CONTROLLER" style="width: 0; min-width: 100%; display: flex; justify-content: space-between; font-family: 'Barlow Condensed', sans-serif; font-weight: 500; font-size: 21px; line-height: 1; color: #a6adc8"><span>D</span><span>S</span><span>P</span><span style="flex: 0 0 0.5em"></span><span>C</span><span>O</span><span>N</span><span>T</span><span>R</span><span>O</span><span>L</span><span>L</span><span>E</span><span>R</span></div>
+    </div>
+    <nav style="display: flex; gap: 8px">
+      <a class="tab" href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #313244; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Amplifiers</a>
+      <a class="tab" href="A-Mix.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #b4befe; color: #11111b; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Mix &amp; EQ</a>
+      <a class="tab" href="A-Search.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #313244; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Search</a>
+    </nav>
+    <button sc-camel-on-click="{{toggleAll}}" aria-pressed="{{allMuted}}" style="justify-self: end; min-height: 52px; padding: 0 28px; border-radius: 4px; font-size: 14px; font-weight: 600; letter-spacing: 0.1em; {{allSty}}">{{allLabel}}</button>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 10px">
+    <sc-for list="{{amps}}" as="amp" hint-placeholder-count="6">
+      <button sc-camel-on-click="{{amp.pick}}" aria-pressed="{{amp.sel}}" style="display: flex; flex-direction: column; gap: 8px; text-align: left; min-height: 60px; padding: 8px 12px; box-sizing: border-box; border-radius: 4px; {{amp.sty}}">
+        <span style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600; line-height: 1">{{amp.idx}}</span><span style="font-size: 13px; font-weight: 600">{{amp.name}}</span></span>
+        <span style="display: flex; flex-direction: column; gap: 3px">
+          <span style="position: relative; display: block; height: 6px; background: rgba(0, 0, 0, 0.55)"><span style="position: absolute; top: 0; bottom: 0; left: 0; width: {{amp.lv}}; background: #a6e3a1; transition: width 0.09s linear"></span></span>
+          <span style="position: relative; display: block; height: 4px; background: rgba(0, 0, 0, 0.55)"><span style="position: absolute; top: 0; bottom: 0; right: 0; width: {{amp.gr}}; background: #fab387"></span></span>
+        </span>
+      </button>
+    </sc-for>
+  </div>
+
+  <section aria-label="Presets" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 8px 14px">
+    <label for="pslot" style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: 0.08em">PRESET</label>
+    <sc-raw-select id="pslot" value="{{pre.selV}}" sc-camel-on-change="{{pre.pickV}}" style="flex: 1 1 280px; max-width: 360px; width: auto">
+      <sc-for list="{{pre.options}}" as="o" hint-placeholder-count="50">
+        <option value="{{o.v}}">{{o.txt}}</option>
+      </sc-for>
+    </sc-raw-select>
+    <label for="pname" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Name of the selected slot</label>
+    <input id="pname" type="text" maxlength="24" placeholder="Slot name" value="{{pre.draft}}" sc-camel-on-change="{{pre.setDraft}}" style="flex: 1 1 160px; max-width: 220px; min-height: 44px; box-sizing: border-box; padding: 0 12px; border-radius: 4px; background: #11111b; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px">
+    <button sc-camel-on-click="{{pre.load}}" disabled="{{pre.loadDis}}" style="min-height: 44px; padding: 0 16px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; background: #b4befe; color: #11111b; border: 1px solid #b4befe; {{pre.loadSty}}">{{pre.loadTxt}}</button>
+    <button sc-camel-on-click="{{pre.save}}" disabled="{{pre.saveDis}}" style="min-height: 44px; padding: 0 16px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; background: #313244; color: #cdd6f4; border: 1px solid #585b70; {{pre.saveSty}}">SAVE</button>
+    <label class="filebtn" style="position: relative; display: flex; align-items: center; min-height: 44px; padding: 0 16px; box-sizing: border-box; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; background: #313244; color: #cdd6f4; border: 1px solid #585b70; cursor: pointer">OPEN FILE…<input type="file" accept=".json" sc-camel-on-change="{{pre.openFile}}" aria-label="Open a preset file from this computer" style="position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none"></label>
+    <button sc-camel-on-click="{{pre.saveFile}}" style="min-height: 44px; padding: 0 16px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; background: #313244; color: #cdd6f4; border: 1px solid #585b70">SAVE TO COMPUTER…</button>
+    <span role="status" aria-live="polite" style="margin-left: auto; font-size: 12px; color: #a6adc8">{{pre.status}}</span>
+  </section>
+    <div role="group" aria-label="Sections" style="position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; margin-bottom: -16px">
+      <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="4">
+        <button sc-camel-on-click="{{tb.pick}}" aria-pressed="{{tb.on}}" style="display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px; min-height: 48px; padding: 6px 18px; border-radius: 6px 6px 0 0; text-align: left; {{tb.sty}}"><span style="font-size: 13px; font-weight: 600; letter-spacing: 0.08em">{{tb.txt}}</span></button>
+      </sc-for>
+      <sc-if value="{{showTabLk}}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{tabLk.pick}}" aria-pressed="{{tabLk.on}}" aria-label="{{tabLk.aria}}" style="margin-left: auto; margin-bottom: 8px; min-height: 44px; padding: 0 14px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; {{tabLk.sty2}}">{{tabLk.txt}}</button></sc-if>
+    </div>
+
+  <main style="display: flex; flex-direction: column; gap: 16px">
+
+    <sc-if value="{{wrapMix}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start">
+    <sc-for list="{{mixGroups}}" as="g" hint-placeholder-count="2">
+          <section style="border: 2px solid {{g.c}}; border-radius: 6px; background: {{g.tint}}; overflow: hidden">
+            <div style="display: flex; flex-direction: column; gap: 14px; padding: 16px 20px">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px">
+                <sc-for list="{{g.strips}}" as="s" hint-placeholder-count="2">
+                  <div style="display: flex; flex-direction: column; gap: 10px; {{s.sepSty}}">
+                  <div style="display: flex; align-items: stretch; gap: 8px">
+    
+                    <div style="flex: 1 1 0; min-width: 0; display: flex; gap: 10px">
+                        <sc-for list="{{s.faders}}" as="f" hint-placeholder-count="4"><div style="position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; padding: 22px 10px 12px; background: #181825; border: 1px solid #45475a; border-radius: 4px; box-sizing: border-box"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.12em; position: absolute; top: -8px; left: 10px; padding: 0 6px; background: #11111b; color: #a6adc8">{{f.name}}</span><div style="display: flex; align-items: flex-end; justify-content: center; gap: 12px"><div style="display: flex; flex-direction: column; align-items: center; gap: 6px; {{f.dim}}"><div style="display: flex; gap: 8px; align-items: stretch"><div aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 30px; height: 200px"><span style="position: absolute; right: 9px; top: 0%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">+12</span><span style="position: absolute; right: 9px; top: 20%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">0</span><span style="position: absolute; right: 9px; top: 40%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−12</span><span style="position: absolute; right: 9px; top: 60%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−24</span><span style="position: absolute; right: 9px; top: 80%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−36</span><span style="position: absolute; right: 9px; top: 100%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−48</span><div style="position: absolute; right: 0; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.5) 0 1px, transparent 1px 20px)"></div><div style="position: absolute; right: 0; bottom: 0; width: 6px; height: 1px; background: rgba(205, 214, 244, 0.5)"></div></div><div class="fw" style="position: relative; flex: 0 0 auto; width: 52px; height: 200px; border-radius: 4px">
+                                <div aria-hidden="true" style="position: absolute; left: calc(50% - 9px); width: 18px; top: 0; bottom: 0; background: #313244"></div>
+                                <div aria-hidden="true" style="position: absolute; left: calc(50% - 9px); width: 18px; bottom: 0; height: {{f.prePct}}; background: rgba(205, 214, 244, 0.28); transition: height 0.09s linear"></div>
+                                <div aria-hidden="true" style="position: absolute; left: calc(50% - 9px); width: 18px; top: 0; bottom: 0; background: linear-gradient(to top, #a6e3a1 0%, #a6e3a1 60%, #f9e2af 60%, #f9e2af 80%, #f38ba8 80%, #f38ba8 100%); clip-path: inset({{f.postCover}} 0 0 0); transition: clip-path 0.09s linear"></div>
+                                <div aria-hidden="true" style="position: absolute; left: calc(50% - 9px); width: 18px; top: 0; bottom: 0; background: repeating-linear-gradient(to top, transparent 0 5px, #181825 5px 7px)"></div>
+                                <div aria-hidden="true" style="position: absolute; left: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div><div aria-hidden="true" style="position: absolute; right: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div>
+                                <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 80%; height: 0; border-top: 1px dashed rgba(205, 214, 244, 0.55)"></div>
+                                <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: {{f.capBottom}}; height: 16px; box-sizing: border-box; border-radius: 3px; background: #cdd6f4; border: 1px solid #11111b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7)"><div style="position: absolute; left: 6px; right: 6px; top: 50%; height: 2px; margin-top: -1px; background: #11111b"></div></div>
+                                <div role="slider" tabindex="0" aria-valuemin="-48" aria-valuemax="12" aria-valuenow="{{f.val}}" aria-label="{{f.aria}}" sc-camel-on-pointer-down="{{f.fDown}}" sc-camel-on-pointer-move="{{f.fMove}}" sc-camel-on-pointer-up="{{f.fUp}}" sc-camel-on-pointer-cancel="{{f.fUp}}" sc-camel-on-key-down="{{f.fKey}}" sc-camel-on-wheel="{{f.fWheel}}" style="position: absolute; inset: 0; cursor: ns-resize; touch-action: none; outline: none"></div>
+                              </div></div></div><div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><div style="position: relative; width: 100px"><input type="text" inputmode="decimal" autocomplete="off" value="{{f.box}}" sc-camel-on-change="{{f.edit}}" sc-camel-on-blur="{{f.end}}" sc-camel-on-key-down="{{f.enter}}" aria-label="{{f.aria}}" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 20px 0 3px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 700; font-weight: 600"><span style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #a6adc8; pointer-events: none">dB</span></div><sc-if value="{{f.showMute}}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{f.flip}}" aria-pressed="{{f.muted}}" aria-label="{{f.mAria}}" style="width: 100px; min-height: 44px; border-radius: 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; {{f.mSty}}">MUTE</button></sc-if></div></div></div></sc-for>
+                      </div>
+    
+                    <button sc-camel-on-click="{{s.go}}" aria-label="{{s.goAria}}" style="flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; white-space: nowrap; padding: 0 12px; box-sizing: border-box; background: transparent; color: {{g.c}}; border: 0"><span aria-hidden="true" style="font-size: 24px; line-height: 1">→</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 30px; font-weight: 700; letter-spacing: 0.06em; line-height: 1.1">{{s.label}}</span></button>
+    
+                  </div>
+                
+</div>
+</sc-for>
+              </div>
+            </div>
+          </section>
+        </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+
+    <sc-if value="{{wrapLev}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start">
+    <sc-for list="{{levGroups}}" as="g" hint-placeholder-count="2">
+          <section style="border: 2px solid {{g.c}}; border-radius: 6px; background: {{g.tint}}; overflow: hidden">
+            <div style="display: flex; flex-direction: column; gap: 14px; padding: 16px 20px">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px">
+                <sc-for list="{{g.strips}}" as="s" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: row; align-items: stretch; gap: 10px; min-width: 0; {{s.sepSty}}">
+<sc-for list="{{s.faders}}" as="f" hint-placeholder-count="1"><div style="position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 22px 12px 12px; background: #181825; border: 1px solid #45475a; border-radius: 4px; box-sizing: border-box"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.12em; position: absolute; top: -8px; left: 10px; padding: 0 6px; background: #11111b; color: #a6adc8">{{s.inName}}</span><div style="flex: 1 1 auto; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 28px; {{f.dim}}"><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="display: flex; gap: 10px; align-items: stretch"><div aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 30px; height: 200px"><span style="position: absolute; right: 9px; top: 0%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">+12</span><span style="position: absolute; right: 9px; top: 20%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">0</span><span style="position: absolute; right: 9px; top: 40%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−12</span><span style="position: absolute; right: 9px; top: 60%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−24</span><span style="position: absolute; right: 9px; top: 80%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−36</span><span style="position: absolute; right: 9px; top: 100%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−48</span><div style="position: absolute; right: 0; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.5) 0 1px, transparent 1px 20px)"></div><div style="position: absolute; right: 0; bottom: 0; width: 6px; height: 1px; background: rgba(205, 214, 244, 0.5)"></div></div><div class="fw" style="position: relative; flex: 0 0 auto; width: 52px; height: 200px; border-radius: 4px">
+                                <sc-for list="{{f.meters}}" as="m" hint-placeholder-count="2"><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: #313244"></div><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; bottom: 0; height: {{m.pre}}; background: rgba(205, 214, 244, 0.28); transition: height 0.09s linear"></div><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: linear-gradient(to top, #a6e3a1 0%, #a6e3a1 60%, #f9e2af 60%, #f9e2af 80%, #f38ba8 80%, #f38ba8 100%); clip-path: inset({{m.cover}} 0 0 0); transition: clip-path 0.09s linear"></div><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: repeating-linear-gradient(to top, transparent 0 5px, #181825 5px 7px)"></div></sc-for>
+                                <div aria-hidden="true" style="position: absolute; left: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div><div aria-hidden="true" style="position: absolute; right: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div>
+                                <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 80%; height: 0; border-top: 1px dashed rgba(205, 214, 244, 0.55)"></div>
+                                <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: {{f.capBottom}}; height: 16px; box-sizing: border-box; border-radius: 3px; background: #cdd6f4; border: 1px solid #11111b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7)"><div style="position: absolute; left: 6px; right: 6px; top: 50%; height: 2px; margin-top: -1px; background: #11111b"></div></div>
+                                <div role="slider" tabindex="0" aria-valuemin="-48" aria-valuemax="12" aria-valuenow="{{f.val}}" aria-label="{{f.aria}}" sc-camel-on-pointer-down="{{f.fDown}}" sc-camel-on-pointer-move="{{f.fMove}}" sc-camel-on-pointer-up="{{f.fUp}}" sc-camel-on-pointer-cancel="{{f.fUp}}" sc-camel-on-key-down="{{f.fKey}}" sc-camel-on-wheel="{{f.fWheel}}" style="position: absolute; inset: 0; cursor: ns-resize; touch-action: none; outline: none"></div>
+                              </div></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="position: relative; width: 100px"><input type="text" inputmode="decimal" autocomplete="off" value="{{f.box}}" sc-camel-on-change="{{f.edit}}" sc-camel-on-blur="{{f.end}}" sc-camel-on-key-down="{{f.enter}}" aria-label="{{f.aria}}" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 20px 0 3px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 700; font-weight: 600"><span style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #a6adc8; pointer-events: none">dB</span></div><button sc-camel-on-click="{{f.flip}}" aria-pressed="{{f.muted}}" aria-label="{{f.mAria}}" style="width: 100px; min-height: 44px; border-radius: 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; {{f.mSty}}">MUTE</button></div></div></div></sc-for>
+<div style="position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 22px 12px 12px; background: {{g.tint}}; border: 2px solid {{g.c}}; border-radius: 4px; box-sizing: border-box"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.12em; position: absolute; top: -8px; left: 10px; padding: 0 6px; background: #11111b; color: {{g.c}}">{{s.label}}</span><div style="flex: 1 1 auto; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 28px; {{s.bDim}}"><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="display: flex; gap: 10px; align-items: stretch">
+                          <div aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 30px; height: 200px"><span style="position: absolute; right: 9px; top: 0%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">+12</span><span style="position: absolute; right: 9px; top: 20%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">0</span><span style="position: absolute; right: 9px; top: 40%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−12</span><span style="position: absolute; right: 9px; top: 60%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−24</span><span style="position: absolute; right: 9px; top: 80%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−36</span><span style="position: absolute; right: 9px; top: 100%; transform: translateY(-50%); font-size: 9px; color: #a6adc8">−48</span><div style="position: absolute; right: 0; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.5) 0 1px, transparent 1px 20px)"></div><div style="position: absolute; right: 0; bottom: 0; width: 6px; height: 1px; background: rgba(205, 214, 244, 0.5)"></div></div><div class="fw" style="position: relative; flex: 0 0 auto; width: 52px; height: 200px; border-radius: 4px">
+                            <sc-for list="{{s.meters}}" as="m" hint-placeholder-count="2"><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: #313244"></div><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: linear-gradient(to top, #a6e3a1 0%, #a6e3a1 60%, #f9e2af 60%, #f9e2af 80%, #f38ba8 80%, #f38ba8 100%); clip-path: inset({{m.cover}} 0 0 0); transition: clip-path 0.09s linear"></div><div aria-hidden="true" style="position: absolute; left: {{m.left}}; width: {{m.w}}; top: 0; bottom: 0; background: repeating-linear-gradient(to top, transparent 0 5px, #181825 5px 7px)"></div></sc-for>
+                            <div aria-hidden="true" style="position: absolute; left: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div><div aria-hidden="true" style="position: absolute; right: 3px; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(205, 214, 244, 0.4) 0 1px, transparent 1px 20px)"></div>
+                            <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 80%; height: 0; border-top: 1px dashed rgba(205, 214, 244, 0.55)"></div>
+                            <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: {{s.vCap}}; height: 16px; box-sizing: border-box; border-radius: 3px; background: #cdd6f4; border: 1px solid #11111b; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7)"><div style="position: absolute; left: 6px; right: 6px; top: 50%; height: 2px; margin-top: -1px; background: #11111b"></div></div>
+                            <div role="slider" tabindex="0" aria-valuemin="-48" aria-valuemax="12" aria-valuenow="{{s.vVal}}" aria-label="{{s.vAria}}" sc-camel-on-pointer-down="{{s.vDown}}" sc-camel-on-pointer-move="{{s.vMove}}" sc-camel-on-pointer-up="{{s.vUp}}" sc-camel-on-pointer-cancel="{{s.vUp}}" sc-camel-on-key-down="{{s.vKey}}" sc-camel-on-wheel="{{s.vWheel}}" style="position: absolute; inset: 0; cursor: ns-resize; touch-action: none; outline: none"></div>
+                          </div>
+                        </div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="position: relative; width: 100px"><input type="text" inputmode="decimal" autocomplete="off" value="{{s.vBox}}" sc-camel-on-change="{{s.vEdit}}" sc-camel-on-blur="{{s.vEnd}}" sc-camel-on-key-down="{{s.vEnter}}" aria-label="{{s.vAria}}" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 20px 0 3px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 700; font-weight: 600"><span style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #a6adc8; pointer-events: none">dB</span></div><button sc-camel-on-click="{{s.mute}}" aria-pressed="{{s.bMuted}}" aria-label="{{s.mAria}}" style="width: 100px; min-height: 44px; border-radius: 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; {{s.mSty}}">MUTE</button></div></div></div>
+<div style="position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 22px 12px 12px; background: #181825; border: 1px dashed #7f849c; border-radius: 4px; box-sizing: border-box"><span style="font-size: 10px; font-weight: 600; letter-spacing: 0.12em; position: absolute; top: -8px; left: 10px; padding: 0 6px; background: #11111b; color: #b4befe">{{s.limName}}</span><div style="flex: 1 1 auto; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 28px; {{s.lDim}}"><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="display: flex; gap: 0; align-items: stretch; height: 200px"><div aria-hidden="true" style="display: flex; gap: 2px; align-items: stretch"><sc-for list="{{s.grBars}}" as="gb" hint-placeholder-count="2"><div style="position: relative; flex: 0 0 auto; width: {{gb.w}}; background: #313244"><div style="position: absolute; left: 0; right: 0; top: 0; height: {{gb.pct}}; background: #fab387; transition: height 0.09s linear"></div><div style="position: absolute; inset: 0; background: repeating-linear-gradient(to top, transparent 0 5px, #11111b 5px 7px)"></div></div></sc-for></div><div aria-hidden="true" style="position: relative; flex: 0 0 auto; width: 30px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: repeating-linear-gradient(to bottom, rgba(250, 179, 135, 0.6) 0 1px, transparent 1px 50px)"></div><div style="position: absolute; left: 0; bottom: 0; width: 6px; height: 1px; background: rgba(250, 179, 135, 0.6)"></div><span style="position: absolute; left: 9px; top: 0%; transform: translateY(-50%); font-size: 9px; color: #fab387">0</span><span style="position: absolute; left: 9px; top: 25%; transform: translateY(-50%); font-size: 9px; color: #fab387">−3</span><span style="position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #fab387">−6</span><span style="position: absolute; left: 9px; top: 75%; transform: translateY(-50%); font-size: 9px; color: #fab387">−9</span><span style="position: absolute; left: 9px; top: 100%; transform: translateY(-50%); font-size: 9px; color: #fab387">−12</span></div></div></div><div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="display: grid; grid-template-columns: 100px 100px; gap: 6px 12px"><sc-for list="{{s.lboxes}}" as="b" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 10px; color: #a6adc8">{{b.label}}</span><div style="position: relative; width: 100px"><input type="text" inputmode="decimal" autocomplete="off" value="{{b.box}}" sc-camel-on-change="{{b.edit}}" sc-camel-on-blur="{{b.end}}" aria-label="{{b.aria}}" style="width: 100%; height: 44px; box-sizing: border-box; padding: 0 30px 0 6px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 600"><span style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #a6adc8; pointer-events: none">{{b.unit}}</span></div></div></sc-for></div></div></div></div>
+</div>
+</sc-for>
+              </div>
+            </div>
+          </section>
+        </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{wrapEq}}" hint-placeholder-val="{{ true }}">
+      <section style="border: 2px solid {{th.c}}; border-radius: 6px; background: {{th.tint}}; overflow-x: hidden;">
+        <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; padding: 16px 20px">
+            <div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+              <div style="position: relative; flex: 1 1 auto; min-height: 320px; background: #11111b; border: 1px solid #45475a; border-radius: 4px; overflow: hidden">
+                <svg sc-camel-view-box="0 0 1000 300" sc-camel-preserve-aspect-ratio="none" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">
+                  <line x1="132.7" y1="0" x2="132.7" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="233" y1="0" x2="233" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="333.3" y1="0" x2="333.3" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="466" y1="0" x2="466" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="566.3" y1="0" x2="566.3" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="666.7" y1="0" x2="666.7" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="799.3" y1="0" x2="799.3" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="899.7" y1="0" x2="899.7" y2="300" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="0" y1="38" x2="1000" y2="38" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="0" y1="94" x2="1000" y2="94" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="0" y1="206" x2="1000" y2="206" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="0" y1="262" x2="1000" y2="262" stroke="#313244" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <line x1="0" y1="150" x2="1000" y2="150" stroke="#585b70" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+                  <path d="{{curveFill}}" fill="{{th.c}}" fill-opacity="0.16" stroke="none"></path>
+                  <path d="{{curve}}" fill="none" stroke="{{th.c}}" stroke-width="2.5" vector-effect="non-scaling-stroke"></path>
+                </svg>
+                <span style="position: absolute; left: 6px; top: 8%; font-size: 10px; color: #a6adc8">+12</span>
+                <span style="position: absolute; left: 6px; top: 30%; font-size: 10px; color: #a6adc8">+6</span>
+                <span style="position: absolute; left: 6px; top: 49%; font-size: 10px; color: #a6adc8">0</span>
+                <span style="position: absolute; left: 6px; top: 67%; font-size: 10px; color: #a6adc8">−6</span>
+                <span style="position: absolute; left: 6px; top: 86%; font-size: 10px; color: #a6adc8">−12</span>
+                <span style="position: absolute; bottom: 4px; left: 13.3%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">50</span>
+                <span style="position: absolute; bottom: 4px; left: 23.3%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">100</span>
+                <span style="position: absolute; bottom: 4px; left: 33.3%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">200</span>
+                <span style="position: absolute; bottom: 4px; left: 46.6%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">500</span>
+                <span style="position: absolute; bottom: 4px; left: 56.6%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">1k</span>
+                <span style="position: absolute; bottom: 4px; left: 66.7%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">2k</span>
+                <span style="position: absolute; bottom: 4px; left: 79.9%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">5k</span>
+                <span style="position: absolute; bottom: 4px; left: 90%; transform: translateX(-50%); font-size: 10px; color: #a6adc8">10k</span>
+                <sc-for list="{{handles}}" as="h" hint-placeholder-count="4">
+                  <span aria-hidden="true" style="position: absolute; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; font-size: 11px; font-weight: 600; background: #11111b; {{h.sty}}">{{h.n}}</span>
+                </sc-for>
+              </div>
+              <sc-if value="{{showOut}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; flex-direction: column; gap: 2px; background: #11111b; border: 1px solid #7f849c; border-radius: 4px; padding: 8px 14px">
+                <div style="display: grid; grid-template-columns: 84px 116px minmax(0, 1fr); gap: 8px; align-items: center; {{flt.hpSty}}"><label style="display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 15px; font-weight: 600"><input type="checkbox" checked="{{flt.hpOn}}" sc-camel-on-change="{{flt.flipHp}}" style="width: 22px; height: 22px; margin: 0 10px 0 0; accent-color: #b4befe">HPF</label><div style="position: relative; min-width: 0"><input type="text" inputmode="decimal" autocomplete="off" value="{{flt.hpBox}}" sc-camel-on-change="{{flt.setHpBox}}" sc-camel-on-blur="{{flt.endHpBox}}" aria-label="High-pass frequency in hertz, for example 80 or 1k" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 30px 0 6px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 600"><span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">Hz</span></div><sc-raw-select value="{{flt.hpT}}" sc-camel-on-change="{{flt.setHpT}}" aria-label="High-pass filter type"><option value="bw12">Butterworth 12 dB/oct</option><option value="bw18">Butterworth 18 dB/oct</option><option value="bw24">Butterworth 24 dB/oct</option><option value="lr24">Linkwitz-Riley 24 dB/oct</option><option value="lr48">Linkwitz-Riley 48 dB/oct</option></sc-raw-select></div>
+                <div style="display: grid; grid-template-columns: 84px 116px minmax(0, 1fr); gap: 8px; align-items: center; {{flt.lpSty}}"><label style="display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 15px; font-weight: 600"><input type="checkbox" checked="{{flt.lpOn}}" sc-camel-on-change="{{flt.flipLp}}" style="width: 22px; height: 22px; margin: 0 10px 0 0; accent-color: #b4befe">LPF</label><div style="position: relative; min-width: 0"><input type="text" inputmode="decimal" autocomplete="off" value="{{flt.lpBox}}" sc-camel-on-change="{{flt.setLpBox}}" sc-camel-on-blur="{{flt.endLpBox}}" aria-label="Low-pass frequency in hertz, for example 120 or 1k" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 30px 0 6px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 600"><span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">Hz</span></div><sc-raw-select value="{{flt.lpT}}" sc-camel-on-change="{{flt.setLpT}}" aria-label="Low-pass filter type"><option value="bw12">Butterworth 12 dB/oct</option><option value="bw18">Butterworth 18 dB/oct</option><option value="bw24">Butterworth 24 dB/oct</option><option value="lr24">Linkwitz-Riley 24 dB/oct</option><option value="lr48">Linkwitz-Riley 48 dB/oct</option></sc-raw-select></div>
+                <div style="display: grid; grid-template-columns: 84px 116px minmax(0, 1fr); gap: 8px; align-items: center; {{dly.sty}}"><label style="display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 15px; font-weight: 600"><input type="checkbox" checked="{{dly.on}}" sc-camel-on-change="{{dly.flip}}" style="width: 22px; height: 22px; margin: 0 10px 0 0; accent-color: #b4befe">DELAY</label><div style="position: relative; min-width: 0"><input type="text" inputmode="decimal" autocomplete="off" value="{{dly.box}}" sc-camel-on-change="{{dly.setBox}}" sc-camel-on-blur="{{dly.endBox}}" aria-label="Delay in milliseconds" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 30px 0 6px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 600"><span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">ms</span></div><span style="font-size: 12px; color: #a6adc8">{{dly.dist}}</span></div>
+              </div>
+              </sc-if>
+              <sc-if value="{{showIn}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; flex-direction: column; gap: 2px; background: #11111b; border: 1px solid #3f6a85; border-radius: 4px; padding: 8px 14px">
+                <div style="display: grid; grid-template-columns: 84px 116px minmax(0, 1fr); gap: 8px; align-items: center; {{idly.sty}}"><label style="display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 15px; font-weight: 600"><input type="checkbox" checked="{{idly.on}}" sc-camel-on-change="{{idly.flip}}" style="width: 22px; height: 22px; margin: 0 10px 0 0; accent-color: #74c7ec">DELAY</label><div style="position: relative; min-width: 0"><input type="text" inputmode="decimal" autocomplete="off" value="{{idly.box}}" sc-camel-on-change="{{idly.setBox}}" sc-camel-on-blur="{{idly.endBox}}" aria-label="Input delay in milliseconds" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 30px 0 6px; text-align: right; border-radius: 4px; background: #1e1e2e; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px; font-weight: 600"><span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">ms</span></div><span style="font-size: 12px; color: #a6adc8">{{idly.dist}}</span></div>
+              </div>
+              </sc-if>
+            </div>
+
+            <div style="flex: 0 0 470px; max-width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px">
+                <h3 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase">10-band EQ</h3>
+                <div style="display: flex; gap: 8px">
+                  <button sc-camel-on-click="{{allOff}}" style="min-height: 44px; padding: 0 14px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #313244; color: #cdd6f4; border: 1px solid #585b70">ALL OFF</button>
+                  <button sc-camel-on-click="{{reset}}" style="min-height: 44px; padding: 0 14px; border-radius: 4px; font-size: 12px; font-weight: 600; background: #313244; color: #cdd6f4; border: 1px solid #585b70">RESET</button>
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: {{eqCols}}; gap: 8px; padding: 4px 0; border-bottom: 2px solid {{th.c}}; font-size: 11px; letter-spacing: 0.06em; color: #a6adc8; text-transform: uppercase">
+                <span style="text-align: center">On</span><span>#</span><span>Type</span><span style="text-align: right">Freq</span><span style="text-align: right">Gain</span><span style="text-align: right">Q</span>
+              </div>
+              <sc-for list="{{rowsEq}}" as="b" hint-placeholder-count="10">
+                <div style="display: grid; grid-template-columns: {{b.cols}}; gap: 8px; align-items: center; padding: 1px 0; border-bottom: 1px solid #45475a; {{b.sty}}">
+                  <label style="display: flex; align-items: center; justify-content: center; height: 44px; cursor: pointer">
+                    <input type="checkbox" checked="{{b.on}}" sc-camel-on-change="{{b.flip}}" aria-label="{{b.aOn}}" style="width: 22px; height: 22px; margin: 0; accent-color: {{b.c}}">
+                  </label>
+                  <span style="font-size: 13px; font-weight: 600">{{b.n}}</span>
+                  <sc-raw-select value="{{b.type}}" sc-camel-on-change="{{b.setType}}" aria-label="{{b.aT}}" style="padding: 0 4px">
+                    <option value="bell">Bell</option>
+                    <option value="notch">Notch</option>
+                    <option value="allpass">All-pass</option>
+                    <option value="lowshelf">Low shelf</option>
+                    <option value="highshelf">High shelf</option>
+                    <option value="bandpass">Band-pass</option>
+                    <option value="hp">High-pass</option>
+                    <option value="lp">Low-pass</option>
+                  </sc-raw-select>
+                  <div style="position: relative; min-width: 0; {{b.fSty}}">
+                    <input type="text" inputmode="decimal" autocomplete="off" value="{{b.fBox}}" sc-camel-on-change="{{b.setF}}" sc-camel-on-blur="{{b.endF}}" disabled="{{b.noF}}" aria-label="{{b.aF}}" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 26px 0 6px; text-align: right; border-radius: 4px; background: #11111b; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px">
+                    <span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">Hz</span>
+                  </div>
+                  <div style="position: relative; min-width: 0; {{b.gSty}}">
+                    <input type="text" inputmode="decimal" autocomplete="off" value="{{b.gBox}}" sc-camel-on-change="{{b.setG}}" sc-camel-on-blur="{{b.endG}}" disabled="{{b.noG}}" aria-label="{{b.aG}}" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 26px 0 6px; text-align: right; border-radius: 4px; background: #11111b; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px">
+                    <span style="position: absolute; right: 7px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #a6adc8; pointer-events: none">dB</span>
+                  </div>
+                  <div style="position: relative; min-width: 0; {{b.qSty}}">
+                    <input type="text" inputmode="decimal" autocomplete="off" value="{{b.qBox}}" sc-camel-on-change="{{b.setQ}}" sc-camel-on-blur="{{b.endQ}}" disabled="{{b.noQ}}" aria-label="{{b.aQ}}" style="width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 6px 0 6px; text-align: right; border-radius: 4px; background: #11111b; color: #cdd6f4; border: 1px solid #585b70; font-family: inherit; font-size: 13px">
+                    
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+      </section>
+    </sc-if>
+
+
+  </main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;live&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true},&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  state = {
+    t: 0, amp: 0, eqT: 'in', inC: 0, outC: 0, eq: {}, levs: {}, mgs: {}, links: {}, imats: {}, proc: {}, ed: {}, mem: {}, bm: {},
+    slots: {}, sel: 0, draft: 'Factory default', loaded: {}, fileName: {}, msg: '',
+    tab: 'mix'
+  };
+  componentDidMount() {
+    // every state change goes through the link (mirror) step
+    const raw = this.setState.bind(this);
+    this.setState = (p) => raw(this.mirror(p));
+    this.iv = setInterval(() => {
+      if (this.props.live !== false) this.setState({ t: this.state.t + 0.1 });
+    }, 100);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  names() { return ['FOH Main L', 'FOH Main R', 'Subs']; }
+  lvl(s, t) {
+    const base = 0.5 + 0.16 * Math.sin(s * 1.7);
+    const v = base + 0.16 * Math.sin(t * 0.9 + s) + 0.1 * Math.sin(t * 2.3 + s * 2.1) + 0.05 * Math.sin(t * 5.1 + s * 0.7);
+    return Math.max(0.04, Math.min(0.99, v));
+  }
+  gr(s, t) {
+    const over = this.lvl(s, t) - (0.72 + 0.03 * (s % 3));
+    return over > 0 ? Math.min(1, over * 5) : 0;
+  }
+  // limiter maths: V peak, load (ohm), power (W) and level (dBu) are linked
+  dbuOf(v) { return 20 * Math.log10((v / Math.SQRT2) / 0.7746); }
+  vOfDbu(d) { return 0.7746 * Math.pow(10, d / 20) * Math.SQRT2; }
+  wOf(v, r) { return (v * v) / (2 * r); }
+  clampV(v) { return Math.max(1, Math.min(250, v)); }
+  fmtW(w) { return w >= 1000 ? (w / 1000).toFixed(2) + ' kW' : Math.round(w) + ' W'; }
+  proc(a, c) {
+    const d = { dOn: false, dMs: 0, lOn: true, lV: 80, lR: 4, lAt: 5, lRl: 200, hpOn: true, hpF: 40, hpT: 'bw24', lpOn: false, lpF: 120, lpT: 'lr24' };
+    return { ...d, ...(this.state.proc[a + '-' + c] || {}) };
+  }
+  setProc(patch) {
+    const k = this.state.amp + '-' + this.state.outC;
+    this.setState({ proc: { ...this.state.proc, [k]: { ...(this.state.proc[k] || {}), ...patch } } });
+  }
+  parseU(raw) {
+    let s = String(raw).trim().toLowerCase().replace(',', '.').replace('\u2212', '-'), m = 1;
+    if (/kw$/.test(s)) m = 1000;
+    s = s.replace(/(dbu|kw|ms|v|w)$/, '').trim();
+    return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? parseFloat(s) * m : NaN;
+  }
+  setProcFor(c, patch) {
+    const k = this.state.amp + '-' + c;
+    this.setState({ proc: { ...this.state.proc, [k]: { ...(this.state.proc[k] || {}), ...patch } } });
+  }
+  limGr(a, c, t) {
+    const p = this.proc(a, c);
+    if (!p.lOn) return 0;
+    const n = Math.max(0, Math.min(1, (this.dbuOf(p.lV) - 10) / 38));
+    const over = this.lvl(a * 8 + 4 + c, t) - (0.3 + 0.6 * n);
+    return over > 0 ? Math.min(1, over * 5) : 0;
+  }
+  // presets: a preset is a snapshot of one amp's mixer, levels, EQ, filters, delay and limiter
+  stable(o) {
+    if (o === null || typeof o !== 'object') return JSON.stringify(o);
+    if (Array.isArray(o)) return '[' + o.map((x) => this.stable(x)).join(',') + ']';
+    return '{' + Object.keys(o).sort().map((k) => JSON.stringify(k) + ':' + this.stable(o[k])).join(',') + '}';
+  }
+  seedSlots() {
+    const e = { imat: null, lev: null, mg: null, eq: {}, proc: {} };
+    return [
+      { name: 'Factory default', locked: true, data: e },
+      { name: 'Show', data: { ...e, proc: { '0': { hpF: 60 }, '1': { hpF: 60 } } } },
+      { name: 'Rehearsal', data: { ...e, proc: { '0': { lV: 50 }, '1': { lV: 50 } } } },
+      ...Array(47).fill(null)
+    ];
+  }
+  slotsOf(a) { return this.state.slots[a] || this.seedSlots(); }
+  snapshot(a) {
+    const S = this.state, pre = a + '-';
+    const pick = (o) => { const r = {}; Object.keys(o).forEach((k) => { if (k.indexOf(pre) === 0) r[k.slice(pre.length)] = o[k]; }); return r; };
+    const dflt = (v, d) => (!v || this.stable(v) === this.stable(d) ? null : v);
+    return { imat: dflt(S.imats[a], this.defIMat()), lev: dflt(S.levs[a], this.defLev()), mg: dflt(S.mgs[a], this.defMg()), eq: pick(S.eq), proc: pick(S.proc) };
+  }
+  applyData(a, data) {
+    const S = this.state, pre = a + '-';
+    const strip = (o) => { const r = {}; Object.keys(o).forEach((k) => { if (k.indexOf(pre) !== 0) r[k] = o[k]; }); return r; };
+    const add = (base, src) => { const r = { ...base }; Object.keys(src || {}).forEach((k) => { r[pre + k] = src[k]; }); return r; };
+    const levs = { ...S.levs }, imats = { ...S.imats }, mgs = { ...S.mgs };
+    if (data.mg) mgs[a] = data.mg; else delete mgs[a];
+    if (data.lev) levs[a] = data.lev; else delete levs[a];
+    if (data.imat) imats[a] = data.imat; else delete imats[a];
+    return { levs, mgs, imats, eq: add(strip(S.eq), data.eq), proc: add(strip(S.proc), data.proc) };
+  }
+  pickSlot(i) {
+    const s = this.slotsOf(this.state.amp)[i];
+    this.setState({ sel: i, draft: s ? s.name : '' });
+  }
+  loadSlot() {
+    const S = this.state, a = S.amp, s = this.slotsOf(a)[S.sel];
+    if (!s) return;
+    if (!this.armed('load')) { this.arm('load'); return; }
+    // loading never unmutes: output mutes are kept as they are
+    this.setState({ ...this.applyData(a, s.data), arm: '', loaded: { ...S.loaded, [a]: S.sel }, msg: 'Loaded "' + s.name + '" into ' + this.names()[a] + '. Mutes unchanged.' });
+  }
+  saveSlot() {
+    const S = this.state, a = S.amp, slots = this.slotsOf(a).slice();
+    if (slots[S.sel] && slots[S.sel].locked) return;
+    const nm = S.draft.trim() || 'Preset ' + (S.sel + 1);
+    slots[S.sel] = { name: nm, data: this.snapshot(a) };
+    this.setState({ slots: { ...S.slots, [a]: slots }, draft: nm, loaded: { ...S.loaded, [a]: S.sel }, msg: 'Saved "' + nm + '" to slot ' + (S.sel + 1) + '.' });
+  }
+  saveFile() {
+    const S = this.state, a = S.amp;
+    const nm = S.draft.trim() || 'Preset';
+    const text = JSON.stringify({ kind: 'labgruppen-amp-preset', v: 1, name: nm, data: this.snapshot(a) }, null, 2);
+    const fname = nm.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() + '.json';
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const el = document.createElement('a');
+      el.href = url; el.download = fname;
+      el.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.setState({ msg: 'File "' + fname + '" sent to your downloads.' });
+    } catch (err) {
+      this.setState({ msg: 'This preview cannot write files.' });
+    }
+  }
+  openFile(e) {
+    const f = e.target.files && e.target.files[0];
+    const a = this.state.amp;
+    e.target.value = '';
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const j = JSON.parse(rd.result);
+        if (!j || j.kind !== 'labgruppen-amp-preset' || !j.data) throw new Error('not a preset');
+        if (!window.confirm('Load "' + f.name + '" into ' + this.names()[a] + '? This replaces its settings; mutes are kept.')) return;
+        this.setState({ ...this.applyData(a, j.data), loaded: { ...this.state.loaded, [a]: -1 }, fileName: { ...this.state.fileName, [a]: j.name || f.name }, msg: 'Loaded file "' + f.name + '".' });
+      } catch (err) {
+        this.setState({ msg: '"' + f.name + '" is not a preset file this app can read.' });
+      }
+    };
+    rd.readAsText(f);
+  }
+  // Mixer: ANALOG 1, ANALOG 2, AES 1, AES 2 -> IN 1, IN 2 (4 x 2 gains).  Levels: IN 1 -> OUT 1 and IN 2 -> OUT 2 only, one volume each.
+  defIMat() { return [[0, -60], [-60, 0], [-60, -60], [-60, -60]]; }
+  defLev() { return [0, 0]; }
+  imat() { return this.state.imats[this.state.amp] || this.defIMat(); }
+  lev() { return this.state.levs[this.state.amp] || this.defLev(); }
+  // master volume of each bus (IN 1, IN 2, OUT 1, OUT 2), dB, -60 = off
+  defMg() { return { i: [0, 0], o: [0, 0] }; }
+  mgv(g, c) { return (this.state.mgs[this.state.amp] || this.defMg())[g][c]; }
+  putM(g, c, v) {
+    const a = this.state.amp, x = Math.min(12, Math.round(v * 10) / 10), cur = this.state.mgs[a] || this.defMg();
+    const m = { i: cur.i.slice(), o: cur.o.slice() };
+    m[g][c] = x <= -48 ? -60 : x;
+    this.setState({ mgs: { ...this.state.mgs, [a]: m } });
+  }
+  gv(g, r, c) { return g === 'i' ? this.imat()[r][c] : this.lev()[c]; }
+  // gain in dB, -60 means off, +12 is the maximum
+  put(g, r, c, v) {
+    const a = this.state.amp, x = Math.min(12, Math.round(v * 10) / 10), y = x <= -48 ? -60 : x;
+    if (g === 'i') {
+      const m = this.imat().map((q) => q.slice());
+      m[r][c] = y;
+      this.setState({ imats: { ...this.state.imats, [a]: m } });
+    } else {
+      const m = this.lev().slice();
+      m[c] = y;
+      this.setState({ levs: { ...this.state.levs, [a]: m } });
+    }
+  }
+  flip(g, r, c) {
+    const v = this.gv(g, r, c), id = this.state.amp + g + r + c;
+    if (v > -60) { this.setState({ mem: { ...this.state.mem, [id]: v } }); this.put(g, r, c, -60); }
+    else this.put(g, r, c, this.state.mem[id] !== undefined ? this.state.mem[id] : 0);
+  }
+  parseDb(raw) {
+    const s = String(raw).trim().toLowerCase().replace(',', '.').replace('\u2212', '-').replace(/db$/, '').trim();
+    if (s === 'off' || s === '-inf') return -60;
+    return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? parseFloat(s) : NaN;
+  }
+  editDb(g, r, c, e) {
+    this.setState({ ed: { ...this.state.ed, ['mx' + this.state.amp + g + r + c]: e.target.value } });
+  }
+  endDb(g, r, c) {
+    const id = 'mx' + this.state.amp + g + r + c, raw = this.state.ed[id], ed = { ...this.state.ed };
+    delete ed[id];
+    this.setState({ ed });
+    if (raw !== undefined) this.applyTyped(raw, this.gv(g, r, c), (v) => this.put(g, r, c, v));
+  }
+  // typed levels apply on Enter or blur; raising a level by more than 6 dB asks first
+  applyTyped(raw, cur, set) {
+    const v = this.parseDb(raw);
+    if (isNaN(v)) return;
+    const x = Math.max(-60, Math.min(12, v)), up = x - Math.max(-48, cur);
+    if (up > 6 && !window.confirm('Raise this level by ' + up.toFixed(1) + ' dB?')) return;
+    set(x);
+  }
+  enter(e) { if (e.key === 'Enter') e.currentTarget.blur(); }
+  // faders: a click never moves the cap. Dragging moves it relative to where the drag started
+  // (0.2 dB per pixel), arrow keys and the wheel step 0.5 dB, Page Up / Down 3 dB.
+  fader(get, set) {
+    const q = (v) => Math.max(-48, Math.min(12, Math.round(v * 2) / 2));
+    const cur = () => Math.max(-48, get());
+    const step = (d) => { const v = q(cur() + d); if (v !== cur()) set(v); };
+    return {
+      down: (e) => { e.currentTarget.setPointerCapture(e.pointerId); this.drag = { y: e.clientY, v: cur() }; },
+      move: (e) => {
+        if (!this.drag) return;
+        const v = q(this.drag.v + (this.drag.y - e.clientY) * 0.2);
+        if (v !== cur()) set(v);
+      },
+      up: () => { this.drag = null; },
+      key: (e) => {
+        const d = { ArrowUp: 0.5, ArrowRight: 0.5, ArrowDown: -0.5, ArrowLeft: -0.5, PageUp: 3, PageDown: -3 }[e.key];
+        if (d === undefined) return;
+        e.preventDefault();
+        step(d);
+      },
+      wheel: (e) => step(e.deltaY < 0 ? 0.5 : -0.5)
+    };
+  }
+  key() {
+    const S = this.state;
+    return S.amp + '-' + S.eqT + (S.eqT === 'in' ? S.inC : S.outC);
+  }
+  bands() {
+    const o = this.state.eq[this.key()];
+    if (o) return o;
+    return this.defBands(this.key());
+  }
+  // link (mirror) two channels: IN 1 = IN 2 or OUT 1 = OUT 2. A change on one channel is copied to the other.
+  defBands(k) {
+    let seed = 0;
+    for (let i = 0; i < k.length; i++) seed += k.charCodeAt(i);
+    const fs = [32, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const on = [true, true, false, true, false, true, true, false, true, false];
+    return fs.map((f, i) => ({
+      f, on: on[i], q: 1.4, type: i === 0 ? 'lowshelf' : (i === 9 ? 'highshelf' : 'bell'),
+      g: on[i] ? ((seed + i * 3) % 7 - 3) * 0.8 : 0
+    }));
+  }
+  mirror(p) {
+    const S = this.state, L = S.links || {};
+    if (!p || 'links' in p || 'loaded' in p || !Object.keys(L).some((k) => L[k])) return p;
+    const out = { ...p }, a = S.amp;
+    const pairKey = (k) => {
+      const m = /^(\d+)-(in|out)?([01])$/.exec(k);
+      if (!m) return null;
+      const t = m[2] === 'in' ? 'i' : 'o';
+      return L[m[1] + t] ? m[1] + '-' + (m[2] || '') + (m[3] === '0' ? '1' : '0') : null;
+    };
+    ['eq', 'proc'].forEach((n) => {
+      if (!p[n]) return;
+      const old = S[n], nw = { ...p[n] };
+      let ch = false;
+      Object.keys(nw).forEach((k) => { if (nw[k] !== old[k]) { const q = pairKey(k); if (q) { nw[q] = nw[k]; ch = true; } } });
+      Object.keys(old).forEach((k) => { if (!(k in nw)) { const q = pairKey(k); if (q) { delete nw[q]; ch = true; } } });
+      if (ch) out[n] = nw;
+    });
+    if (p.levs && p.levs[a] && p.levs[a] !== S.levs[a] && L[a + 'o']) {
+      const o = S.levs[a] || this.defLev(), n = p.levs[a].slice();
+      [0, 1].forEach((c) => { if (n[c] !== o[c]) n[1 - c] = n[c]; });
+      out.levs = { ...p.levs, [a]: n };
+    }
+    if (p.mgs && p.mgs[a] && p.mgs[a] !== S.mgs[a]) {
+      const o = S.mgs[a] || this.defMg(), n = { i: p.mgs[a].i.slice(), o: p.mgs[a].o.slice() };
+      ['o'].forEach((g) => { if (L[a + g]) [0, 1].forEach((c) => { if (n[g][c] !== o[g][c]) n[g][1 - c] = n[g][c]; }); });
+      out.mgs = { ...p.mgs, [a]: n };
+    }
+    if (p.bm) {
+      const nw = { ...p.bm }; let ch = false;
+      Object.keys(nw).forEach((k) => {
+        const m = /^(\d+)([io])([01])$/.exec(k);
+        if (m && m[2] === 'o' && L[m[1] + m[2]] && nw[k] !== S.bm[k]) { nw[m[1] + m[2] + (m[3] === '0' ? '1' : '0')] = nw[k]; ch = true; }
+      });
+      if (ch) out.bm = nw;
+    }
+    return out;
+  }
+  // dangerous actions (unmute all, load a preset) need a second click within 3 s
+  armed(k) { return this.state.arm === k && this.state.t - this.state.armT < 3; }
+  arm(k) { this.setState({ arm: k, armT: this.state.t }); }
+  toggleAll() {
+    const S = this.state, all = this.names().every((_, x) => [0, 1].every((c) => S.bm[x + 'o' + c])), bm = { ...S.bm };
+    if (all && !this.armed('all')) { this.arm('all'); return; }
+    this.names().forEach((_, x) => [0, 1].forEach((c) => { bm[x + 'o' + c] = !all; }));
+    this.setState({ bm, arm: '' });
+  }
+  setLink(g) {
+    const S = this.state, a = S.amp, on = !(S.links[a + g]), patch = { links: { ...S.links, [a + g]: on } };
+    if (on) {
+      // channel 2 takes over the settings of channel 1
+      const side = g === 'i' ? 'in' : 'out', k0 = a + '-' + side + '0', k1 = a + '-' + side + '1';
+      patch.eq = { ...S.eq, [k1]: S.eq[k0] || this.defBands(k0) };
+      const p0 = g === 'i' ? a + '-in0' : a + '-0', p1 = g === 'i' ? a + '-in1' : a + '-1';
+      const pr = { ...S.proc };
+      if (S.proc[p0]) pr[p1] = S.proc[p0]; else delete pr[p1];
+      patch.proc = pr;
+      if (g === 'o') {
+        const mg = S.mgs[a] || this.defMg();
+        patch.mgs = { ...S.mgs, [a]: { i: mg.i.slice(), o: mg.o.slice() } };
+        patch.mgs[a].o[1] = mg.o[0];
+        patch.bm = { ...S.bm, [a + 'o1']: !!S.bm[a + 'o0'] };
+        const l = this.lev().slice();
+        l[1] = l[0];
+        patch.levs = { ...S.levs, [a]: l };
+      }
+    }
+    this.setState(patch);
+  }
+  updBand(i, patch) {
+    const key = this.key();
+    const bs = this.bands().map((b, j) => (j === i ? { ...b, ...patch } : b));
+    this.setState({ eq: { ...this.state.eq, [key]: bs } });
+  }
+  // typed values: f in Hz (accepts 1k, 2.5k), g in dB, q as a number. The raw text is kept while typing.
+  parseNum(r, k) {
+    let s = String(r).trim().toLowerCase().replace(',', '.').replace('\u2212', '-'), m = 1;
+    if (k === 'f') { s = s.replace(/hz$/, '').trim(); if (/k$/.test(s)) { m = 1000; s = s.slice(0, -1).trim(); } }
+    if (k === 'g') s = s.replace(/db$/, '').trim();
+    return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(s) ? parseFloat(s) * m : NaN;
+  }
+  editBand(i, k, e) {
+    const raw = e.target.value, key = this.key(), id = key + ':' + i + k;
+    const v = this.parseNum(raw, k);
+    const ed = { ...this.state.ed, [id]: raw };
+    if (isNaN(v)) { this.setState({ ed }); return; }
+    const x = k === 'f' ? Math.max(20, Math.min(20000, v))
+      : k === 'g' ? Math.max(-15, Math.min(15, Math.round(v * 10) / 10))
+      : Math.max(0.3, Math.min(8, Math.round(v * 10) / 10));
+    const bs = this.bands().map((b, j) => (j === i ? { ...b, [k]: x } : b));
+    this.setState({ ed, eq: { ...this.state.eq, [key]: bs } });
+  }
+  endEdit(i, k) {
+    const ed = { ...this.state.ed };
+    delete ed[this.key() + ':' + i + k];
+    this.setState({ ed });
+  }
+  allOff() {
+    const key = this.key();
+    this.setState({ eq: { ...this.state.eq, [key]: this.bands().map((b) => ({ ...b, on: false })) } });
+  }
+  reset() {
+    const eq = { ...this.state.eq };
+    delete eq[this.key()];
+    this.setState({ eq, ed: {} });
+  }
+  resp(b, f) {
+    const o = Math.log2(f / b.f);
+    if (b.type === 'bell') { const bw = 1.3 / Math.pow(b.q, 0.85); return b.g * Math.exp(-(o * o) / (bw * bw)); }
+    if (b.type === 'notch') { const bw = 0.5 / Math.pow(b.q, 0.85) + 0.05; return -30 * Math.exp(-(o * o) / (bw * bw)); }
+    if (b.type === 'lowshelf') return b.g / (1 + Math.exp(3 * o));
+    if (b.type === 'highshelf') return b.g / (1 + Math.exp(-3 * o));
+    if (b.type === 'bandpass') { const bw = 1.3 / Math.pow(b.q, 0.85); return -24 * (1 - Math.exp(-(o * o) / (bw * bw))); }
+    if (b.type === 'hp') return -10 * Math.log10(1 + Math.pow(b.f / f, 4));
+    if (b.type === 'lp') return -10 * Math.log10(1 + Math.pow(f / b.f, 4));
+    return 0;
+  }
+  fltResp(type, fc, f, hp) {
+    const x = hp ? fc / f : f / fc;
+    if (type === 'bw12') return -10 * Math.log10(1 + Math.pow(x, 4));
+    if (type === 'bw18') return -10 * Math.log10(1 + Math.pow(x, 6));
+    if (type === 'bw24') return -10 * Math.log10(1 + Math.pow(x, 8));
+    if (type === 'lr24') return -20 * Math.log10(1 + Math.pow(x, 4));
+    return -20 * Math.log10(1 + Math.pow(x, 8));
+  }
+  fmtF(f) {
+    if (f >= 1000) return String(parseFloat((f / 1000).toFixed(f >= 10000 ? 0 : 2))) + ' kHz';
+    return String(Math.round(f)) + ' Hz';
+  }
+  fmtG(g) { return (g > 0 ? '+' : '') + g.toFixed(1); }
+  fPos(f) { return Math.round(Math.log10(f / 20) / 3 * 1000); }
+  fOf(v) { return 20 * Math.pow(10, 3 * v / 1000); }
+  renderVals() {
+    const S = this.state, t = S.t, a = S.amp;
+    const names = this.names();
+    const IN_C = '#74c7ec', OUT_C = '#b4befe';
+    const SEL = 'background: #313244; color: #b4befe; border: 1px solid #b4befe; box-shadow: inset 0 0 0 1px #b4befe';
+    const OFF = 'background: #313244; color: #cdd6f4; border: 1px solid #585b70';
+    const pct = (x) => (x * 100).toFixed(1) + '%';
+    const isIn = S.eqT === 'in';
+    const ch = isIn ? S.inC : S.outC;
+
+    const amps = names.map((name, i) => ({
+      name, idx: String(i + 1).padStart(2, '0'), sel: i === a, sty: i === a ? SEL : OFF,
+      lv: pct(this.lvl(i * 4, t)), gr: pct(this.gr(i * 4, t)),
+      pick: () => this.setState({ amp: i, sel: 0, draft: this.slotsOf(i)[0].name, msg: '' })
+    }));
+
+    // go to the EQ of an input or output
+    const goEq = (side, c) => () => {
+      const patch = side === 'in' ? { eqT: 'in', inC: c } : { eqT: 'out', outC: c };
+      patch.tab = side;
+      patch.ed = {};
+      this.setState(patch);
+    };
+
+    // Mixer: 4 physical sources into IN 1 and IN 2.  Levels: IN 1 into OUT 1 and IN 2 into OUT 2, one volume each.
+    const srcNames = ['ANALOG 1', 'ANALOG 2', 'AES 1', 'AES 2'];
+    const dbTxt = (x) => (x <= -60 ? '\u2212\u221e' : x.toFixed(0).replace('-', '\u2212'));
+    const busTxt = (x) => (x <= -60 ? '\u2212\u221e' : x.toFixed(1).replace('-', '\u2212'));
+    const frac = (db) => Math.max(0, Math.min(1, (db + 48) / 60));
+    const BTN_OFF = 'background: #313244; color: #cdd6f4; border: 1px solid #585b70';
+    const BTN_RED = 'background: #eba0ac; color: #11111b; border: 1px solid #eba0ac';
+    const INS = 'background: #1c2a38; color: ' + IN_C + '; border: 1px solid #3f6a85';
+    const OUTS = 'background: #262638; color: ' + OUT_C + '; border: 1px solid #7f849c';
+    let active = 0;
+    const mkFader = (g, r, c, name, to, srcDb, showMute) => {
+      const v = this.gv(g, r, c), on = v > -60, raw = S.ed['mx' + a + g + r + c];
+      const post = on && srcDb > -100 ? srcDb + v : -120, preF = frac(srcDb), postF = frac(post);
+      if (on) active++;
+      return {
+        post, on, name, showMute,
+        sep: r > 0 ? 'border-left: 1px dashed #585b70; padding-left: 8px' : '',
+        dim: on ? '' : 'opacity: 0.6',
+        meters: [{ left: 'calc(50% - 9px)', w: '18px', pre: pct(preF), cover: ((1 - postF) * 100).toFixed(1) + '%' }],
+        prePct: pct(preF), postCover: ((1 - postF) * 100).toFixed(1) + '%', postTxt: dbTxt(post),
+        capBottom: 'calc(' + (on ? (Math.max(-48, v) + 48) / 60 : 0).toFixed(4) + ' * 100% - 8px)',
+        val: on ? Math.max(-48, v) : -48,
+        box: raw !== undefined ? raw : (on ? v.toFixed(1) : 'OFF'),
+        aria: name + ' to ' + to + ' gain in decibels, type a number or off',
+        muted: !on, mSty: on ? BTN_OFF : BTN_RED, mAria: (on ? 'Mute ' : 'Unmute ') + name + ' to ' + to,
+        edit: (e) => this.editDb(g, r, c, e), end: () => this.endDb(g, r, c),
+        flip: () => this.flip(g, r, c),
+        enter: (e) => this.enter(e),
+        ...(() => { const d = this.fader(() => this.gv(g, r, c), (x) => this.put(g, r, c, x)); return { fDown: d.down, fMove: d.move, fUp: d.up, fKey: d.key, fWheel: d.wheel }; })()
+      };
+    };
+    const busOf = (faders) => {
+      let sum = 0;
+      faders.forEach((x) => { if (x.on && x.post > -100) sum += Math.pow(10, x.post / 20); });
+      return sum > 0 ? 20 * Math.log10(sum) : -120;
+    };
+    // limiter of OUT c: typed values only. V peak, power and level (dBu) are linked.
+    const limOf = (c) => {
+      const p = this.proc(a, c), dbu = this.dbuOf(p.lV), pk = a + '-' + c;
+      const mkBox = (key, label, unit, shown, apply) => {
+        const id = 'lm' + a + c + key, raw = S.ed[id];
+        return {
+          label, unit, box: raw !== undefined ? raw : shown, aria: 'Limiter ' + label + ' of output ' + (c + 1) + ' in ' + unit,
+          edit: (e) => {
+            const r = e.target.value, v = this.parseU(r), ed = { ...S.ed, [id]: r };
+            if (isNaN(v)) { this.setState({ ed }); return; }
+            this.setState({ ed, proc: { ...S.proc, [pk]: { ...(S.proc[pk] || {}), ...apply(v) } } });
+          },
+          end: () => { const ed = { ...S.ed }; delete ed[id]; this.setState({ ed }); }
+        };
+      };
+      const W = this.wOf(p.lV, p.lR);
+      return {
+        lboxes: [
+          mkBox('l', 'Load', '\u03a9', String(parseFloat(p.lR.toFixed(1))), (v) => ({ lR: Math.max(1, Math.min(32, v)) })),
+          mkBox('v', 'V peak', 'V', p.lV.toFixed(1), (v) => ({ lV: this.clampV(v) })),
+          mkBox('w', 'Power', 'W', String(Math.round(W)), (v) => ({ lV: this.clampV(Math.sqrt(2 * Math.max(0, v) * p.lR)) })),
+          mkBox('d', 'Level', 'dBu', dbu.toFixed(1), (v) => ({ lV: this.clampV(this.vOfDbu(v)) }))
+        ],
+        lDim: p.lOn ? '' : 'opacity: 0.45',
+        lOff: !p.lOn, lBtn: p.lOn ? 'LIMITER ON' : 'LIMITER OFF',
+        lBtnSty: p.lOn ? BTN_OFF : BTN_RED, lFlipAria: (p.lOn ? 'Bypass the limiter of output ' : 'Enable the limiter of output ') + (c + 1),
+        lFlip: () => this.setProcFor(c, { lOn: !p.lOn })
+      };
+    };
+    const mkStrip = (g, c, label, faders, sty, goSide) => {
+      const mv = this.mgv(g, c), mOn = mv > -60, sumDb = busOf(faders), mraw = S.ed['mg' + a + g + c];
+      const bMuted = !!S.bm[a + g + c], db = bMuted || !mOn || sumDb <= -100 ? -120 : sumDb + mv;
+      const gr = g === 'o' && !bMuted ? this.limGr(a, c, t) : 0, grDb = gr * 12;
+      return {
+        label, sty, faders, db,
+        vVal: mOn ? Math.max(-48, mv) : -48,
+        vCap: 'calc(' + (mOn ? (Math.max(-48, mv) + 48) / 60 : 0).toFixed(4) + ' * 100% - 8px)',
+        vBox: mraw !== undefined ? mraw : (mOn ? mv.toFixed(1) : 'OFF'),
+        vAria: 'Master volume of ' + label + ' in decibels, type a number or off',
+        ...(() => { const d = this.fader(() => this.mgv(g, c), (x) => this.putM(g, c, x)); return { vDown: d.down, vMove: d.move, vUp: d.up, vKey: d.key, vWheel: d.wheel }; })(),
+        vEdit: (e) => this.setState({ ed: { ...S.ed, ['mg' + a + g + c]: e.target.value } }),
+        vEnd: () => {
+          const ed = { ...this.state.ed }, raw = ed['mg' + a + g + c];
+          delete ed['mg' + a + g + c];
+          this.setState({ ed });
+          if (raw !== undefined) this.applyTyped(raw, mv, (x) => this.putM(g, c, x));
+        },
+        vEnter: (e) => this.enter(e),
+        go: goEq(goSide, c), goAria: 'Open the EQ of ' + label,
+        busCover: ((1 - frac(db)) * 100).toFixed(1) + '%',
+        meters: [{ left: 'calc(50% - 9px)', w: '18px', cover: ((1 - frac(db)) * 100).toFixed(1) + '%' }],
+        busLed: db > -1 ? '#f38ba8' : '#313244',
+        bMuted, bDim: bMuted ? 'opacity: 0.4' : '',
+        busShow: bMuted ? 'MUTED' : busTxt(db) + ' dB',
+        mSty: bMuted ? BTN_RED : BTN_OFF, mAria: (bMuted ? 'Unmute ' : 'Mute ') + label,
+        mute: () => this.setState({ bm: { ...S.bm, [a + g + c]: !bMuted } }),
+        grPct: (gr * 100).toFixed(1) + '%',
+        grBars: [{ pct: (gr * 100).toFixed(1) + '%', w: '24px' }], grNum: (grDb > 0.05 ? '\u2212' : '') + grDb.toFixed(1),
+        grTxt: g === 'o' && !bMuted ? 'GR ' + (grDb > 0.05 ? '\u2212' : '') + grDb.toFixed(1) + ' dB' : '',
+        sepSty: c > 0 ? 'padding-top: 16px; border-top: 2px dashed #585b70' : '',
+        inName: 'IN ' + (c + 1), limName: 'LIMITER ' + (c + 1),
+        hasLim: g === 'o', ...(g === 'o' ? limOf(c) : {})
+      };
+    };
+    const mixStrips = [0, 1].map((c) => mkStrip('i', c, 'IN ' + (c + 1),
+      srcNames.map((nm, r) => mkFader('i', r, c, nm, 'IN ' + (c + 1), this.lvl(a * 8 + r, t) * 60 - 54, true)), INS, 'in'));
+    const activeMix = active;
+    const levStrips = [0, 1].map((c) => mkStrip('o', c, 'OUT ' + (c + 1),
+      [mkFader('o', 0, c, 'IN ' + (c + 1), 'OUT ' + (c + 1), mixStrips[c].db, true)], OUTS, 'out'));
+    const mkLink = (g, nm) => {
+      const on = !!S.links[a + g];
+      return {
+        on, txt: on ? '\u26d3 LINKED \u00b7 click to split' : '\u26d3 LINK 1 + 2',
+        aria: (on ? 'Unlink ' : 'Link ') + nm + ' 1 and ' + nm + ' 2: ' + (on ? 'they are mirrored now' : 'mirror every change on both'),
+        sty2: on ? 'background: ' + (g === 'i' ? IN_C : OUT_C) + '; color: #11111b; border: 1px solid ' + (g === 'i' ? IN_C : OUT_C) : 'background: #313244; color: #cdd6f4; border: 1px solid #585b70',
+        sty: on ? 'background: #11111b; color: ' + (g === 'i' ? IN_C : OUT_C) + '; border: 1px solid #11111b' : 'background: rgba(0, 0, 0, 0.14); color: #11111b; border: 1px solid rgba(0, 0, 0, 0.4)',
+        pick: () => this.setLink(g)
+      };
+    };
+    const lk = { i: mkLink('i', 'IN '), o: mkLink('o', 'OUT ') };
+    // mute all: every output of every amplifier (same as MUTE ALL on the amplifiers page)
+    const allMuted = names.every((_, x) => [0, 1].every((c) => S.bm[x + 'o' + c]));
+    const mergeLev = (s0, s1) => {
+      const f0 = s0.faders[0], f1 = s1.faders[0];
+      const L = 'calc(50% - 15px)', R = 'calc(50% + 1px)', W = '14px';
+      const both = (x, y) => (x === y ? x : x + ' \u00b7 ' + y);
+      return {
+        ...s0, sepSty: '', inName: 'IN 1 + 2', label: 'OUT 1 + 2', limName: 'LIMITER 1 + 2',
+        faders: [{ ...f0, postTxt: f0.postTxt + ' \u00b7 ' + f1.postTxt, meters: [{ left: L, w: W, pre: f0.prePct, cover: f0.postCover }, { left: R, w: W, pre: f1.prePct, cover: f1.postCover }],
+          aria: 'IN 1 + 2 volume in decibels, type a number or off', mAria: (f0.muted ? 'Unmute' : 'Mute') + ' IN 1 + 2' }],
+        meters: [{ left: L, w: W, cover: s0.meters[0].cover }, { left: R, w: W, cover: s1.meters[0].cover }],
+        busShow: both(s0.busShow.replace(' dB', ''), s1.busShow.replace(' dB', '')) + (s0.bMuted && s1.bMuted ? '' : ' dB'),
+        busLed: s0.busLed !== '#313244' || s1.busLed !== '#313244' ? '#f38ba8' : '#313244',
+        vAria: 'Master volume of OUT 1 + 2 in decibels, type a number or off', mAria: (s0.bMuted ? 'Unmute' : 'Mute') + ' OUT 1 + 2',
+        grBars: [{ pct: s0.grBars[0].pct, w: '11px' }, { pct: s1.grBars[0].pct, w: '11px' }],
+        grTxt: s0.grTxt ? 'GR ' + s0.grNum + ' \u00b7 ' + s1.grNum + ' dB' : ''
+      };
+    };
+    const groups = [
+      { title: 'Mixer', sub: '4 sources \u2192 IN 1, IN 2 \u00b7 click an IN name to open its EQ', c: IN_C, tint: '#1b2635', srcLabel: 'SOURCES', mergeLabel: 'MERGED', arrow: 'MIX', lk: lk.i, strips: mixStrips },
+      { title: 'Levels', sub: 'IN 1 \u2192 OUT 1, IN 2 \u2192 OUT 2 \u00b7 one volume and one limiter each \u00b7 click an OUT name to open its EQ', c: OUT_C, tint: '#222236', srcLabel: 'FROM MIXER', mergeLabel: 'OUTPUT', arrow: 'LEVEL', lk: lk.o, strips: S.links[a + 'o'] ? [mergeLev(levStrips[0], levStrips[1])] : levStrips }
+    ];
+
+    // EQ for the selected channel
+    const th = isIn
+      ? { c: IN_C, tint: '#1b2635', title: 'INPUT ' + (ch + 1) + ' · EQ, DELAY', cap: 'AFTER the mixer, BEFORE the levels' }
+      : { c: OUT_C, tint: '#222236', title: 'OUTPUT ' + (ch + 1) + ' · EQ, FILTERS, DELAY', cap: 'AFTER the levels, before the speakers' };
+    const p = this.proc(a, S.outC);
+    const bs = this.bands();
+
+    const N = 140, pts = [];
+    for (let i = 0; i <= N; i++) {
+      const f = 20 * Math.pow(10, 3 * i / N);
+      let db = 0;
+      bs.forEach((b) => { if (b.on) db += this.resp(b, f); });
+      if (!isIn) {
+        if (p.hpOn) db += this.fltResp(p.hpT, p.hpF, f, true);
+        if (p.lpOn) db += this.fltResp(p.lpT, p.lpF, f, false);
+      }
+      db = Math.max(-15, Math.min(15, db));
+      pts.push((i / N * 1000).toFixed(1) + ' ' + (150 - db / 15 * 140).toFixed(1));
+    }
+    const curve = 'M' + pts.join(' L ');
+    const handles = [];
+    bs.forEach((b, i) => {
+      if (!b.on) return;
+      const hasG = b.type === 'bell' || b.type === 'lowshelf' || b.type === 'highshelf';
+      const gy = hasG ? Math.max(-15, Math.min(15, b.g)) : 0;
+      handles.push({
+        n: i + 1,
+        sty: 'left: ' + (Math.log10(b.f / 20) / 3 * 100).toFixed(2) + '%; top: ' + ((150 - gy / 15 * 140) / 300 * 100).toFixed(2) + '%; color: ' + th.c + '; border: 2px solid ' + th.c
+      });
+    });
+    const eqCols = '40px 22px 124px 96px 78px 66px';
+    const eqGap = '8px';
+    const fmtBox = (f) => String(parseFloat(f.toFixed(f < 100 ? 1 : 0)));
+    const rowsEq = bs.map((b, i) => {
+      const hasG = b.type === 'bell' || b.type === 'lowshelf' || b.type === 'highshelf';
+      const hasQ = b.type === 'bell' || b.type === 'notch' || b.type === 'bandpass' || b.type === 'allpass';
+      const id = this.key() + ':' + i;
+      const box = (k, shown, ok) => (ok ? (S.ed[id + k] !== undefined ? S.ed[id + k] : shown) : '—');
+      return {
+        n: i + 1, on: b.on, c: th.c, type: b.type, cols: eqCols,
+        sty: b.on ? '' : 'opacity: 0.5',
+        aOn: 'Band ' + (i + 1) + ' enabled', aT: 'Band ' + (i + 1) + ' type',
+        aF: 'Band ' + (i + 1) + ' frequency in hertz, for example 1k', aG: 'Band ' + (i + 1) + ' gain in decibels', aQ: 'Band ' + (i + 1) + ' width Q',
+        fBox: box('f', fmtBox(b.f), true), fSty: '', noF: false,
+        gBox: box('g', b.g.toFixed(1), hasG), gSty: hasG ? '' : 'opacity: 0.3', noG: !hasG,
+        qBox: box('q', b.q.toFixed(1), hasQ), qSty: hasQ ? '' : 'opacity: 0.3', noQ: !hasQ,
+        flip: () => this.updBand(i, { on: !b.on }),
+        setType: (e) => this.updBand(i, { type: e.target.value }),
+        setF: (e) => this.editBand(i, 'f', e), endF: () => this.endEdit(i, 'f'),
+        setG: (e) => this.editBand(i, 'g', e), endG: () => this.endEdit(i, 'g'),
+        setQ: (e) => this.editBand(i, 'q', e), endQ: () => this.endEdit(i, 'q')
+      };
+    });
+    const bandsOn = bs.filter((b) => b.on).length;
+
+    // channel chips in the EQ header
+    const chipsAll = [0, 1].map((i) => {
+      const on = isIn && S.inC === i;
+      return { txt: 'IN ' + (i + 1), on, sty: on ? 'background: #11111b; color: ' + IN_C + '; border: 1px solid #11111b' : 'background: rgba(0, 0, 0, 0.14); color: #11111b; border: 1px solid rgba(0, 0, 0, 0.4)', pick: goEq('in', i) };
+    }).concat([0, 1].map((o) => {
+      const on = !isIn && S.outC === o;
+      return { txt: 'OUT ' + (o + 1), on, sty: on ? 'background: #11111b; color: ' + OUT_C + '; border: 1px solid #11111b' : 'background: rgba(0, 0, 0, 0.14); color: #11111b; border: 1px solid rgba(0, 0, 0, 0.4)', pick: goEq('out', o) };
+    }));
+    const sideLinked = !!S.links[a + (isIn ? 'i' : 'o')];
+    const chips = sideLinked
+      ? [{ txt: (isIn ? 'IN' : 'OUT') + ' 1 + 2', on: true, sty: 'background: #11111b; color: ' + (isIn ? IN_C : OUT_C) + '; border: 1px solid #11111b', pick: () => {} }]
+      : chipsAll.filter((x) => x.txt.indexOf(isIn ? 'IN' : 'OUT') === 0);
+
+    // output only: filters and delay (typed values), shown under the graph of the OUTPUTS EQ
+    const pk = a + '-' + S.outC;
+    const fx = (name, shown, parse, apply) => {
+      const id = 'fx' + a + S.outC + name, raw = S.ed[id];
+      return {
+        box: raw !== undefined ? raw : shown,
+        set: (e) => {
+          const r = e.target.value, v = parse(r), ed = { ...S.ed, [id]: r };
+          if (isNaN(v)) { this.setState({ ed }); return; }
+          this.setState({ ed, proc: { ...S.proc, [pk]: { ...(S.proc[pk] || {}), ...apply(v) } } });
+        },
+        end: () => { const ed = { ...S.ed }; delete ed[id]; this.setState({ ed }); }
+      };
+    };
+    const fshown = (f) => String(parseFloat(f.toFixed(f < 100 ? 1 : 0)));
+    const pf = (r) => this.parseNum(r, 'f'), pm = (r) => this.parseU(r);
+    const hpx = fx('hp', fshown(p.hpF), pf, (v) => ({ hpF: Math.max(20, Math.min(20000, v)) }));
+    const lpx = fx('lp', fshown(p.lpF), pf, (v) => ({ lpF: Math.max(20, Math.min(20000, v)) }));
+    const dlx = fx('dl', p.dMs.toFixed(1), pm, (v) => ({ dMs: Math.max(0, Math.min(500, Math.round(v * 10) / 10)) }));
+    const flt = {
+      hpOn: p.hpOn, hpSty: p.hpOn ? '' : 'opacity: 0.6', hpT: p.hpT, hpBox: hpx.box, setHpBox: hpx.set, endHpBox: hpx.end,
+      lpOn: p.lpOn, lpSty: p.lpOn ? '' : 'opacity: 0.6', lpT: p.lpT, lpBox: lpx.box, setLpBox: lpx.set, endLpBox: lpx.end,
+      flipHp: () => this.setProc({ hpOn: !p.hpOn }),
+      flipLp: () => this.setProc({ lpOn: !p.lpOn }),
+      setHpT: (e) => this.setProc({ hpT: e.target.value }),
+      setLpT: (e) => this.setProc({ lpT: e.target.value })
+    };
+    const dly = {
+      on: p.dOn, sty: p.dOn ? '' : 'opacity: 0.6',
+      dist: '\u2248 ' + (p.dMs * 0.343).toFixed(2) + ' m of air at 20 \u00b0C',
+      box: dlx.box, setBox: dlx.set, endBox: dlx.end,
+      flip: () => this.setProc({ dOn: !p.dOn })
+    };
+
+    // input delay: one per input, kept in the same store as the output settings under the key "in0" / "in1"
+    const ik = 'in' + S.inC, ip = this.proc(a, ik), iid = 'fx' + a + ik + 'dl', iraw = S.ed[iid];
+    const idly = {
+      on: ip.dOn, sty: ip.dOn ? '' : 'opacity: 0.6',
+      dist: '\u2248 ' + (ip.dMs * 0.343).toFixed(2) + ' m of air at 20 \u00b0C',
+      box: iraw !== undefined ? iraw : ip.dMs.toFixed(1),
+      setBox: (e) => {
+        const r = e.target.value, v = this.parseU(r), ed = { ...S.ed, [iid]: r };
+        if (isNaN(v)) { this.setState({ ed }); return; }
+        const k = a + '-' + ik;
+        this.setState({ ed, proc: { ...S.proc, [k]: { ...(S.proc[k] || {}), dMs: Math.max(0, Math.min(500, Math.round(v * 10) / 10)) } } });
+      },
+      endBox: () => { const ed = { ...S.ed }; delete ed[iid]; this.setState({ ed }); },
+      flip: () => this.setProcFor(ik, { dOn: !ip.dOn })
+    };
+
+    // presets bar
+    const slotsArr = this.slotsOf(a);
+    const ls = S.loaded[a] === undefined ? 0 : S.loaded[a];
+    const loadedSlot = ls >= 0 ? slotsArr[ls] : null;
+    const dirty = ls >= 0 ? (loadedSlot ? this.stable(loadedSlot.data) !== this.stable(this.snapshot(a)) : true) : false;
+    const curSlot = slotsArr[S.sel];
+    const current = ls >= 0 ? (loadedSlot ? String(ls + 1).padStart(2, '0') + ' · ' + loadedSlot.name : 'slot ' + (ls + 1)) + (dirty ? ' (modified)' : '') : 'file "' + (S.fileName[a] || '') + '"';
+    const pre = {
+      draft: S.draft, selV: String(S.sel),
+      status: S.msg || ('Running: ' + current),
+      options: slotsArr.map((s, i) => ({
+        v: String(i),
+        txt: String(i + 1).padStart(2, '0') + ' · ' + (s ? s.name : 'Empty') + (i === ls ? (dirty ? '  (loaded, modified)' : '  (loaded)') : '')
+      })),
+      loadDis: !curSlot, loadSty: curSlot ? '' : 'opacity: 0.4', loadTxt: this.armed('load') ? 'CONFIRM LOAD' : 'LOAD',
+      saveDis: !!(curSlot && curSlot.locked), saveSty: curSlot && curSlot.locked ? 'opacity: 0.4' : '',
+      pickV: (e) => this.pickSlot(parseInt(e.target.value, 10)),
+      setDraft: (e) => this.setState({ draft: e.target.value }),
+      load: () => this.loadSlot(),
+      save: () => this.saveSlot(),
+      saveFile: () => this.saveFile(),
+      openFile: (e) => this.openFile(e)
+    };
+
+    // tabs
+    const linkedI = !!S.links[a + 'i'], linkedO = !!S.links[a + 'o'];
+    const IN_T = { c: IN_C, bg: '#1c2a38', bd: '#3f6a85' }, OUT_T = { c: OUT_C, bg: '#262638', bd: '#7f849c' };
+    const tabDefs = [
+      { k: 'mix', txt: 'MIXER', ...IN_T },
+      { k: 'lev', txt: 'LEVELS', ...OUT_T },
+      ...(linkedI ? [{ k: 'in', ch: 0, all: true, txt: 'INPUTS 1 + 2 \u00b7 EQ', ...IN_T }] : [0, 1].map((i) => ({ k: 'in', ch: i, txt: 'INPUT ' + (i + 1) + ' \u00b7 EQ', ...IN_T }))),
+      ...(linkedO ? [{ k: 'out', ch: 0, all: true, txt: 'OUTPUTS 1 + 2 \u00b7 EQ', ...OUT_T }] : [0, 1].map((o) => ({ k: 'out', ch: o, txt: 'OUTPUT ' + (o + 1) + ' \u00b7 EQ', ...OUT_T })))
+    ];
+    const tabs = tabDefs.map((d) => {
+      const on = S.tab === d.k && (d.ch === undefined || d.all || (d.k === 'in' ? S.inC : S.outC) === d.ch);
+      return {
+        txt: d.txt, on,
+        sty: on ? 'background: ' + d.c + '; color: #11111b; border: 1px solid ' + d.c + '; border-bottom: 0; margin-bottom: -2px; padding-bottom: 8px; position: relative; z-index: 2' : 'background: ' + d.bg + '; color: ' + d.c + '; border: 1px solid ' + d.bd + '; border-bottom: 0',
+        pick: d.ch === undefined ? () => this.setState({ tab: d.k, ed: {} }) : goEq(d.k, d.ch)
+      };
+    });
+
+    return {
+      ampName: names[a], amps, pre, th, isIn, curve, curveFill: curve + ' L 1000 150 L 0 150 Z',
+      tabLk: S.tab === 'in' ? lk.i : lk.o, showTabLk: S.tab !== 'mix', allMuted, allLabel: allMuted ? (this.armed('all') ? 'CONFIRM UNMUTE ALL' : 'UNMUTE ALL') : 'MUTE ALL',
+      allSty: allMuted ? 'background: #11111b; color: #eba0ac; border: 2px solid #eba0ac' : 'background: #b4befe; color: #11111b; border: 2px solid #b4befe',
+      toggleAll: () => this.toggleAll(),
+      mixGroups: [groups[0]], levGroups: [groups[1]],
+      handles, rowsEq, eqCols, flt, dly, idly, chips, tabs, lkEq: isIn ? lk.i : lk.o, showOut: !isIn, showIn: isIn,
+      allOff: () => this.allOff(),
+      reset: () => this.reset(),
+      wrapMix: S.tab === 'mix',
+      wrapLev: S.tab === 'lev',
+      wrapEq: S.tab === 'in' || S.tab === 'out'
+    };
+  }
+}
+</script>
+
+
+</body></html>
