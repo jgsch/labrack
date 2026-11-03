@@ -10,14 +10,13 @@ Use Phases until v1 ships, then Now / Next / Later.
 - Goal: control IPD and IPX amplifiers from LAB.RACK safely, as specified.
 - Spec: BEH-1 to BEH-41, UX-1 to UX-27, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
 - Changes (`plan/changes/`), in dependency order:
-  1. `mockup-tooling`
-  2. `core-amp-list`, then `core-connections` and `core-discovery`
-  3. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link`
-  4. `app-shell`, then `app-controls`
-  5. `app-amplifiers-page`, `app-search-page`, `app-mix-eq`, `ipd-access`
-  6. `v1-verification`
-- Already in place: ARCH-11 (formatting in the mise tasks), ARCH-12 (`re/flake.nix`), and ARCH-9
-  except `scripts/mockup.py`.
+  1. `core-amp-list`, then `core-connections` and `core-discovery`
+  2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link`
+  3. `app-shell`, then `app-controls`
+  4. `app-amplifiers-page`, `app-search-page`, `app-mix-eq`, `ipd-access`
+  5. `v1-verification`
+- Already in place: ARCH-9, ARCH-10, ARCH-11 (formatting in the mise tasks), ARCH-12
+  (`re/flake.nix`).
 - Exit criteria:
   - An amp added by discovery or by hand appears on all pages, survives a restart, and can be
     renamed and removed. (BEH-19 to BEH-23, BEH-39, BEH-40)

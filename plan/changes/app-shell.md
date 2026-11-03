@@ -19,9 +19,11 @@ No spec change; implements:
 ## Tasks
 
 - [ ] Create `crates/app` and wire it to core (state in, intents out)
-- [ ] Import the mockup CSS and fonts (from `mockup-tooling`)
+- [ ] Import the mockup CSS (in `spec/mockup/boards/`) and the fonts (`spec/mockup/assets/*.woff2`, licences
+      in `spec/mockup/licenses.txt`)
 - [ ] Header, three tabs, MUTE ALL slot, keyboard focus
-- [ ] App screenshot task (mise) and comparison with the mockup header
+- [ ] App screenshot task (mise) and comparison with the mockup header (`scripts/mockup.py compare`;
+      the mockup screenshots are taken with the meters frozen, `mise run mockup`)
 - [ ] `mise run build` builds the app; add a `run` task
 
 ## Done when
@@ -31,4 +33,4 @@ No spec change; implements:
 
 ## Notes
 
-- Depends on `mockup-tooling` and `core-amp-list`.
+- Depends on `core-amp-list`.
