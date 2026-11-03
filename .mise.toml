@@ -1,14 +1,29 @@
-# Placeholder tasks fail until configured, so a missing setup is never
-# mistaken for a passing run.
-
-[tasks.test]
-description = "Run the test suite"
-run = "echo 'test task not configured yet: edit .mise.toml' >&2; exit 1"
-
-[tasks.lint]
-description = "Run linters and type checks"
-run = "echo 'lint task not configured yet: edit .mise.toml' >&2; exit 1"
+# Every task runs inside the Nix dev shell (flake.nix), so only nix and mise
+# are needed on the host.
 
 [tasks.fmt]
 description = "Format the code"
-run = "echo 'fmt task not configured yet: edit .mise.toml' >&2; exit 1"
+run = "nix develop -c cargo fmt --all -- --config max_width=110,use_small_heuristics=Max"
+
+[tasks.lint]
+description = "Format check and clippy (both drivers, each alone); warnings are errors"
+run = """
+nix develop -c bash -ec '
+cargo fmt --all --check -- --config max_width=110,use_small_heuristics=Max
+cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy -p amps --all-targets --no-default-features --features ipx -- -D warnings
+cargo clippy -p amps --all-targets --no-default-features --features ipd -- -D warnings
+'
+"""
+
+[tasks.test]
+description = "Run the test suite"
+run = "nix develop -c cargo test --workspace"
+
+[tasks.build]
+description = "Build the workspace"
+run = "nix develop -c cargo build --workspace"
+
+[tasks.sim]
+description = "Run the IPD simulator (extra arguments go to `labgruppen sim`)"
+run = "nix develop -c cargo run -p amps --bin labgruppen -- sim"
