@@ -181,9 +181,9 @@ TEMPERATURE (env 22) is pushed as one i32; ALL_TEMPERATURES (env 28) returns an 
 | Cmd | Name | Payload | Reply | Status |
 |---|---|---|---|---|
 | 1 | HEARTBEAT | none | none awaited | sent every 2 s by the client |
-| 3 | GETPRESET | u32 index | sub echoed; u32 ?, char[16] name @4, u32 index @0x14, audio config @0x48; an empty slot returns 0xFF bytes; slot 50 gets no reply | verified |
-| 4 | RECALLPRESET | u32 index | none | untested (changes live audio incl. mutes) |
-| 18 | GETALLPRESETNAME | none | N x char[16] (N = 50 on the test amp: slots 0-49, the array index is the preset index, slot 0 is empty) | verified |
+| 3 | GETPRESET | u32 index | sub echoed; u32 ?, char[16] name @4, u32 index @0x14, audio config @0x48; an empty slot returns 0xFF bytes; index 50 gets no reply | verified |
+| 4 | RECALLPRESET | u32 index (wire) | none | untested (changes live audio incl. mutes) |
+| 18 | GETALLPRESETNAME | none | N x char[16] (N = 50 on the test amp; the array index is the wire preset index 0-49, the other commands use the same index) | verified |
 | 19 | GETVALIDPRESETS | none | N x u32, non-zero = slot used | verified |
 
 Preset slots are indexed from the same list (index 1 = "base" on the test amp).

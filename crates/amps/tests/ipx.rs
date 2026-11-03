@@ -431,7 +431,7 @@ fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> V
             Ctrl::GETALLPRESETNAME => reply(Main::SYSCTRL, &fixture("preset_names.bin")),
             Ctrl::GETVALIDPRESETS => {
                 let valid: Vec<u8> =
-                    (0..50u32).flat_map(|i| u32::from(matches!(i, 0..=3 | 5)).to_le_bytes()).collect();
+                    (0..50u32).flat_map(|i| u32::from(matches!(i, 1 | 2 | 3 | 5)).to_le_bytes()).collect();
                 reply(Main::SYSCTRL, &valid)
             }
             Ctrl::GETPRESET => reply(Main::SYSCTRL, &fixture("getpreset_1.bin")),
@@ -562,25 +562,26 @@ async fn status_presets_and_recall() {
     assert_eq!((st.driver.as_str(), st.model.as_str(), st.name.as_str()), ("ipx", "IPX 1200", "Stage Left"));
     assert_eq!(st.firmware, "2.3.4.0");
     let preset = st.preset.unwrap();
-    assert_eq!((preset.index, preset.name.as_str()), (1, "base"));
+    // BEH-6: slots are the wire index + 1, as in the vendor app ("base" is wire index 1)
+    assert_eq!((preset.index, preset.name.as_str()), (2, "base"));
     assert_eq!(st.temperatures, [35, 40, 38]);
     assert_eq!(st.extra["port"], "50168");
     assert_eq!(st.extra["serial"], "SN-0042");
 
+    assert_eq!(amp.preset_slots(), 1..=50);
     let presets = amp.presets().await.unwrap();
     let got: Vec<(u32, &str)> = presets.iter().map(|p| (p.index, p.name.as_str())).collect();
-    assert_eq!(&got[..3], [(1, "base"), (2, "alegra-ext"), (3, "alegra-int")]);
+    assert_eq!(&got[..3], [(2, "base"), (3, "alegra-ext"), (4, "alegra-int")]);
     assert_eq!(got.len(), 4);
-    assert_eq!(got[3].0, 5);
+    assert_eq!(got[3].0, 6);
 
-    amp.recall_preset(2).await.unwrap();
+    amp.recall_preset(3).await.unwrap();
     amp.get(&param("in1.gain")).await.unwrap();
     assert_eq!(fake.state().recalled, [2]);
 
-    // BEH-6, BEH-36: slots 1-49 only; the fake marks slot 0 valid, it must not be listed
-    assert_eq!(amp.preset_slots(), 1..=49);
-    amp.recall_preset(49).await.unwrap();
-    for bad in [0, 50] {
+    // BEH-6, BEH-36: slots 1-50 map to wire 0-49; anything else is refused before sending
+    amp.recall_preset(50).await.unwrap();
+    for bad in [0, 51] {
         assert!(matches!(amp.recall_preset(bad).await, Err(Error::InvalidValue(_))), "slot {bad}");
     }
     amp.get(&param("in1.gain")).await.unwrap();
@@ -588,7 +589,8 @@ async fn status_presets_and_recall() {
 
     assert_eq!(amp.temperatures().await.unwrap(), [35, 40, 38]);
     assert_eq!(amp.device_name().await.unwrap(), "Stage Left");
-    assert_eq!(amp.stored_preset(1).await.unwrap().name, "base");
+    assert_eq!(amp.stored_preset(2).await.unwrap().name, "base");
+    assert!(matches!(amp.stored_preset(0).await, Err(Error::InvalidValue(_))));
 }
 
 async fn next_event<T>(

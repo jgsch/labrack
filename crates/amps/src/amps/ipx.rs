@@ -36,8 +36,17 @@ use crate::model::*;
 /// Reads of a written value before giving up (each waits the client timeout).
 const READ_BACK_TRIES: u32 = 3;
 
-/// The amp lists slots 0-49; slot 0 is empty and left alone, slot 50 gets no reply (BEH-6).
-const PRESET_SLOTS: RangeInclusive<u32> = 1..=49;
+/// The amp counts presets 0-49 on the wire (slot 50 gets no reply); like the vendor app, the API shows
+/// index + 1 (BEH-6).
+const PRESET_SLOTS: RangeInclusive<u32> = 1..=50;
+
+/// Wire index of a preset slot.
+fn wire_index(slot: u32) -> Result<u32> {
+    if !PRESET_SLOTS.contains(&slot) {
+        return Err(Error::InvalidValue(format!("preset {slot} (valid: 1..=50)")));
+    }
+    Ok(slot - 1)
+}
 
 pub struct IpxAmp {
     info: AmpInfo,
@@ -118,8 +127,9 @@ impl IpxAmp {
         Ok(cstr(&self.client.get_raw(Address::block(Env::DEVICE_NAME)).await?))
     }
 
-    /// A stored preset (settings, not just the name).
-    pub async fn stored_preset(&self, index: u32) -> Result<StoredPreset> {
+    /// A stored preset (settings, not just the name); `slot` is 1-50.
+    pub async fn stored_preset(&self, slot: u32) -> Result<StoredPreset> {
+        let index = wire_index(slot)?;
         let reply = self.client.ctrl(Ctrl::GETPRESET, &index.to_le_bytes(), None).await?;
         StoredPreset::parse(&reply.payload)
     }
@@ -229,7 +239,7 @@ impl Amp for IpxAmp {
             model: self.info.model.clone(),
             name,
             firmware: state.versions.mcu.clone(),
-            preset: Some(PresetInfo { index: state.preset_index, name: state.preset_name.clone() }),
+            preset: Some(PresetInfo { index: state.preset_index + 1, name: state.preset_name.clone() }),
             temperatures,
             extra,
         })
@@ -250,15 +260,13 @@ impl Amp for IpxAmp {
             .into_iter()
             .zip(valid)
             .enumerate()
-            .filter(|(i, (_, ok))| *ok && PRESET_SLOTS.contains(&(*i as u32)))
-            .map(|(i, (name, _))| PresetInfo { index: i as u32, name })
+            .filter(|(i, (_, ok))| *ok && PRESET_SLOTS.contains(&(*i as u32 + 1)))
+            .map(|(i, (name, _))| PresetInfo { index: i as u32 + 1, name })
             .collect())
     }
 
-    async fn recall_preset(&self, index: u32) -> Result<()> {
-        if !PRESET_SLOTS.contains(&index) {
-            return Err(Error::InvalidValue(format!("preset {index} (valid: 1..=49)")));
-        }
+    async fn recall_preset(&self, slot: u32) -> Result<()> {
+        let index = wire_index(slot)?;
         self.client.send_ctrl(Ctrl::RECALLPRESET, &index.to_le_bytes()).await
     }
 

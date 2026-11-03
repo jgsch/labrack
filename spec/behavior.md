@@ -17,8 +17,8 @@ statement with a `BEH-<n>` ID.
   - IPX: the amp stores Vpk and Ohm; Watt and dBu are calculated.
   - IPD: the amp stores only the threshold in dBu. The app keeps the load in Ohm per output
     (default 4 Ω) in its config and converts.
-- **BEH-6** Up to 50 presets per amplifier, numbered as on the amp: IPD slots 1–50 (51–100 are not
-  used), IPX slots 1–49 (the amp has no slot 50; slot 0 is never used).
+- **BEH-6** 50 presets per amplifier, slots 1–50, numbered as in the vendor apps (IPD slots 51–100
+  are not used; the IPX counts from 0 on the wire, the vendor app and this app show index + 1).
 
 ## Amplifier list and status
 
@@ -113,7 +113,7 @@ statement with a `BEH-<n>` ID.
 
 ## Presets
 
-- **BEH-36** Up to 50 presets per amplifier (IPX: 49), identified by number and name.
+- **BEH-36** 50 presets per amplifier, identified by number and name.
 - **BEH-37** Actions: recall a stored preset, store the current settings to a slot under a name,
   save the settings to a JSON file on the computer, load such a file into an amp. The file format
   is the library's snapshot (`labgruppen dump`).

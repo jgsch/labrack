@@ -13,7 +13,8 @@ preset slots are numbered differently per family.
 No spec change; this change makes the library able to satisfy:
 
 - `SEC-2`: `ParamSpec::check` rejects NaN and infinity for every numeric kind, ranged or not.
-- `BEH-6`, `BEH-36`: IPD exposes slots 1–50, IPX slots 1–49 (wire numbers, slot 0 never used).
+- `BEH-6`, `BEH-36`: both drivers expose slots 1–50; the IPX slot is the wire index + 1, as in the
+  vendor app.
 - `BEH-37`: store the current settings to a slot under a name (IPD `CMD_SAVE_PRESET`, IPX
   store command).
 - `BEH-14`: read the IPD access rights as named flags (input channel, output channel, load
@@ -23,7 +24,7 @@ No spec change; this change makes the library able to satisfy:
 ## Tasks
 
 - [x] Failing test: `check` with NaN / ±inf on Float and Int, with and without a range; fix
-- [x] Preset numbering: `Amp::preset_slots()` (IPD 1–50, IPX 1–49); `presets()` lists only those,
+- [x] Preset numbering: `Amp::preset_slots()` (1–50 on both); `presets()` lists only those,
       `recall_preset` rejects other slots
 - [ ] `store_preset(index, name)` on the `Amp` trait; implement for IPD and IPX; simulator and
       fake IPX support it
@@ -37,7 +38,9 @@ No spec change; this change makes the library able to satisfy:
 
 ## Notes
 
-- IPX slots checked on the IPX 1200: 50 name entries (0–49), "base" at 1, GETPRESET 50 gets no
-  reply. Slot 0 is empty and stays unused.
+- IPX slots: 50 name entries (wire 0–49), "base" at wire 1, GETPRESET 50 gets no reply. The vendor
+  app (decompiled: combo box item i is labelled "Preset" + (i + 1), read-only when item index <
+  ReadOnlyPresetRange) shows wire 0–49 as presets 1–50, so "base" is slot 2 and slot 1 is the
+  read-only one on this amp (DEVCFG read-only range 1).
 - The IPX store command (SETPRESET 2 or PC_STORE_PRESET 21) is unused and untested; capture the
   vendor app or test on hardware with outputs muted.
