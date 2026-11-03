@@ -1,6 +1,7 @@
 //! The interface every amp driver implements.
 
 use std::any::Any;
+use std::ops::RangeInclusive;
 
 use async_trait::async_trait;
 use tokio::sync::broadcast;
@@ -39,10 +40,14 @@ pub trait Amp: Send + Sync {
 
     async fn status(&self) -> Result<Status>;
 
-    /// Presets stored on the amp.
+    /// Usable preset slots, numbered as on the amp.
+    fn preset_slots(&self) -> RangeInclusive<u32>;
+
+    /// Presets stored on the amp, in [`Amp::preset_slots`].
     async fn presets(&self) -> Result<Vec<PresetInfo>>;
 
     /// Load a stored preset. This changes the audio settings, including mutes.
+    /// Slots outside [`Amp::preset_slots`] are rejected with [`Error::InvalidValue`].
     async fn recall_preset(&self, index: u32) -> Result<()>;
 
     /// Latest meter readings.

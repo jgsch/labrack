@@ -13,7 +13,7 @@ preset slots are numbered differently per family.
 No spec change; this change makes the library able to satisfy:
 
 - `SEC-2`: `ParamSpec::check` rejects NaN and infinity for every numeric kind, ranged or not.
-- `BEH-6`, `BEH-36`: both drivers expose slots 1–50 with the same numbering.
+- `BEH-6`, `BEH-36`: IPD exposes slots 1–50, IPX slots 1–49 (wire numbers, slot 0 never used).
 - `BEH-37`: store the current settings to a slot under a name (IPD `CMD_SAVE_PRESET`, IPX
   store command).
 - `BEH-14`: read the IPD access rights as named flags (input channel, output channel, load
@@ -22,9 +22,9 @@ No spec change; this change makes the library able to satisfy:
 
 ## Tasks
 
-- [ ] Failing test: `check` with NaN / ±inf on Float and Int, with and without a range; fix
-- [ ] Preset numbering: 1-based slots 1–50 on both families; IPD `presets()` reads only 1–50,
-      `recall_preset` rejects out-of-range slots on both
+- [x] Failing test: `check` with NaN / ±inf on Float and Int, with and without a range; fix
+- [x] Preset numbering: `Amp::preset_slots()` (IPD 1–50, IPX 1–49); `presets()` lists only those,
+      `recall_preset` rejects other slots
 - [ ] `store_preset(index, name)` on the `Amp` trait; implement for IPD and IPX; simulator and
       fake IPX support it
 - [ ] `IpdAmp::access_rights()` returning the decoded `M_ACCESS_RIGHTS` bits
@@ -37,7 +37,7 @@ No spec change; this change makes the library able to satisfy:
 
 ## Notes
 
-- IPX slot base (0 or 1) is not settled in `docs/ipx-protocol.md`; the fake IPX lists "base" at
-  index 1. Confirm on the IPX 1200 before fixing the numbering.
+- IPX slots checked on the IPX 1200: 50 name entries (0–49), "base" at 1, GETPRESET 50 gets no
+  reply. Slot 0 is empty and stays unused.
 - The IPX store command (SETPRESET 2 or PC_STORE_PRESET 21) is unused and untested; capture the
   vendor app or test on hardware with outputs muted.

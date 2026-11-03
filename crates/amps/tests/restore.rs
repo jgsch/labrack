@@ -41,6 +41,9 @@ impl Amp for Recorder {
     async fn status(&self) -> Result<Status> {
         Ok(Status::default())
     }
+    fn preset_slots(&self) -> std::ops::RangeInclusive<u32> {
+        1..=50
+    }
     async fn presets(&self) -> Result<Vec<PresetInfo>> {
         Ok(vec![])
     }

@@ -14,6 +14,7 @@ pub mod protocol;
 pub mod structs;
 
 use std::any::Any;
+use std::ops::RangeInclusive;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -34,6 +35,9 @@ use crate::model::*;
 
 /// Reads of a written value before giving up (each waits the client timeout).
 const READ_BACK_TRIES: u32 = 3;
+
+/// The amp lists slots 0-49; slot 0 is empty and left alone, slot 50 gets no reply (BEH-6).
+const PRESET_SLOTS: RangeInclusive<u32> = 1..=49;
 
 pub struct IpxAmp {
     info: AmpInfo,
@@ -231,6 +235,10 @@ impl Amp for IpxAmp {
         })
     }
 
+    fn preset_slots(&self) -> RangeInclusive<u32> {
+        PRESET_SLOTS
+    }
+
     async fn presets(&self) -> Result<Vec<PresetInfo>> {
         let (names, valid) = tokio::try_join!(
             self.client.ctrl(Ctrl::GETALLPRESETNAME, &[], None),
@@ -242,12 +250,15 @@ impl Amp for IpxAmp {
             .into_iter()
             .zip(valid)
             .enumerate()
-            .filter(|(_, (_, ok))| *ok)
+            .filter(|(i, (_, ok))| *ok && PRESET_SLOTS.contains(&(*i as u32)))
             .map(|(i, (name, _))| PresetInfo { index: i as u32, name })
             .collect())
     }
 
     async fn recall_preset(&self, index: u32) -> Result<()> {
+        if !PRESET_SLOTS.contains(&index) {
+            return Err(Error::InvalidValue(format!("preset {index} (valid: 1..=49)")));
+        }
         self.client.send_ctrl(Ctrl::RECALLPRESET, &index.to_le_bytes()).await
     }
 

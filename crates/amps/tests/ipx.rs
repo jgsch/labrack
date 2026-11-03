@@ -431,7 +431,7 @@ fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> V
             Ctrl::GETALLPRESETNAME => reply(Main::SYSCTRL, &fixture("preset_names.bin")),
             Ctrl::GETVALIDPRESETS => {
                 let valid: Vec<u8> =
-                    (0..50u32).flat_map(|i| u32::from(matches!(i, 1 | 2 | 3 | 5)).to_le_bytes()).collect();
+                    (0..50u32).flat_map(|i| u32::from(matches!(i, 0..=3 | 5)).to_le_bytes()).collect();
                 reply(Main::SYSCTRL, &valid)
             }
             Ctrl::GETPRESET => reply(Main::SYSCTRL, &fixture("getpreset_1.bin")),
@@ -576,6 +576,15 @@ async fn status_presets_and_recall() {
     amp.recall_preset(2).await.unwrap();
     amp.get(&param("in1.gain")).await.unwrap();
     assert_eq!(fake.state().recalled, [2]);
+
+    // BEH-6, BEH-36: slots 1-49 only; the fake marks slot 0 valid, it must not be listed
+    assert_eq!(amp.preset_slots(), 1..=49);
+    amp.recall_preset(49).await.unwrap();
+    for bad in [0, 50] {
+        assert!(matches!(amp.recall_preset(bad).await, Err(Error::InvalidValue(_))), "slot {bad}");
+    }
+    amp.get(&param("in1.gain")).await.unwrap();
+    assert_eq!(fake.state().recalled, [2, 49]);
 
     assert_eq!(amp.temperatures().await.unwrap(), [35, 40, 38]);
     assert_eq!(amp.device_name().await.unwrap(), "Stage Left");

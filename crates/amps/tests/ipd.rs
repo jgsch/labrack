@@ -166,6 +166,23 @@ async fn exercise(mk2: bool) {
     let presets = amp.presets().await.unwrap();
     assert_eq!(presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Default", "Sub", "Top"]);
 
+    // BEH-6, BEH-36: slots 1-50 only
+    assert_eq!(amp.preset_slots(), 1..=50);
+    amp.client()
+        .set_raw(Key::new(S_PRESET, M_SHORT_NAME, 51, 0), Raw::Text("Beyond".into()), None)
+        .await
+        .unwrap();
+    amp.client()
+        .set_raw(Key::new(S_PRESET, M_SHORT_NAME, 50, 0), Raw::Text("Last".into()), None)
+        .await
+        .unwrap();
+    let presets = amp.presets().await.unwrap();
+    assert_eq!(presets.last().map(|p| (p.index, p.name.as_str())), Some((50, "Last")));
+    assert!(presets.iter().all(|p| p.name != "Beyond"));
+    assert!(matches!(amp.recall_preset(0).await, Err(labgruppen::Error::InvalidValue(_))));
+    assert!(matches!(amp.recall_preset(51).await, Err(labgruppen::Error::InvalidValue(_))));
+    assert_eq!(amp.status().await.unwrap().preset.unwrap().name, "Sub");
+
     let mut events = amp.subscribe();
     let got = tokio::time::timeout(Duration::from_secs(5), async {
         while let Ok(ev) = events.recv().await {

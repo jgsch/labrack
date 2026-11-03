@@ -8,6 +8,7 @@ pub mod sim;
 use std::any::Any;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::ops::RangeInclusive;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -25,6 +26,9 @@ use crate::error::{Error, Result};
 use crate::model::*;
 
 pub use self::protocol::Announcement;
+
+/// The amp has 100 slots; the app uses the first 50 (BEH-6).
+const PRESET_SLOTS: RangeInclusive<u32> = 1..=50;
 
 const fn global(member: u8) -> Key {
     Key::new(S_GLOBAL, member, 0, 0)
@@ -271,8 +275,12 @@ impl Amp for IpdAmp {
         Ok(st)
     }
 
+    fn preset_slots(&self) -> RangeInclusive<u32> {
+        PRESET_SLOTS
+    }
+
     async fn presets(&self) -> Result<Vec<PresetInfo>> {
-        let keys: Vec<Key> = (1..=100u8).map(|n| Key::new(S_PRESET, M_SHORT_NAME, n, 0)).collect();
+        let keys: Vec<Key> = PRESET_SLOTS.map(|n| Key::new(S_PRESET, M_SHORT_NAME, n as u8, 0)).collect();
         let vals = self.client.get_many(&keys, Duration::from_secs(60)).await?;
         Ok(keys
             .iter()
@@ -286,8 +294,8 @@ impl Amp for IpdAmp {
     }
 
     async fn recall_preset(&self, index: u32) -> Result<()> {
-        if !(1..=100).contains(&index) {
-            return Err(Error::InvalidValue(format!("preset {index} (valid: 1..100)")));
+        if !PRESET_SLOTS.contains(&index) {
+            return Err(Error::InvalidValue(format!("preset {index} (valid: 1..=50)")));
         }
         self.client.set_raw(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(index as i64), None).await?;
         self.client.command(CMD_LOAD_PRESET).await
