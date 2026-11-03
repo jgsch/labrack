@@ -243,7 +243,11 @@ impl Amp for IpxAmp {
             model: self.info.model.clone(),
             name,
             firmware: state.versions.mcu.clone(),
-            preset: Some(PresetInfo { index: state.preset_index + 1, name: state.preset_name.clone() }),
+            preset: state
+                .preset_index
+                .checked_add(1)
+                .filter(|n| PRESET_SLOTS.contains(n))
+                .map(|index| PresetInfo { index, name: state.preset_name.clone() }),
             temperatures,
             extra,
         })

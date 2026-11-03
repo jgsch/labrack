@@ -656,6 +656,17 @@ async fn store_preset() {
     assert!(matches!(amp.store_preset(10, "Lost").await, Err(Error::NotConfirmed(_))));
 }
 
+/// BEH-36: a current preset index outside the slots is no current preset, not a panic.
+#[tokio::test]
+async fn status_with_preset_index_out_of_range() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    for index in [u32::MAX, 50] {
+        fake.state().sync[16..20].copy_from_slice(&index.to_le_bytes());
+        assert_eq!(amp.status().await.unwrap().preset, None, "wire index {index}");
+    }
+}
+
 async fn next_event<T>(
     rx: &mut broadcast::Receiver<AmpEvent>,
     mut pick: impl FnMut(AmpEvent) -> Option<T>,
