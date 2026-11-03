@@ -115,7 +115,11 @@ Example: -2.5 dB is `00 00 20 C0`.
 | OUTPUT_LIMITER | 0 Vpk f32 (setting), 1 load ohms f32, 2 watts f32, 3 dBu f32, 4 release i32 | V, ohm, W, dBu, ms |
 | DEVCFG | 0 display mode, 1 lock unit, 2 power off, 3-4 unknown, 5 power-on preset (255 = last used), 6 read-only preset range, 7 auto power down, 8-10 access rights locked/user/admin | |
 
-Watts is derived: Vpk^2 / (2 * ohms). Quirk (verified live): a single GETPRM of field 2 returns it as an i32 (595), the bulk blocks (DEV_PRM_SYNC, GETPRESET) carry it as f32 (595.0) (69 Vpk into 4 ohm = 595 W, matches the fixture). Watts and dBu are derived, so the library treats them as read-only. But dBu is stored separately (verified live): an IPX 1200 had out2 at 69 Vpk with 34.77 dBu (69 Vpk is 35.99 dBu); writing field 3 changed only field 3, and linking copied out1's dBu over it. Which of the two fields the limiter uses is not known yet.
+Watts is derived: Vpk^2 / (2 * ohms). Quirk (verified live): a single GETPRM of field 2 returns it as an i32 (595), the bulk blocks (DEV_PRM_SYNC, GETPRESET) carry it as f32 (595.0) (69 Vpk into 4 ohm = 595 W, matches the fixture). Watts and dBu are derived by the vendor app, not by the amp: all four fields are plain stored values (verified live on an IPX 1200, outputs muted, state restored afterwards). Writing Vpk (field 0) or ohms (field 1) leaves Watts and dBu unchanged; writing field 3 changes only field 3; linking copies out1's dBu over out2's. Field 2 accepts a float write (`ipx raw 17 1 0 2 --float 450`), reads back as the integer 450 in a single reply and as 450.0 in the bulk block.
+
+dBu relation (matches every value seen, to 4 decimals): `dBu = 10 * log10(W * ohms / 0.6)` (0.7746 V squared is 0.6). The values written by the vendor app fit it from the watts figure the user typed: preset dBu 36.02 is 600 W into 4 ohm (while Vpk was stored as 69 and Watts as 595); live out1 35.9851 is 69 Vpk (595.125 W); live out2 34.7712 is 450 W (60 Vpk), although its Vpk and Watts now read 69 and 595, so something changed them without updating dBu.
+
+Which field the DSP limits on is still not known: it needs a signal above the threshold and the gain reduction meter. Writing all four fields consistently makes the question moot.
 Amp-side value ranges were not determined; values outside the app's limits were not tried.
 
 EQ type: 0 bell, 1 notch, 2 allpass, 3 low shelf, 4 high shelf, 5 band pass, 6 high pass, 7 low pass.
