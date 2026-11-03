@@ -10,8 +10,8 @@ use labgruppen::amps::ipx::protocol::{
     Address, Ctrl, Env, FrameParser, Main, build_frame, ctrl_sub, xor_password,
 };
 use labgruppen::amps::ipx::structs::{
-    DeviceState, Meters, StoredPreset, SystemAttributes, audio_bytes, audio_dword, cstr, parse_preset_names,
-    parse_valid_presets,
+    AUDCFG_SIZE, DeviceState, Meters, StoredPreset, SystemAttributes, audio_bytes, audio_dword, cstr,
+    parse_preset_names, parse_valid_presets,
 };
 use labgruppen::amps::ipx::{Discovered, IpxAmp};
 use labgruppen::{Amp, AmpEvent, Error, Param, Value};
@@ -318,8 +318,8 @@ struct State {
     drop_reads: Vec<Address>,
     /// SETPRESET payloads as received.
     store_payloads: Vec<Vec<u8>>,
-    /// Presets stored by SETPRESET: wire index -> name.
-    stored: std::collections::HashMap<u32, String>,
+    /// Presets stored by SETPRESET: wire index -> name and audio config.
+    stored: std::collections::HashMap<u32, (String, Vec<u8>)>,
     /// Receive SETPRESET but do not store anything.
     ignore_store: bool,
 }
@@ -443,9 +443,11 @@ fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> V
             Ctrl::GETPRESET => {
                 let mut p = fixture("getpreset_1.bin");
                 let index = u32::from_le_bytes(fr.payload[..4].try_into().unwrap());
-                if let Some(name) = st.stored.get(&index) {
+                if let Some((name, audio)) = st.stored.get(&index) {
                     p[4..20].copy_from_slice(&padded(name, 16));
                     p[20..24].copy_from_slice(&index.to_le_bytes());
+                    p[StoredPreset::AUDIO_OFFSET..StoredPreset::AUDIO_OFFSET + AUDCFG_SIZE]
+                        .copy_from_slice(audio);
                 }
                 reply(Main::SYSCTRL, &p)
             }
@@ -453,7 +455,8 @@ fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> V
                 st.store_payloads.push(fr.payload.clone());
                 if !st.ignore_store && fr.payload.len() == 20 {
                     let index = u32::from_le_bytes(fr.payload[16..20].try_into().unwrap());
-                    st.stored.insert(index, cstr(&fr.payload[..16]));
+                    let audio = st.sync[AUDIO..AUDIO + AUDCFG_SIZE].to_vec();
+                    st.stored.insert(index, (cstr(&fr.payload[..16]), audio));
                 }
                 vec![]
             }
@@ -654,6 +657,14 @@ async fn store_preset() {
     // the amp did not take it
     fake.state().ignore_store = true;
     assert!(matches!(amp.store_preset(10, "Lost").await, Err(Error::NotConfirmed(_))));
+
+    // same name as before: the name proves nothing, the stored settings must be the current ones
+    fake.state().ignore_store = false;
+    amp.set(&param("out1.gain"), f(-6.0)).await.unwrap();
+    amp.store_preset(4, "Free").await.unwrap();
+    fake.state().ignore_store = true;
+    amp.set(&param("out1.gain"), f(-3.0)).await.unwrap();
+    assert!(matches!(amp.store_preset(4, "Free").await, Err(Error::NotConfirmed(_))));
 }
 
 /// BEH-36: a current preset index outside the slots is no current preset, not a panic.

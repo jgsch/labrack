@@ -27,7 +27,7 @@ use tracing::{debug, warn};
 use self::client::{Client, ClientConfig, ClientEvent};
 use self::protocol::{Address, Ctrl, DISCOVERY_PORT, Env, Frame, FrameParser, Main, TCP_PORT};
 use self::structs::{
-    DeviceState, StoredPreset, SystemAttributes, cstr, parse_preset_names, parse_valid_presets,
+    AUDCFG_SIZE, DeviceState, StoredPreset, SystemAttributes, cstr, parse_preset_names, parse_valid_presets,
 };
 use crate::amp::{Amp, check_preset_name};
 use crate::error::{Error, Result};
@@ -282,10 +282,16 @@ impl Amp for IpxAmp {
         let index = wire_index(slot)?;
         // char[16] without a guaranteed terminator on the wire: keep one byte for the NUL
         let name = check_preset_name(name, 15)?;
-        let read_only = self.sync().await?.device.read_only_preset_range;
+        let state = self.sync().await?;
+        let read_only = state.device.read_only_preset_range;
         if slot <= read_only {
             return Err(Error::Denied(format!("presets 1 to {read_only} are protected")));
         }
+        // When the slot already has this name, the name cannot confirm the store: the stored audio
+        // config must then equal the current one as well.
+        let audio = |raw: &[u8], at: usize| raw.get(at..at + AUDCFG_SIZE).map(<[u8]>::to_vec);
+        let current = audio(&state.raw, DeviceState::AUDIO_OFFSET);
+        let same_name = self.stored_preset(slot).await.is_ok_and(|p| p.index == index && p.name == name);
         let mut payload = name.as_bytes().to_vec();
         payload.resize(16, 0);
         payload.extend(index.to_le_bytes());
@@ -296,6 +302,7 @@ impl Amp for IpxAmp {
             if let Ok(p) = self.stored_preset(slot).await
                 && p.index == index
                 && p.name == name
+                && (!same_name || (current.is_some() && audio(&p.raw, StoredPreset::AUDIO_OFFSET) == current))
             {
                 return Ok(());
             }

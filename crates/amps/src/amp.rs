@@ -68,7 +68,8 @@ pub trait Amp: Send + Sync {
     async fn recall_preset(&self, index: u32) -> Result<()>;
 
     /// Store the amp's current settings in `slot` under `name`, replacing what is there. Returns once
-    /// the amp lists the new name.
+    /// the amp lists the new name. When the slot already had that name, the IPX also has to report
+    /// the current settings for the slot; the IPD only has its echo of the save command.
     ///
     /// Errors: [`Error::InvalidValue`] for a slot outside [`Amp::preset_slots`] or a name the amp
     /// cannot hold, [`Error::Denied`] for a protected slot or missing access right,

@@ -333,6 +333,8 @@ impl Amp for IpdAmp {
         // The amp saves the current settings to the current preset number, under the current name.
         self.client.set_raw(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(slot as i64), None).await?;
         self.client.set_raw(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text(name.clone()), None).await?;
+        // The echo confirms the command. The stored settings cannot be read back, so when the slot
+        // already had this name, the name check below adds nothing to it.
         self.client.command(CMD_SAVE_PRESET).await?;
         let key = Key::new(S_PRESET, M_SHORT_NAME, slot as u8, 0);
         for _ in 0..STORE_CHECKS {
