@@ -6,7 +6,7 @@ How the system is built. Requirements use `ARCH-<n>` IDs.
 
 - **ARCH-1** Language: Rust. GUI: Dioxus desktop (0.7, a WebKitGTK window). The mockup's CSS is
   reused; its markup is converted to RSX; all logic is Rust.
-- **ARCH-2** Cargo workspace with three crates:
+- **ARCH-2** Cargo workspace with three crates, each in `crates/<name>/`:
   - `amps`: the protocol library and test CLI (`Amp` trait, IPX and IPD drivers, IPD
     simulator).
   - `core`: everything that is not drawing: amplifier list, connection state machine,
