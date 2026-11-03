@@ -83,6 +83,11 @@ impl IpdAmp {
         Ok(user_name(raw.int().unwrap_or(-1)))
     }
 
+    pub async fn access_rights(&self) -> Result<AccessRights> {
+        let raw = self.client.get_raw(global(M_ACCESS_RIGHTS), None).await?;
+        Ok(AccessRights::from_raw(raw.int().unwrap_or(0) as u32))
+    }
+
     pub async fn standby(&self, on: bool) -> Result<()> {
         self.client.command(if on { CMD_GOTO_STANDBY } else { CMD_EXIT_STANDBY }).await
     }

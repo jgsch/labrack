@@ -27,7 +27,7 @@ No spec change; this change makes the library able to satisfy:
       `recall_preset` rejects other slots
 - [ ] `store_preset(index, name)` on the `Amp` trait; implement for IPD and IPX; simulator and
       fake IPX support it
-- [ ] `IpdAmp::access_rights()` returning the decoded `M_ACCESS_RIGHTS` bits
+- [x] `IpdAmp::access_rights()` returning the decoded `M_ACCESS_RIGHTS` bits
 - [ ] Faster IPD `presets()` for 50 slots (currently up to 60 s for 100)
 
 ## Done when

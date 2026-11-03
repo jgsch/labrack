@@ -208,6 +208,28 @@ async fn client_against_simulator_mk1() {
     exercise(false).await;
 }
 
+/// BEH-14: the access rights the UI needs, decoded from the amp's bit mask.
+#[tokio::test(flavor = "multi_thread")]
+async fn access_rights_are_decoded() {
+    let (_srv, amp) = connect(true).await;
+    let all = amp.access_rights().await.unwrap();
+    assert!(all.input_channel && all.output_channel && all.load_preset && all.save_preset && all.unit_name);
+
+    let key = Key::new(S_GLOBAL, M_ACCESS_RIGHTS, 0, 0);
+    amp.client().set_raw(key, Raw::Int(0x4 | 0x8 | 0x40000), None).await.unwrap();
+    let r = amp.access_rights().await.unwrap();
+    assert_eq!(r.raw, 0x4 | 0x8 | 0x40000);
+    assert_eq!(
+        (r.input_channel, r.output_channel, r.load_preset, r.save_preset, r.unit_name),
+        (false, false, true, true, true)
+    );
+
+    amp.client().set_raw(key, Raw::Int(0), None).await.unwrap();
+    let r = amp.access_rights().await.unwrap();
+    assert!(!(r.input_channel || r.output_channel || r.load_preset || r.save_preset || r.unit_name));
+    amp.close().await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn snapshot_and_restore() {
     let (_srv, amp) = connect(true).await;
