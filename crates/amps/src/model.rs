@@ -322,9 +322,12 @@ impl ParamSpec {
         let out = match self.kind {
             Kind::Bool => Value::Bool(v.as_bool().ok_or_else(|| bad("expected on/off"))?),
             Kind::Int => {
-                Value::Int(v.as_f64().map(|f| f.round() as i64).ok_or_else(|| bad("expected an integer"))?)
+                let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| bad("expected an integer"))?;
+                Value::Int(f.round() as i64)
             }
-            Kind::Float => Value::Float(v.as_f64().ok_or_else(|| bad("expected a number"))?),
+            Kind::Float => {
+                Value::Float(v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| bad("expected a number"))?)
+            }
             Kind::Enum(labels) => {
                 let label = match v {
                     Value::Text(t) => t.to_ascii_lowercase(),
@@ -446,6 +449,23 @@ mod tests {
         assert!("out0.gain".parse::<Param>().is_err());
         assert!("out1.eq.10.q".parse::<Param>().is_err());
         assert!("out1.bogus".parse::<Param>().is_err());
+    }
+
+    /// SEC-2: NaN and infinity never pass, whatever the kind or range.
+    #[test]
+    fn spec_check_rejects_non_finite() {
+        let specs = [
+            ParamSpec::new(Kind::Float),
+            ParamSpec::new(Kind::Float).range(-48.0, 12.0),
+            ParamSpec::new(Kind::Int),
+            ParamSpec::new(Kind::Int).range(0.0, 100.0),
+        ];
+        for s in specs {
+            for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                assert!(s.check(&"x", &Value::Float(v)).is_err(), "{s:?} accepted {v}");
+            }
+            assert!(s.check(&"x", &Value::Float(1.0)).is_ok());
+        }
     }
 
     #[test]
