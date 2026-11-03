@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.mise.local.toml
+
+# Logs, caches, and temporary files
+*.log
+.cache/
+tmp/
+coverage/
+
+# Runtime databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Build output
+target/

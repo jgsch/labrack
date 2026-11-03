@@ -1,0 +1,14 @@
+# Placeholder tasks fail until configured, so a missing setup is never
+# mistaken for a passing run.
+
+[tasks.test]
+description = "Run the test suite"
+run = "echo 'test task not configured yet: edit .mise.toml' >&2; exit 1"
+
+[tasks.lint]
+description = "Run linters and type checks"
+run = "echo 'lint task not configured yet: edit .mise.toml' >&2; exit 1"
+
+[tasks.fmt]
+description = "Format the code"
+run = "echo 'fmt task not configured yet: edit .mise.toml' >&2; exit 1"
