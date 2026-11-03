@@ -1,0 +1,77 @@
+AdminAccessRights                  env=19 DEVCFG             ch=0 idx=2 field=8
+AdminModePassword                  env=24 USERPASSWORD       ch=0 idx=1 field=1
+Aes1Channel1Name                   env= 6 INPUT_MIXER        ch=0 idx=2 field=2
+Aes1Channel2Name                   env= 6 INPUT_MIXER        ch=1 idx=2 field=2
+Aes1LevelControl1                  env= 6 INPUT_MIXER        ch=0 idx=2 field=0
+Aes1LevelControl2                  env= 6 INPUT_MIXER        ch=1 idx=2 field=0
+Aes1Mute1                          env= 6 INPUT_MIXER        ch=0 idx=2 field=1
+Aes1Mute2                          env= 6 INPUT_MIXER        ch=1 idx=2 field=1
+Aes2Channel1Name                   env= 6 INPUT_MIXER        ch=0 idx=3 field=2
+Aes2Channel2Name                   env= 6 INPUT_MIXER        ch=1 idx=3 field=2
+Aes2LevelControl1                  env= 6 INPUT_MIXER        ch=0 idx=3 field=0
+Aes2LevelControl2                  env= 6 INPUT_MIXER        ch=1 idx=3 field=0
+Aes2Mute1                          env= 6 INPUT_MIXER        ch=0 idx=3 field=1
+Aes2Mute2                          env= 6 INPUT_MIXER        ch=1 idx=3 field=1
+Analog1Channel1Name                env= 6 INPUT_MIXER        ch=0 idx=0 field=2
+Analog1Channel2Name                env= 6 INPUT_MIXER        ch=1 idx=0 field=2
+Analog1LevelControl1               env= 6 INPUT_MIXER        ch=0 idx=0 field=0
+Analog1LevelControl2               env= 6 INPUT_MIXER        ch=1 idx=0 field=0
+Analog1Mute1                       env= 6 INPUT_MIXER        ch=0 idx=0 field=1
+Analog1Mute2                       env= 6 INPUT_MIXER        ch=1 idx=0 field=1
+Analog2Channel1Name                env= 6 INPUT_MIXER        ch=0 idx=1 field=2
+Analog2Channel2Name                env= 6 INPUT_MIXER        ch=1 idx=1 field=2
+Analog2LevelControl1               env= 6 INPUT_MIXER        ch=0 idx=1 field=0
+Analog2LevelControl2               env= 6 INPUT_MIXER        ch=1 idx=1 field=0
+Analog2Mute1                       env= 6 INPUT_MIXER        ch=0 idx=1 field=1
+Analog2Mute2                       env= 6 INPUT_MIXER        ch=1 idx=1 field=1
+AutoPowerDown                      env=19 DEVCFG             ch=0 idx=0 field=7
+ChangeAdminModePasswordStatus      env=18 ACK                ch=0 idx=1 field=1
+ChangeDeveloperModePasswordStatus  env=18 ACK                ch=0 idx=1 field=2
+ChangeUserModePasswordStatus       env=18 ACK                ch=0 idx=1 field=0
+CurrentModeTypeSubject             env=23 SWITCH_USER        ch=0 idx=0 field=0
+DeveloperModePassword              env=24 USERPASSWORD       ch=0 idx=1 field=2
+DeviceName                         env=27 DEVICE_NAME        ch=0 idx=0 field=0
+DisplayMode                        env=19 DEVCFG             ch=0 idx=0 field=0
+Edit                               env=12 OUTPUT_XOVER       ch=0 idx=0 field=0
+GainLevels                         env=20 GAINSLEVEL         ch=0 idx=0 field=0
+Input1LevelControl                 env= 7 INPUT_LEVEL        ch=0 idx=0 field=0
+Input1Mute                         env= 7 INPUT_LEVEL        ch=0 idx=0 field=1
+Input1Name                         env= 7 INPUT_LEVEL        ch=0 idx=0 field=3
+Input2LevelControl                 env= 7 INPUT_LEVEL        ch=1 idx=0 field=0
+Input2Mute                         env= 7 INPUT_LEVEL        ch=1 idx=0 field=1
+Input2Name                         env= 7 INPUT_LEVEL        ch=1 idx=0 field=3
+Input2RMSLimiter                   env=11 INPUT_INLIMITER    ch=1 idx=0 field=0
+InputLink                          env= 7 INPUT_LEVEL        ch=0 idx=0 field=2
+IsPowerOff                         env=19 DEVCFG             ch=0 idx=0 field=2
+LockedAcessRights                  env=19 DEVCFG             ch=0 idx=0 field=8
+LockUnit                           env=19 DEVCFG             ch=0 idx=0 field=1
+Output1FirMode                     env=29 FIR_MODE           ch=0 idx=0 field=0
+Output1LevelControl                env=13 OUTPUT_LEVEL       ch=0 idx=0 field=0
+Output1Mute                        env=13 OUTPUT_LEVEL       ch=0 idx=0 field=1
+Output1Name                        env=13 OUTPUT_LEVEL       ch=0 idx=0 field=4
+Output1PhaseToggle                 env=13 OUTPUT_LEVEL       ch=0 idx=0 field=2
+Output2Compressor                  env=16 OUTPUT_RMSLIMITER  ch=1 idx=0 field=0
+Output2FirMode                     env=29 FIR_MODE           ch=1 idx=0 field=0
+Output2LevelControl                env=13 OUTPUT_LEVEL       ch=1 idx=0 field=0
+Output2Limiter                     env=17 OUTPUT_LIMITER     ch=1 idx=0 field=0
+Output2Mute                        env=13 OUTPUT_LEVEL       ch=1 idx=0 field=1
+Output2Name                        env=13 OUTPUT_LEVEL       ch=1 idx=0 field=4
+Output2PhaseToggle                 env=13 OUTPUT_LEVEL       ch=1 idx=0 field=2
+OutputEQ2                          env=15 OUTPUT_DELAY       ch=1 idx=0 field=1
+OutputLink                         env=13 OUTPUT_LEVEL       ch=0 idx=0 field=3
+PowerOnPreset                      env=19 DEVCFG             ch=0 idx=0 field=5
+PresetAdminAccessRights            env=21 PRESET_PRMCFG      ch=0 idx=2 field=1
+PresetAdminPassword                env=21 PRESET_PRMCFG      ch=0 idx=0 field=0
+PresetDeveloperPassword            env=21 PRESET_PRMCFG      ch=0 idx=1 field=0
+PresetLockedAcessRights            env=21 PRESET_PRMCFG      ch=0 idx=0 field=1
+PresetUserAccessRights             env=21 PRESET_PRMCFG      ch=0 idx=1 field=1
+ReadOnlyPresetRange                env=19 DEVCFG             ch=0 idx=0 field=6
+SetDeviceAdminModePassword         env=24 USERPASSWORD       ch=0 idx=0 field=1
+SetDeviceDeveloperModePassword     env=24 USERPASSWORD       ch=0 idx=0 field=2
+SetDeviceUserModePassword          env=24 USERPASSWORD       ch=0 idx=0 field=0
+SyncDeviceModes                    env= 2 USER               ch=0 idx=0 field=0
+SyncDeviceSystemConfig             env=19 DEVCFG             ch=0 idx=0 field=0
+SynDeviceInit                      env=25 DEV_PRM_SYNC       ch=0 idx=0 field=0
+Temperature                        env=22 TEMPERATURE        ch=0 idx=0 field=0
+UserAccessRights                   env=19 DEVCFG             ch=0 idx=1 field=8
+UserModePassword                   env=24 USERPASSWORD       ch=0 idx=1 field=0

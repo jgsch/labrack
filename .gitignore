@@ -26,3 +26,6 @@ Thumbs.db
 
 # Build output
 target/
+
+# Vendor installers used by re/
+re/installers/
