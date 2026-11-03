@@ -31,6 +31,6 @@ No spec change; implements:
 
 ## Notes
 
-- Depends on `amps-v1-gaps` (NaN fix) and `core-connections`.
+- Depends on `core-connections`.
 - IPD mixer gain tops out at 0 dB (backlog): the UI must take the range from here.
 - Default ceilings are an open question (backlog).

@@ -39,6 +39,8 @@ No spec change; implements:
 
 - Depends on `core-amp-list`.
 - Retry intervals for UNREACHABLE and BUSY are not specified; pick and document them.
+- An IPX connect shortly after the previous connection closed (about 20 s) often gets no reply to the
+  first GETPRM; retry after a pause (docs/ipx-protocol.md).
 - The IPX heartbeat is a SYSCTRL frame, not a parameter write; the "no write" check counts
   SETPRM, preset and store commands.
 - The fake IPX lives in `crates/amps/tests/ipx.rs`; core integration tests need it exported

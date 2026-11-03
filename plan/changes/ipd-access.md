@@ -29,6 +29,6 @@ No spec change; implements:
 
 ## Notes
 
-- Depends on `amps-v1-gaps` (access rights) and, for the UI part, `app-amplifiers-page`.
+- `IpdAmp::access_rights()` exists in `amps`; the UI part depends on `app-amplifiers-page`.
 - Open question (backlog): does the firmware block writes at User / Locked, and does the level
   survive a reconnect?

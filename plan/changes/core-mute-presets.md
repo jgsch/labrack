@@ -36,5 +36,6 @@ No spec change; implements:
 ## Notes
 
 - Confirmation (SEC-5) is a UI concern, see `app-controls`.
-- Depends on `amps-v1-gaps` (store, slot numbering) and `core-dsp-control`.
+- `amps` offers `store_preset`, `preset_slots` (1–50 on both families) and `Error::Denied` (protected
+  slot or missing right). Depends on `core-dsp-control`.
 - Open question (backlog): how the app sees IPD front-panel changes, which affects MODIFIED.
