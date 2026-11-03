@@ -1,0 +1,32 @@
+[package]
+name = "amps"
+version = "0.1.0"
+edition = "2024"
+description = "Control Lab.gruppen IPX and IPD amplifiers over the network"
+license = "MIT"
+publish = false
+
+[lib]
+name = "labgruppen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "labgruppen"
+path = "src/main.rs"
+
+[features]
+default = ["ipx", "ipd"]
+ipx = []
+ipd = []
+
+[dependencies]
+async-trait = "0.1"
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socket2 = "0.5"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+

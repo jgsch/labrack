@@ -1,0 +1,121 @@
+//! The interface every amp driver implements.
+
+use std::any::Any;
+
+use async_trait::async_trait;
+use tokio::sync::broadcast;
+
+use crate::error::{Error, Result};
+use crate::model::*;
+
+/// A connected amplifier.
+///
+/// Drivers translate the common [`Param`] vocabulary to their wire protocol. Anything a driver does
+/// not support is simply absent from [`Amp::params`]. Driver-specific features (IPD users and
+/// standby, IPX raw addresses) are available on the concrete types through [`Amp::as_any`].
+#[async_trait]
+pub trait Amp: Send + Sync {
+    fn info(&self) -> &AmpInfo;
+
+    /// All parameters this amp supports, in a stable order.
+    fn params(&self) -> Vec<Param>;
+
+    /// Type, unit and range of a parameter; `None` when this amp does not have it.
+    fn spec(&self, param: &Param) -> Option<ParamSpec>;
+
+    async fn get(&self, param: &Param) -> Result<Value>;
+
+    /// Write a value. Returns once the amp confirmed it (IPD: echo, IPX: read back).
+    async fn set(&self, param: &Param, value: Value) -> Result<()>;
+
+    /// Write several parameters; one result per item. Drivers override this to pipeline the writes.
+    async fn set_many(&self, items: &[(Param, Value)]) -> Vec<Result<()>> {
+        let mut out = Vec::with_capacity(items.len());
+        for (p, v) in items {
+            out.push(self.set(p, v.clone()).await);
+        }
+        out
+    }
+
+    async fn status(&self) -> Result<Status>;
+
+    /// Presets stored on the amp.
+    async fn presets(&self) -> Result<Vec<PresetInfo>>;
+
+    /// Load a stored preset. This changes the audio settings, including mutes.
+    async fn recall_preset(&self, index: u32) -> Result<()>;
+
+    /// Latest meter readings.
+    fn meters(&self) -> Meters;
+
+    fn subscribe(&self) -> broadcast::Receiver<AmpEvent>;
+
+    async fn close(&self);
+
+    fn as_any(&self) -> &dyn Any;
+
+    /// Read several parameters. Drivers override this when requests can be pipelined.
+    async fn get_many(&self, params: &[Param]) -> Result<Vec<Value>> {
+        let mut out = Vec::with_capacity(params.len());
+        for p in params {
+            out.push(self.get(p).await?);
+        }
+        Ok(out)
+    }
+
+    /// Read every parameter. Drivers override this when the amp has a bulk read.
+    async fn snapshot(&self) -> Result<Snapshot> {
+        let info = self.info();
+        let mut snap = Snapshot::new(info.driver, &info.model);
+        for p in self.params() {
+            snap.params.insert(p.to_string(), self.get(&p).await?);
+        }
+        Ok(snap)
+    }
+
+    /// Write the writable parameters of `snap` that this amp has.
+    async fn restore(&self, snap: &Snapshot, dry_run: bool) -> Result<RestoreReport> {
+        if snap.format != Snapshot::FORMAT {
+            return Err(Error::Parse(format!("unsupported snapshot format {}", snap.format)));
+        }
+        let mut report = RestoreReport::default();
+        let mut todo: Vec<(String, Param, Value)> = Vec::new();
+        for (name, value) in &snap.params {
+            let Ok(param) = name.parse::<Param>() else {
+                report.skipped.push(name.clone());
+                continue;
+            };
+            let Some(spec) = self.spec(&param).filter(|s| s.writable) else {
+                report.skipped.push(name.clone());
+                continue;
+            };
+            match spec.check(&name, value) {
+                Ok(v) => todo.push((name.clone(), param, v)),
+                Err(e) => report.failed.push((name.clone(), e.to_string())),
+            }
+        }
+        if dry_run {
+            report.applied = todo.len();
+            return Ok(report);
+        }
+        // Order matters: mute first and unmute last, and switch filters on/off after their other
+        // settings (the IPX turns a filter on when its type is written).
+        todo.sort_by_key(|(_, p, v)| match (p, v) {
+            (Param::Mute(_), Value::Bool(true)) => 0,
+            (
+                Param::Eq { field: EqField::Enabled, .. } | Param::Xover { field: XoverField::Enabled, .. },
+                _,
+            ) => 2,
+            (Param::Mute(_) | Param::Mixer { field: MixerField::Mute, .. }, _) => 3,
+            _ => 1,
+        });
+        let items: Vec<(Param, Value)> = todo.iter().map(|(_, p, v)| (p.clone(), v.clone())).collect();
+        for ((name, ..), result) in todo.iter().zip(self.set_many(&items).await) {
+            match result {
+                Ok(()) => report.applied += 1,
+                Err(e) => report.failed.push((name.clone(), e.to_string())),
+            }
+        }
+        Ok(report)
+    }
+}
