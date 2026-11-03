@@ -325,7 +325,8 @@ impl Amp for IpdAmp {
         // setting (it is not always answered) assume no protected range.
         let startup = self.client.get_raw(global(M_STARTUP_PRESET), None).await.ok().and_then(|r| r.int());
         let read_only = (startup.unwrap_or(0) as u32 & 0xFF00) >> 8;
-        let level = self.client.get_raw(global(M_CURRENT_USER), None).await?.int().unwrap_or(-1);
+        // an unreadable level counts as the lowest
+        let level = self.client.get_raw(global(M_CURRENT_USER), None).await?.int().unwrap_or(i64::MAX);
         if slot <= read_only && level > USER_DEVELOPER {
             return Err(Error::Denied(format!("presets 1 to {read_only} are protected")));
         }
