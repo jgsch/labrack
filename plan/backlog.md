@@ -12,10 +12,6 @@ committed.
 
 Open questions to resolve; each blocks or shapes the requirements listed.
 
-- IPX limiter, before building the limiter UI: the amp stores Vpk and dBu as two separate values
-  that can disagree (out2 had 69 Vpk with 34.77 dBu). Which one does the limiter use, and what does
-  the vendor app write when the user edits dBu? Test with the outputs muted and a signal on a dummy
-  load, or capture the vendor app's writes. Spec: BEH-5, BEH-28
 - IPD login: does the firmware block writes at User or Locked level, and does the level survive a
   reconnect or power cycle? Spec: BEH-13 to BEH-15
 - How does the app see IPD changes made on the front panel? Polling the full state takes about
