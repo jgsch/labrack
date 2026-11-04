@@ -46,45 +46,45 @@ async fn the_limiter_is_read_in_all_units_on_both_families() {
     close(l.dbu, 35.9851, 1e-3);
     assert!(hub.limiter(id, 2).is_none());
 
-    // the simulated IPD stores 36.78 dBu, and that is the dBu shown, as on the amp's front panel. Its volts
-    // and watts are the vendor app's: 2.22 dB more than that dBu gives (an IPD 2400 read with the Windows
-    // app: stored 29.04 is 40 Vpk, stored 32.56 is 60 Vpk)
+    // the IPD stores the threshold in dBV (36.78 in the simulator), which is 2.22 dB below its dBu; the app
+    // shows dBu and the volts and watts of that dBu (an IPD 2400 read with the Windows app: stored 29.04 is
+    // shown as 31.26 dBu, 40 Vpk, 200 W into 4 ohm)
     let (hub, id, _sim) = online_ipd().await;
     let l = hub.limiter(id, 0).unwrap();
-    close(l.dbu, 36.78, 1e-9);
+    close(l.dbu, 36.78 + math::DBV_TO_DBU, 1e-3);
     close(l.ohm, 4.0, 1e-9);
-    close(l.vpk, math::vpk_from_dbu(39.0), 1e-9);
-    close(l.watt, math::watt(l.vpk, 4.0), 1e-9);
+    close(l.vpk, math::vpk_from_dbu(39.0), 0.2);
+    close(l.watt, math::watt(l.vpk, 4.0), 1e-6);
 }
 
-// BEH-5: volts and watts mean the same on both families. A dBu is the amp's own number: the IPD stores
-// 2.22 dB less than the IPX does for the same volts
+// BEH-5: the same threshold in any unit shows the same dBu, Vpk and watts on both families; what
+// differs is what is stored (the IPD in dBV, 2.22 dB lower)
 #[tokio::test(flavor = "multi_thread")]
-async fn volts_and_watts_are_the_same_on_both_families_and_a_dbu_is_the_amps_own() {
+async fn the_same_threshold_shows_the_same_figures_on_both_families() {
     let (ipx, a, _fake) = online_ipx(timing()).await;
-    let (ipd, b, _sim) = online_ipd().await;
-    for (unit, value) in [(Unit::Watt, 100.0), (Unit::Vpk, 40.0), (Unit::Watt, 250.0)] {
+    let (ipd, b, sim) = online_ipd().await;
+    for (unit, value) in [(Unit::Watt, 100.0), (Unit::Vpk, 40.0), (Unit::Watt, 250.0), (Unit::Dbu, 30.0)] {
         ipx.set_limiter(a, 0, unit, value).unwrap();
         ipd.set_limiter(b, 0, unit, value).unwrap();
         let near = |l: Limiter| (l.in_unit(unit) - value).abs() <= 0.003 * value.abs();
         let x = wait_limiter(&ipx, a, 0, near).await;
         let d = wait_limiter(&ipd, b, 0, near).await;
-        // the IPD keeps the dBu to 0.01, which is 0.2 % of the watts
+        // the IPD keeps its dBV to 0.01, which is 0.2 % of the volts and watts
         close(x.vpk, d.vpk, 0.003 * x.vpk);
         close(x.watt, d.watt, 0.003 * x.watt);
-        close(x.dbu - d.dbu, 2.22, 0.02);
+        close(x.dbu, d.dbu, 0.02);
+        // and the IPD stores 2.22 dB below its dBu
+        let stored = ipd_value(&sim, "out1.limiter.threshold").await.as_f64().unwrap();
+        close(stored + math::DBV_TO_DBU, d.dbu, 0.02);
+        if unit == Unit::Vpk {
+            close(d.vpk, 40.0, 0.003 * 40.0);
+        }
     }
-    // 100 W into 4 ohm is 28.24 dBu on an IPX, whichever way it was asked for
-    ipx.set_limiter(a, 1, Unit::Watt, 100.0).unwrap();
-    let l = wait_limiter(&ipx, a, 1, |l| (l.watt - 100.0).abs() < 1e-3).await;
-    close(l.dbu, 10.0 * (100.0f64 * 4.0 / 0.6).log10(), 1e-3);
-
-    // a dBu that is typed is stored as typed
-    ipx.set_limiter(a, 0, Unit::Dbu, 30.0).unwrap();
-    ipd.set_limiter(b, 0, Unit::Dbu, 30.0).unwrap();
-    let x = wait_limiter(&ipx, a, 0, |l| (l.dbu - 30.0).abs() < 1e-3).await;
-    let d = wait_limiter(&ipd, b, 0, |l| (l.dbu - 30.0).abs() < 1e-3).await;
-    close(x.vpk / d.vpk, 10f64.powf(-2.22 / 20.0), 0.01);
+    // 40 Vpk is 31.26 dBu and 200 W into 4 ohm: what the Windows app shows
+    ipd.set_limiter(b, 0, Unit::Vpk, 40.0).unwrap();
+    let d = wait_limiter(&ipd, b, 0, |l| (l.vpk - 40.0).abs() < 0.05).await;
+    close(d.dbu, 31.26, 0.02);
+    close(d.watt, 200.0, 0.6);
 }
 
 // BEH-5: an edit of the threshold writes Vpk, ohm, watts and dBu together on the IPX, as the vendor
@@ -140,15 +140,15 @@ async fn a_threshold_edit_writes_the_dbu_only_on_the_ipd() {
     hub.set_limiter(id, 1, Unit::Watt, 150.0).unwrap();
     // the IPD keeps the dBu to 0.01
     let l = wait_limiter(&hub, id, 1, |l| (l.watt - 150.0).abs() < 0.5).await;
-    close(l.dbu + 2.22, 10.0 * (150.0f64 * 4.0 / 0.6).log10(), 0.01);
+    close(l.dbu, 10.0 * (150.0f64 * 4.0 / 0.6).log10(), 0.02);
 
     let writes = sim.writes()[before..].to_vec();
     assert_eq!(writes.first(), Some(&ipd_slot(&param("out2.limiter.threshold")).unwrap().key));
     assert!(writes.iter().all(|k| *k == writes[0]), "nothing but the threshold: {writes:?}");
-    // the dBu shown is the dBu stored; the watts asked for are the vendor app's, 2.22 dB on from it
+    // the IPD stores the dBV, 2.22 dB below the dBu shown
     let truth = ipd_value(&sim, "out2.limiter.threshold").await;
-    close(truth.as_f64().unwrap(), l.dbu, 0.01);
-    close(truth.as_f64().unwrap() + 2.22, 10.0 * (150.0f64 * 4.0 / 0.6).log10(), 0.02);
+    close(truth.as_f64().unwrap() + math::DBV_TO_DBU, l.dbu, 0.02);
+    close(l.dbu, 10.0 * (150.0f64 * 4.0 / 0.6).log10(), 0.02);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -203,23 +203,30 @@ async fn values_outside_the_range_are_never_sent() {
         (Unit::Ohm, f64::NAN),
         (Unit::Ohm, f64::INFINITY),
     ];
+    let (ipx_writes, ipd_writes) = (fake.writes(), sim.writes().len());
     for (unit, value) in bad {
         for (hub, id) in [(&ipx, a), (&ipd, b)] {
             let got = hub.set_limiter(id, 0, unit, value);
             assert!(matches!(got, Err(Error::Invalid(_))), "{unit:?} {value}: {got:?}");
         }
     }
-    // the IPD 2400 tops out at 36.78 dBu stored, the IPX 1200 at 35.99 dBu (69 Vpk)
-    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 36.79), Err(Error::Invalid(_))));
+    // the IPD 2400 tops out at 39.0 dBu (36.78 dBV, 98 Vpk), the IPX 1200 at 35.99 dBu (69 Vpk)
+    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 39.01), Err(Error::Invalid(_))));
+    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 18.9), Err(Error::Invalid(_))));
+    assert!(ipd.set_limiter(b, 0, Unit::Dbu, 19.0).is_ok());
+    assert_eq!(ipd.limiter_range(b, 0, Unit::Dbu).unwrap().max, Some(39.0));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 36.0), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 19.2), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Vpk, 70.0), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Vpk, 9.9), Err(Error::Invalid(_))));
     assert!(ipx.set_limiter(a, 0, Unit::Dbu, 35.99).is_ok());
     assert!(matches!(ipx.set_limiter(a, 7, Unit::Dbu, 30.0), Err(Error::NotControllable)));
-    sleep(Duration::from_millis(300)).await;
-    assert_eq!(sim.writes(), []);
-    assert_eq!(fake.writes(), 4, "only the one good edit: four values");
+    // the one good IPX edit: four values; the one good IPD edit: the threshold
+    wait_value(&ipx, a, "out1.limiter.threshold_dbu", f(35.99)).await;
+    wait_limiter(&ipd, b, 0, |l| (l.dbu - 19.0).abs() < 0.05).await;
+    sleep(Duration::from_millis(200)).await;
+    assert_eq!(fake.writes() - ipx_writes, 4);
+    assert_eq!(sim.writes().len() - ipd_writes, 1);
 }
 
 // the generic setter does not take the limiter: its figures must be written together
@@ -252,9 +259,9 @@ async fn the_range_of_a_limiter_control() {
 
     let (hub, id, _sim) = online_ipd().await;
     let r = hub.limiter_range(id, 0, Unit::Dbu).unwrap();
-    assert_eq!((r.min, r.max), (Some(16.78), Some(36.78)), "the IPD 2400, stored");
+    assert_eq!((r.min, r.max), (Some(19.0), Some(39.0)), "the IPD 2400: 16.78 to 36.78 dBV, as dBu");
     let v = hub.limiter_range(id, 0, Unit::Vpk).unwrap();
-    close(v.max.unwrap(), math::vpk_from_dbu(36.78 + 2.22), 1e-9); // 98 Vpk, as the Windows app
+    close(v.max.unwrap(), 98.0, 0.5); // as the Windows app
     hub.disconnect(id).unwrap();
     wait_status(&hub, id, Status::Disconnected).await;
     assert!(hub.limiter_range(id, 0, Unit::Dbu).is_none());
@@ -275,9 +282,8 @@ async fn the_limiter_ceiling_holds_in_every_unit() {
         };
         hub.set_ceilings(id, Ceilings { max_output_gain_db: None, max_limiter_dbu: Some(30.0) }).unwrap();
         let ohm = hub.limiter(id, 0).unwrap().ohm;
-        // the ceiling is in the dBu the amp stores; an IPD's volts for it are 2.22 dB on
-        let offset = if ipx { 0.0 } else { math::IPD_DISPLAY_OFFSET };
-        let at_30 = Limiter::stored(30.0, ohm, offset);
+        // the ceiling is a dBu; 30 dBu is 19.95 Vpk on both families
+        let at_30 = Limiter::from_dbu(30.0, ohm);
 
         assert_eq!(hub.limiter_range(id, 0, Unit::Dbu).unwrap().max, Some(30.0));
         close(hub.limiter_range(id, 0, Unit::Vpk).unwrap().max.unwrap(), at_30.vpk, 1e-9);

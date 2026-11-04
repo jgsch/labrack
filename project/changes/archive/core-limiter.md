@@ -70,7 +70,7 @@ ranges), edits `SEC-3` (the limiter ceiling is a dBu and holds in every unit and
 
 ## Revised after reading a live IPD 2400 and IPX 1200 (see `BEH-5`)
 
-- **The IPD stores 2.22 dB less than the vendor app shows** (`labgruppen::limiter::IPD_DISPLAY_OFFSET`).
+- **The IPD stores 2.22 dB less than the vendor app shows** (then `IPD_DISPLAY_OFFSET`, now `DBV_TO_DBU`).
   The app shows and takes the vendor's dBu, Vpk and Watt, and stores 2.22 dB less (rounded to the
   IPD's 0.01 steps). The library's stored ranges become 19.0 to 36.02 / 39.0 / 42.05 dBu shown. The
   user ceiling is the dBu as shown, in files too.
@@ -86,3 +86,13 @@ volts and watts are the vendor app's, which go with a dBu 2.22 dB above the stor
 (`Limiter::stored(dbu, ohm, offset)`); entering volts or watts stores 2.22 dB less. Ranges and the
 user ceiling are in the stored dBu. The same edit in dBu is therefore not the same volts on the two
 families; in Vpk or Watt it is. This replaces the first revision's "shown dBu = stored + 2.22".
+
+## Third revision: the stored unit is dBV
+
+The live readings settle it: the IPD stores the threshold in **dBV** (0 dBV = 1 V rms), not dBu. 40 Vpk
+is 28.28 V rms = 29.03 dBV, and the amp held 29.04; dBu = dBV + 2.2185, which gives the vendor app's
+31.26 dBu and 98 Vpk for its 36.78 ceiling. So there is no fudge factor and no per-family divergence:
+the app shows dBu and the volts and watts of that dBu, one consistent set on both families; an IPD
+writes `dBu - DBV_TO_DBU` and its range and the user ceiling are in dBu. The library labels the IPD
+limiter threshold `dBV` and keeps its ranges as stored. `Vpk` and `Watt` therefore mean the same on both
+families, and a threshold typed in dBu shows the same volts on both.

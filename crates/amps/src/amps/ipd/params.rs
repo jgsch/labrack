@@ -98,7 +98,7 @@ pub fn slot(p: &Param) -> Option<Slot> {
 /// Global MODEL_NUMBER -> model name.
 pub const MODELS_BY_NUMBER: [&str; 3] = ["IPD2400", "IPD1200", "IPD4800"];
 
-/// Output threshold ceiling (dBu) per model; the floor is 16.78 dBu.
+/// Output threshold ceiling (dBV) per model; the floor is 16.78 dBV. The vendor app shows these as dBu, 2.22 dB higher.
 pub fn output_threshold_max(model: &str) -> f64 {
     match model {
         "IPD2400" => 36.78,
@@ -142,7 +142,7 @@ pub fn spec(p: &Param, model: &str) -> Option<ParamSpec> {
             CompressorField::Gain => f().range(-12.0, 12.0).unit("dB"),
         },
         Param::Limiter { field, .. } => match field {
-            LimiterField::Threshold if out => f().range(16.78, output_threshold_max(model)).unit("dBu"),
+            LimiterField::Threshold if out => f().range(16.78, output_threshold_max(model)).unit("dBV"),
             LimiterField::Threshold => f().range(-24.0, 39.83).unit("dB"),
             _ => ParamSpec::new(Kind::Int).range(10.0, 1000.0).unit("ms"),
         },

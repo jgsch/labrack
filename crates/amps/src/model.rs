@@ -309,17 +309,18 @@ pub fn shared_range(param: &Param) -> Option<(f64, f64)> {
 /// Output limiter units (BEH-5). Peak voltage and dBu are one quantity: `dBu = 10 * log10(Vpk^2 / 1.2)`
 /// (0 dBu is 0.7746 V rms, whose square is 0.6). Watts need the load: `W = Vpk^2 / (2 * ohm)`, so
 /// `dBu = 10 * log10(W * ohm / 0.6)`. The vendor app derives them the same way for both families;
-/// the IPX stores all four figures, the IPD only the dBu threshold.
+/// the IPX stores all four figures, the IPD only the threshold, in dBV.
 pub mod limiter {
     /// The square of 0.7746 V, the 0 dBu reference.
     const REFERENCE: f64 = 0.6;
 
-    /// The vendor app shows an IPD threshold 2.22 dB above what the amp stores, and gives Vpk and watts
-    /// for that. Read on an IPD 2400 (MK1, firmware 1.2.6) with the Windows app: stored 32.56 is shown as
-    /// 34.78 dBu (60 Vpk), stored 29.04 as 31.26 dBu (40 Vpk). It fits the ceilings of the library too:
-    /// IPD 1200 33.8 + 2.22 is 69 Vpk, the IPX 1200's maximum; the 2400 gives 98 Vpk, the 4800 138 Vpk.
-    /// The IPX shows what it stores. The amps' own front panels show and set dBu only.
-    pub const IPD_DISPLAY_OFFSET: f64 = 2.22;
+    /// An IPD stores an output limiter threshold in dBV, and the vendor app, like this one, shows it in
+    /// dBu: `dBu = dBV + 2.2185`, the difference between 0 dBV (1 V rms) and 0 dBu (0.7746 V rms). Read on
+    /// an IPD 2400 (MK1, firmware 1.2.6) with the Windows app: stored 32.56 dBV is shown as 34.78 dBu
+    /// (60 Vpk, 450 W), stored 29.04 dBV as 31.26 dBu (40 Vpk, 200 W). It fits the ceilings of the library
+    /// too: 33.8 dBV is 69 Vpk at the top of the IPD 1200, the IPX 1200's maximum; 36.78 dBV is 98 Vpk for
+    /// the 2400, 39.83 dBV 138 Vpk for the 4800. The IPX stores dBu. The amps' front panels show dBu only.
+    pub const DBV_TO_DBU: f64 = 2.2185;
 
     /// The load impedance, in ohm, that can be entered. It only scales the watts.
     pub const OHM_RANGE: (f64, f64) = (0.5, 100.0);

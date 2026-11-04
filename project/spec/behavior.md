@@ -12,24 +12,20 @@ statement with a `BEH-<n>` ID.
   → fixed routing IN n → OUT n → limiter → output.
 - **BEH-4** 10-band EQ per channel (inputs and outputs). High-pass and low-pass filters on outputs
   only. Delay on inputs and on outputs.
-- **BEH-5** Limiter per output, with linked units: Vpk, Ohm, Watt, dBu, converted the same way on
-  both families. The dBu is the number the amp stores and shows on its front panel (the amps show and
-  set dBu only); Vpk and Watt are the vendor app's. Vpk and dBu are one quantity, `dBu = 10 *
-  log10(Vpk² / 1.2)`; the watts need the load, `W = Vpk² / (2 * Ohm)`, so a change of the load
-  moves the watts only.
-  - IPX: the amp stores all four figures as plain values and derives nothing. The app takes the
-    dBu field as the threshold. Editing the threshold (in Vpk, Watt or dBu) writes all four together,
-    as the vendor app does; editing the load writes the load and the watts only, so it cannot move a
-    threshold.
-  - IPD: the amp stores only the threshold in dBu, and shows it as stored. The vendor app's volts
-    and watts go with a dBu 2.22 dB above the stored one (verified on an IPD 2400: stored 29.04 is
-    40 Vpk, stored 32.56 is 60 Vpk). The app shows the stored dBu, and gives Vpk and Watt as the
-    vendor app does; entering Vpk or Watt stores the dBu 2.22 dB lower, entering a dBu stores it as
-    entered. The app keeps the load in Ohm per output (default 4 Ω) in its config.
-  - Ranges: the IPD takes 16.78 up to 33.8 (IPD 1200), 36.78 (2400) or 39.83 (4800) dBu stored, which
-    is 69, 98 or 138 Vpk at the top. The IPX reports none; the app takes what the Windows app allows
-    on an IPX 1200, 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk), for every IPX until the others are
-    measured. The load takes 0.5 to 100 Ohm.
+- **BEH-5** Limiter per output, in linked units: Vpk, Ohm, Watt, dBu, the same on both families and
+  always one consistent set: the volts and watts are those a threshold in dBu gives at the load,
+  `dBu = 10 * log10(Vpk² / 1.2)` and `W = Vpk² / (2 * Ohm)`. A change of the load moves the watts only.
+  - IPX: the amp stores all four figures as plain values and derives nothing. Editing the threshold
+    (in Vpk, Watt or dBu) writes all four together, as the vendor app does; editing the load writes the
+    load and the watts only, so it cannot move a threshold.
+  - IPD: the amp stores only the threshold, **in dBV** (0 dBV is 1 V rms, 0 dBu is 0.7746 V rms), and
+    the app shows dBu, `dBu = dBV + 2.2185`, as the vendor app does. Read on an IPD 2400: stored 29.04
+    dBV is 31.26 dBu, 40 Vpk, 200 W into 4 ohm; stored 32.56 dBV is 34.78 dBu, 60 Vpk, 450 W. The app
+    keeps the load in Ohm per output (default 4 Ω) in its config.
+  - Ranges: the IPD takes 16.78 dBV (19.0 dBu) up to 33.8 (1200), 36.78 (2400) or 39.83 (4800) dBV,
+    shown as 36.02, 39.0 and 42.05 dBu, which is 69, 98 and 138 Vpk at the top. The IPX reports none;
+    the app takes what the Windows app allows on an IPX 1200, 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk),
+    for every IPX until the others are measured. The load takes 0.5 to 100 Ohm.
 - **BEH-6** 50 presets per amplifier, slots 1–50, numbered as in the vendor apps (IPD slots 51–100
   are not used; the IPX counts from 0 on the wire, the vendor app and this app show index + 1).
 

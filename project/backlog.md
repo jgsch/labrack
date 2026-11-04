@@ -20,9 +20,10 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   fader. Spec: BEH-27, UX-18, SEC-2
 - Choose defaults for the user ceilings. Spec: SEC-3, BEH-40
 - IPD MK2 units (different framing) have not been tried on hardware. Spec: BEH-1
-- Confirm the IPD limiter offset (volts and watts go with stored + 2.22 dB) on the IPD 1200 and 4800,
-  and that the IPD's own front panel shows the stored dBu (29.04 for 40 Vpk). It was measured at two
-  points on an IPD 2400 and fits the ceilings of all three models. Spec: BEH-5
+- Confirm the IPD's limiter unit on the IPD 1200 and 4800, and on an IPD 2400's own front panel.
+  Settled on an IPD 2400 (read, 2026-11-04): the amp stores dBV, 29.04 for 40 Vpk, 32.56 for 60 Vpk,
+  where the Windows app shows 31.26 and 34.78 dBu. Does the front panel show the dBV (29.04) or the
+  dBu? Spec: BEH-5
 - When there is access to an IPX 4800: read its limiter range in the Windows app (lowest and highest
   threshold in dBu and Vpk) and add it to `LIMITER_DBU` in `amps` (`ipx/params.rs`), which now holds
   the IPX 1200's range, 19.22 to 35.99 dBu (10 to 69 Vpk), for every IPX. Expected from the IPD

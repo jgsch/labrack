@@ -52,9 +52,11 @@ pub(crate) fn restorable(param: &Param) -> bool {
 /// one: an IPX holds it as Vpk and as dBu, an IPD as dBu. The user ceiling is in that dBu (of that amp).
 fn threshold_dbu(param: &Param, unit: &str, value: f64) -> Option<f64> {
     match param {
-        Param::Limiter { ch: Channel::Output(_), field: LimiterField::Threshold } => {
-            Some(if unit == "Vpk" { limiter::dbu(value) } else { value })
-        }
+        Param::Limiter { ch: Channel::Output(_), field: LimiterField::Threshold } => Some(match unit {
+            "Vpk" => limiter::dbu(value),
+            "dBV" => value + limiter::DBV_TO_DBU,
+            _ => value,
+        }),
         Param::Limiter { ch: Channel::Output(_), field: LimiterField::ThresholdDbu } => Some(value),
         _ => None,
     }
@@ -107,7 +109,11 @@ pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &C
         && let Some(dbu) = checked.as_f64().and_then(|v| threshold_dbu(param, spec.unit, v))
         && dbu > limit + 1e-9
     {
-        let ceiling = if spec.unit == "Vpk" { limiter::vpk_from_dbu(limit) } else { limit };
+        let ceiling = match spec.unit {
+            "Vpk" => limiter::vpk_from_dbu(limit),
+            "dBV" => limit - limiter::DBV_TO_DBU,
+            _ => limit,
+        };
         return Err(Error::AboveCeiling { ceiling, unit: spec.unit });
     }
     Ok(checked)
@@ -349,17 +355,19 @@ mod tests {
         }
     }
 
-    // SEC-3: a limiter threshold is held to the dBu ceiling, in the dBu the amp stores: an IPX holds the
-    // threshold as Vpk and as dBu, an IPD as dBu
+    // SEC-3: a limiter threshold is held to the dBu ceiling. An IPX holds the threshold as Vpk and as dBu,
+    // an IPD as dBV, 2.22 dB below its dBu.
     #[test]
     fn the_limiter_ceiling_holds_for_vpk_and_dbu_entries() {
         let ceilings = Ceilings { max_limiter_dbu: Some(30.0), ..NONE };
-        let dbu = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBu");
+        let dbu = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBu"); // an IPX
+        let dbv = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBV"); // an IPD
         let vpk = ParamSpec::new(Kind::Float).range(7.0, 110.0).unit("Vpk");
         let at_30 = limiter::vpk_from_dbu(30.0);
+        let ipd_30 = 30.0 - limiter::DBV_TO_DBU;
 
         for (name, spec, ok, over) in [
-            ("out1.limiter.threshold", &dbu, 30.0, 30.01),
+            ("out1.limiter.threshold", &dbv, ipd_30, ipd_30 + 0.01),
             ("out1.limiter.threshold_dbu", &dbu, 30.0, 30.01),
             ("out2.limiter.threshold", &vpk, at_30, at_30 * 1.001),
         ] {
@@ -369,7 +377,11 @@ mod tests {
             assert!(matches!(got, Err(Error::AboveCeiling { .. })), "{name}: {got:?}");
             assert!(check(&p, spec, &f(over), &NONE).is_ok(), "{name}: no ceiling");
         }
-        // the ceiling in the unit of the entry
+        // the ceiling in the unit of the entry: an IPD has it in dBV
+        let got = check(&param("out1.limiter.threshold"), &dbv, &f(ipd_30 + 1.0), &ceilings);
+        assert!(
+            matches!(got, Err(Error::AboveCeiling { ceiling, unit: "dBV" }) if (ceiling - ipd_30).abs() < 1e-9)
+        );
         let got = check(&param("out1.limiter.threshold"), &vpk, &f(at_30 * 1.1), &ceilings);
         assert!(
             matches!(got, Err(Error::AboveCeiling { ceiling, unit: "Vpk" }) if (ceiling - at_30).abs() < 1e-9)

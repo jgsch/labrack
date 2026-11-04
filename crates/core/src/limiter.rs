@@ -26,36 +26,24 @@ impl Unit {
     }
 }
 
-/// The four figures of an output limiter. `dbu` is the number the amp stores and shows on its front
-/// panel. The volts and watts are the vendor app's: on an IPD they correspond to a dBu that is 2.22 dB
-/// above the stored one (`offset`), on an IPX to the stored dBu itself.
+/// The four figures of an output limiter, all consistent: the volts and watts are the ones a threshold
+/// of `dbu` gives at `ohm`. A dBV stored by an IPD is turned into dBu before this (see [`math::DBV_TO_DBU`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Limiter {
     pub vpk: f64,
     pub ohm: f64,
     pub watt: f64,
     pub dbu: f64,
-    offset: f64,
 }
 
 impl Limiter {
-    /// A threshold of `dbu` as stored by an amp whose volts are `offset` dB above that dBu.
-    pub fn stored(dbu: f64, ohm: f64, offset: f64) -> Limiter {
-        let vpk = math::vpk_from_dbu(dbu + offset);
-        Limiter { vpk, ohm, watt: math::watt(vpk, ohm), dbu, offset }
-    }
-
-    fn at_volts(vpk: f64, ohm: f64, offset: f64) -> Limiter {
-        Limiter { vpk, ohm, watt: math::watt(vpk, ohm), dbu: math::dbu(vpk) - offset, offset }
-    }
-
-    /// For an amp whose stored dBu is the true one (the IPX).
-    pub fn from_vpk(vpk: f64, ohm: f64) -> Limiter {
-        Limiter::at_volts(vpk, ohm, 0.0)
-    }
-
     pub fn from_dbu(dbu: f64, ohm: f64) -> Limiter {
-        Limiter::stored(dbu, ohm, 0.0)
+        let vpk = math::vpk_from_dbu(dbu);
+        Limiter { vpk, ohm, watt: math::watt(vpk, ohm), dbu }
+    }
+
+    pub fn from_vpk(vpk: f64, ohm: f64) -> Limiter {
+        Limiter { vpk, ohm, watt: math::watt(vpk, ohm), dbu: math::dbu(vpk) }
     }
 
     pub fn from_watt(watt: f64, ohm: f64) -> Limiter {
@@ -68,12 +56,12 @@ impl Limiter {
     }
 
     /// The limiter after the user entered `value` in `unit`. The threshold is edited at the current
-    /// load; entering the load keeps the threshold. A dBu entered is the dBu to store.
+    /// load; entering the load keeps the threshold.
     pub fn edit(self, unit: Unit, value: f64) -> Limiter {
         match unit {
-            Unit::Vpk => Limiter::at_volts(value, self.ohm, self.offset),
-            Unit::Dbu => Limiter::stored(value, self.ohm, self.offset),
-            Unit::Watt => Limiter::at_volts(math::vpk_from_watt(value, self.ohm), self.ohm, self.offset),
+            Unit::Vpk => Limiter::from_vpk(value, self.ohm),
+            Unit::Dbu => Limiter::from_dbu(value, self.ohm),
+            Unit::Watt => Limiter::from_watt(value, self.ohm),
             Unit::Ohm => self.with_ohm(value),
         }
     }
@@ -158,21 +146,24 @@ mod tests {
         }
     }
 
-    // an IPD stores 2.22 dB less than the volts and watts of the vendor app go with
+    // BEH-5: an IPD stores dBV; the app shows dBu and the volts and watts of that dBu
     #[test]
-    fn an_ipd_threshold_is_the_stored_dbu_with_the_vendor_apps_volts() {
-        // read with the Windows app on an IPD 2400: stored 29.04 is 40 Vpk, 200 W into 4 ohm
-        let l = Limiter::stored(29.04, 4.0, math::IPD_DISPLAY_OFFSET);
-        assert_eq!(l.dbu, 29.04);
-        close(l.vpk, 40.0, 0.05);
-        close(l.watt, 200.0, 0.8);
-        // and entering volts or watts stores the lower dBu
-        close(l.edit(Unit::Vpk, 60.0).dbu, 34.77 - 2.22, 0.01);
-        close(l.edit(Unit::Watt, 450.0).dbu, 34.77 - 2.22, 0.01);
-        assert_eq!(l.edit(Unit::Dbu, 25.0).dbu, 25.0);
-        assert_eq!(l.edit(Unit::Ohm, 8.0).dbu, 29.04);
-        // an IPX stores the dBu of its volts
-        close(Limiter::from_vpk(60.0, 4.0).dbu, 34.77, 0.01);
+    fn a_stored_dbv_is_shown_as_dbu_with_its_volts_and_watts() {
+        // read with the Windows app on an IPD 2400 (4 ohm): the dBu it shows, and the volts and watts
+        for (dbv, dbu, vpk, watt) in [(29.04, 31.26, 40.0, 200.0), (32.56, 34.78, 60.0, 450.0)] {
+            let l = Limiter::from_dbu(dbv + math::DBV_TO_DBU, 4.0);
+            close(l.dbu, dbu, 0.02);
+            close(l.vpk, vpk, 0.1);
+            close(l.watt, watt, 1.0);
+        }
+        // the ceilings of the library, in dBV, are the volts the vendor app allows
+        for (dbv, vpk) in [(33.8, 69.0), (36.78, 98.0), (39.83, 138.7)] {
+            close(Limiter::from_dbu(dbv + math::DBV_TO_DBU, 4.0).vpk, vpk, 0.5);
+        }
+        // the other way: 40 Vpk is 31.26 dBu, and 29.04 dBV
+        let l = Limiter::from_vpk(40.0, 4.0);
+        close(l.dbu, 31.26, 0.02);
+        close(l.dbu - math::DBV_TO_DBU, 29.04, 0.02);
     }
 
     #[test]
