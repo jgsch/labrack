@@ -49,8 +49,9 @@ No spec change; implements:
   prepends the six `@font-face` rules with the WOFF2 files embedded as data URIs, so the stylesheet is
   self-contained (PERF-4). The window sets it as its custom head and its background to `#11111b`, so
   there is no white flash before the page paints.
-- **MUTE ALL is on the Amplifiers page only** (UX-3, confirmed by the user). The mockup had it on the
-  Mix & EQ boards too; boards 02-05 and 07-09 were changed to drop it and `mockup.html` repacked.
+- **MUTE ALL is on every page** (UX-3): whatever page is open, the outputs are one click away from
+  silence. The Search board of the mockup had no button; it was added there (boards 02-05 and 07-09
+  already had one) and `mockup.html` repacked.
 - **MUTE ALL writes the two output mutes** of each ONLINE amp and nothing else (BEH-25, confirmed by the
   user); `mute_all_writes_the_two_output_mutes_only` pins it on the IPD simulator and the fake IPX.
 - **UX-4 and the keyboard.** Tabs are links (`href="#…"`, `aria-current` on the active one), MUTE ALL a

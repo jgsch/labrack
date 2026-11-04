@@ -244,7 +244,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
       <a class="tab" href="A-Mix.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #313244; color: #cdd6f4; border: 1px solid #585b70; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Mix &amp; EQ</a>
       <a class="tab" href="A-Search.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 20px; box-sizing: border-box; background: #b4befe; color: #11111b; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">Search</a>
     </nav>
-    <span></span>
+    <button sc-camel-on-click="{{toggleAll}}" aria-pressed="{{allMuted}}" style="justify-self: end; min-height: 52px; padding: 0 28px; border-radius: 4px; font-size: 14px; font-weight: 600; letter-spacing: 0.1em; {{allSty}}">{{allLabel}}</button>
   </header>
 
   <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start">
@@ -308,6 +308,7 @@ class Component extends DCLogic {
       { name: 'Subs', proto: 'IPX', ip: '192.168.1.31', src: 'AUTO' }
     ],
     useIPD: true, useIPX: true, scanUntil: 0, scanMsg: '',
+    allMuted: false, arm: '', armT: 0,
     fName: '', fProto: 'IPD', fIp: '', fErr: ''
   };
   pool = [
@@ -353,6 +354,12 @@ class Component extends DCLogic {
     const S = this.state;
     this.setState({ amps: S.amps.filter((_, k) => k !== i), scanMsg: S.amps[i].name + ' removed' });
   }
+  armed(k) { return this.state.arm === k && this.state.t - this.state.armT < 3; }
+  toggleAll() {
+    const S = this.state;
+    if (S.allMuted && !this.armed('all')) { this.setState({ arm: 'all', armT: S.t }); return; }
+    this.setState({ allMuted: !S.allMuted, arm: '' });
+  }
   renderVals() {
     const S = this.state;
     const offSty = 'background: #313244; color: #cdd6f4; border: 1px solid #585b70';
@@ -369,7 +376,12 @@ class Component extends DCLogic {
         toggle: () => this.toggleProto(p)
       };
     });
+    const allSty = S.allMuted ? 'background: #11111b; color: #eba0ac; border: 2px solid #eba0ac' : 'background: #b4befe; color: #11111b; border: 2px solid #b4befe';
     return {
+      allMuted: S.allMuted,
+      allLabel: S.allMuted ? (this.armed('all') ? 'CONFIRM UNMUTE ALL' : 'UNMUTE ALL') : 'MUTE ALL',
+      allSty,
+      toggleAll: () => this.toggleAll(),
       summary: S.amps.length + ' amplifier' + (S.amps.length === 1 ? '' : 's') + (S.scanMsg ? ' · ' + S.scanMsg : ''),
       protos, scanOff: none, scanTxt: scanning ? 'SCANNING…' : 'SCAN NOW',
       scanSty: none || scanning ? 'background: #181825; color: #6c7086; border: 1px solid #45475a; cursor: default' : offSty,

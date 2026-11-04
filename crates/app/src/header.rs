@@ -5,8 +5,9 @@ use crate::Page;
 /// The title of the app and its subtitle, spread letter by letter over the width of the title (UX-2).
 const SUBTITLE: [&str; 14] = ["D", "S", "P", "", "C", "O", "N", "T", "R", "O", "L", "L", "E", "R"];
 
-/// Title, the three tabs (UX-1) and, on the Amplifiers page only, MUTE ALL (UX-3). Tabs are links and
-/// MUTE ALL a button, so the keyboard reaches all of them (UX-4).
+/// Title, the three tabs (UX-1) and MUTE ALL (UX-3). The button is on every page: whatever page is
+/// open, the outputs are one click away from silence. Tabs are links and MUTE ALL a button, so the
+/// keyboard reaches all of them (UX-4).
 ///
 /// UNMUTE ALL needs a second click (SEC-5, UX-24); the confirmation is `app-controls`, and until it
 /// exists the button is disabled.
@@ -45,14 +46,12 @@ pub fn Header(
                     }
                 }
             }
-            if page == Page::Amplifiers {
-                button {
-                    class: "mute-all",
-                    "aria-pressed": "{all_muted}",
-                    disabled: all_muted,
-                    onclick: move |_| on_mute_all.call(()),
-                    if all_muted { "UNMUTE ALL" } else { "MUTE ALL" }
-                }
+            button {
+                class: "mute-all",
+                "aria-pressed": "{all_muted}",
+                disabled: all_muted,
+                onclick: move |_| on_mute_all.call(()),
+                if all_muted { "UNMUTE ALL" } else { "MUTE ALL" }
             }
         }
     }

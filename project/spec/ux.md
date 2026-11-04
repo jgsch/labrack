@@ -10,7 +10,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   is filled lavender.
 - **UX-2** Header left: the title LAB.RACK with the subtitle DSP CONTROLLER, letter-spaced to the
   exact width of the title.
-- **UX-3** Header right (Amplifiers page only, not on Mix & EQ or Search): MUTE ALL / UNMUTE ALL.
+- **UX-3** Header right, on every page: MUTE ALL / UNMUTE ALL. Whatever page is open, the
+  outputs are one click away from silence.
 - **UX-4** All controls are keyboard reachable, with a visible focus outline.
 
 ## Visual style

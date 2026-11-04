@@ -66,16 +66,14 @@ fn the_active_tab_is_the_page() {
     }
 }
 
-// UX-3: MUTE ALL is on the Amplifiers page only
+// UX-3: MUTE ALL is on every page: whatever page is open, the outputs are one click away from silence
 #[test]
-fn mute_all_is_on_the_amplifiers_page_only() {
+fn mute_all_is_on_every_page() {
     for page in Page::ALL {
         let html = header(page, false);
         let buttons = elements(&html, "button");
-        match page {
-            Page::Amplifiers => assert_eq!(buttons.len(), 1),
-            _ => assert!(buttons.is_empty(), "{page:?}"),
-        }
+        assert_eq!(buttons.len(), 1, "{page:?}");
+        assert_eq!(buttons[0].1, "MUTE ALL", "{page:?}");
     }
 }
 
