@@ -13,7 +13,10 @@ committed.
 Open questions to resolve; each blocks or shapes the requirements listed.
 
 - IPD login: does the firmware block writes at User or Locked level, and does the level survive a
-  reconnect or power cycle? Spec: BEH-13 to BEH-15
+  reconnect or power cycle? The app holds back what the rights forbid either way. A real IPD 2400 reads
+  as User with all five rights (read 2026-11-04); a Locked amp, a login and a level changed at the front
+  panel while connected have not been tried on hardware (the app sees such a change at the next
+  connect only). Spec: BEH-13 to BEH-15
 - How does the app see IPD changes made on the front panel? Polling the full state takes about
   16 s. Spec: BEH-38
 - IPD mixer gain tops out at 0 dB while the mockup faders go to +12: show the model's range on the

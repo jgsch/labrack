@@ -71,6 +71,7 @@ impl Hub {
     /// preset is the loaded one, the state is read again, and MODIFIED is cleared (BEH-38).
     pub async fn recall_preset(&self, id: AmpId, slot: u32) -> Result<()> {
         let session = self.session(id)?;
+        self.permit(id, |rights| rights.load_preset)?;
         self.check_slot(&session, slot)?;
         self.bulk(id, &session, End::Muted, true, |amp| async move { amp.recall_preset(slot).await }).await?;
 
@@ -86,6 +87,7 @@ impl Hub {
     /// Store the current settings in a slot under a name (BEH-37); it becomes the loaded preset.
     pub async fn store_preset(&self, id: AmpId, slot: u32, name: &str) -> Result<()> {
         let session = self.session(id)?;
+        self.permit(id, |rights| rights.save_preset)?;
         self.check_slot(&session, slot)?;
         // the preset is stored with the outputs muted, and they stay muted. What waits to be written
         // stays too: it is not replaced by anything.
@@ -120,6 +122,8 @@ impl Hub {
     /// [`LoadReport`]). Afterwards the preset is MODIFIED: the file is not the stored preset.
     pub async fn load_file(&self, id: AmpId, path: impl AsRef<Path>) -> Result<LoadReport> {
         let session = self.session(id)?;
+        // a file sets inputs and outputs, so it needs the right for both
+        self.permit(id, |rights| rights.input_channel && rights.output_channel)?;
         let text = tokio::fs::read_to_string(path).await?;
         let snapshot: Snapshot =
             serde_json::from_str(&text).map_err(|e| Error::Invalid(format!("Not a settings file: {e}")))?;

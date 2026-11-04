@@ -10,12 +10,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use labgruppen::{AmpEvent, Channel, Meters, Param, Value};
+use labgruppen::{Access, AmpEvent, Channel, Meters, Param, Value};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinSet;
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
+mod access;
 mod limiter;
 mod link;
 mod mute;
@@ -73,6 +74,8 @@ pub enum Update {
     Modified(AmpId, bool),
     /// The loaded preset of the amp changed (`Hub::amps`).
     Preset(AmpId),
+    /// The user level or the rights of an IPD changed ([`Hub::access`]).
+    Access(AmpId),
     /// A setting the app keeps for the amp changed: a ceiling or a limiter load (`Hub::amps`).
     Settings(AmpId),
     /// Whether a pair is shown linked changed: the amp flags it linked and its channels now differ, or
@@ -131,6 +134,8 @@ struct Live {
     /// shown as two channels with the values stored. Set from what the amp reports, never from the
     /// app's own writes, which keep a linked pair equal.
     diverged: [bool; 2],
+    /// The user level and rights, while ONLINE; `None` for an amp without levels (the IPX).
+    access: Option<Access>,
     /// The open connection, while ONLINE and until it ends.
     session: Option<Session>,
 }
@@ -188,6 +193,7 @@ impl Shared {
                 amp.loaded = false;
                 amp.modified = false;
                 amp.diverged = [false; 2];
+                amp.access = None;
                 amp.session = None;
             }
             next
@@ -199,15 +205,17 @@ impl Shared {
     }
 
     /// Open the amp for intents; they are accepted from now until [`Shared::detach`].
-    fn attach(&self, id: AmpId, session: Session) {
+    fn attach(&self, id: AmpId, session: Session, access: Option<Access>) {
         if let Some(amp) = lock(&self.live).get_mut(&id) {
             amp.session = Some(session);
+            amp.access = access;
         }
     }
 
     fn detach(&self, id: AmpId) {
         if let Some(amp) = lock(&self.live).get_mut(&id) {
             amp.session = None;
+            amp.access = None;
         }
     }
 
@@ -419,6 +427,10 @@ impl Hub {
         if !dsp::controllable(&param) {
             return Err(Error::NotControllable);
         }
+        // a muted output is never the dangerous state: muting is always tried, and the amp has the last word
+        if !(matches!(param, Param::Mute(_)) && value == Value::Bool(true)) {
+            self.permit_channel(id, param.channel())?;
+        }
         let spec = session.amp.spec(&param).ok_or(Error::NotControllable)?;
         let checked = dsp::check(&param, &spec, &value, &ceilings)?;
         let targets = self.route(id, &session, &param)?;
@@ -612,6 +624,7 @@ impl Hub {
                         loaded: false,
                         modified: false,
                         diverged: [false; 2],
+                        access: None,
                         session: None,
                     };
                     lock(&shared.live).insert(amp.id, live);
@@ -663,7 +676,7 @@ async fn session(
                 let writer = Arc::new(Writer::new(timing.write_interval));
                 let gate = Arc::new(tokio::sync::Mutex::new(()));
                 let session = Session { amp: link.amp.clone(), writer: writer.clone(), gate: gate.clone() };
-                shared.attach(id, session);
+                shared.attach(id, session, link.access.take());
                 shared.apply(id, Event::Connected);
                 // the helpers end with the connection: what they still hold is dropped, never sent later
                 let mut helpers = JoinSet::new();
@@ -703,22 +716,24 @@ struct Link {
     amp: Arc<dyn labgruppen::Amp>,
     events: broadcast::Receiver<AmpEvent>,
     preset: Option<Preset>,
+    access: Option<Access>,
 }
 
 /// An amp is ONLINE when it is connected and its state could be read.
 async fn connect_and_read(shared: &Shared, target: &Target) -> labgruppen::Result<Link> {
     let amp = shared.connector.connect(target.protocol, &target.ip).await?;
     let events = amp.subscribe();
-    match amp.status().await {
-        Ok(status) => {
+    // the level and rights are read before the amp is ONLINE, so that whoever sees ONLINE finds them
+    match (amp.status().await, amp.access().await) {
+        (Ok(status), Ok(access)) => {
             let slots = amp.preset_slots();
             let preset = status
                 .preset
                 .filter(|p| slots.contains(&p.index))
                 .map(|p| Preset { number: p.index, name: p.name });
-            Ok(Link { amp, events, preset })
+            Ok(Link { amp, events, preset, access })
         }
-        Err(e) => {
+        (Err(e), _) | (_, Err(e)) => {
             amp.close().await;
             Err(e)
         }

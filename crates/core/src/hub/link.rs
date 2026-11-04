@@ -113,6 +113,7 @@ impl Hub {
     pub async fn set_link(&self, id: AmpId, side: Side, linked: bool) -> Result<()> {
         let session = self.session(id)?;
         let flag = side.flag();
+        self.permit_channel(id, flag.channel())?;
         let shared = &self.0.shared;
 
         if !linked {

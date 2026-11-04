@@ -102,6 +102,7 @@ impl Hub {
             return Err(Error::NotControllable);
         }
         let session = self.session(id)?;
+        self.permit_channel(id, Channel::Output(output))?;
         // the second output follows the first while the pair is linked
         if output == 1 && self.linked(id, Side::Outputs) {
             return Err(Error::Linked);

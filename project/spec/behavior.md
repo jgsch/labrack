@@ -70,11 +70,20 @@ statement with a `BEH-<n>` ID.
 ## IPD access levels
 
 - **BEH-13** The app reads and shows the amp's current user level (AllDSP, Factory, Developer,
-  Admin, User, Locked).
+  Admin, User, Locked) and its access rights when the amp goes ONLINE and after a login. A level
+  changed on the amp meanwhile is seen at the next connect. An IPX has no user levels: nothing is
+  shown and nothing is held back.
 - **BEH-14** Controls the amp's access rights do not allow (input channel, output channel, load
-  preset, save preset, unit name) are disabled.
+  preset, save preset, unit name) are disabled, and the app refuses the intent before sending
+  anything. Input and output settings need the input or output channel right; preset recall the
+  load right; storing a preset the save right; loading a file both channel rights, since it sets
+  both. Linking needs the right of its channels. Turning a mute **on** is never held back, because
+  a muted output is never the dangerous state (`SEC-6`): the amp has the last word. Unmuting needs
+  the output channel right.
 - **BEH-15** When the amp is locked or a right is missing, the app offers a login prompt
-  (8-character password).
+  (8-character password: 1 to 8 printable ASCII characters, a short one is padded; anything else is
+  refused before it is sent). The amp does not say whether a password was right; the app reads the
+  level and rights afterwards and shows them, so a wrong password leaves the level as it was.
 - **BEH-16** The app never reads passwords from the amp (the firmware would hand them out) and
   never stores them (see `SEC-8`).
 
