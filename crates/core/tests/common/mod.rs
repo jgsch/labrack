@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -13,7 +14,7 @@ use async_trait::async_trait;
 use labgruppen::amps::ipd::IpdAmp;
 use labgruppen::amps::ipd::client::Options;
 use labgruppen::amps::ipx::IpxAmp;
-use labrack_core::{AmpId, Connector, Hub, Protocol, Status, Store, Timing, Update};
+use labrack_core::{AmpId, Connector, Finder, Hub, Protocol, Scan, Status, Store, Timing, Update};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout};
@@ -75,7 +76,68 @@ pub fn hub() -> (Hub, Arc<Local>) {
 
 pub fn hub_with(store: Store, timing: Timing) -> (Hub, Arc<Local>) {
     let local = Local::new();
-    (Hub::new(store, local.clone(), timing), local)
+    (Hub::new(store, local.clone(), Heard::nothing(), timing), local)
+}
+
+/// A finder that "hears" the addresses it is given, after `delay`, and records what was searched.
+pub struct Heard {
+    heard: Mutex<HashMap<Protocol, labgruppen::Result<Vec<Ipv4Addr>>>>,
+    searched: Mutex<Vec<Protocol>>,
+    pub delay: Mutex<Duration>,
+}
+
+impl Heard {
+    pub fn nothing() -> Arc<Heard> {
+        Arc::new(Heard { heard: Mutex::default(), searched: Mutex::default(), delay: Mutex::default() })
+    }
+
+    pub fn hear(&self, protocol: Protocol, ips: &[&str]) {
+        let ips = ips.iter().map(|ip| ip.parse().unwrap()).collect();
+        self.heard.lock().unwrap().insert(protocol, Ok(ips));
+    }
+
+    pub fn fail(&self, protocol: Protocol, why: &str) {
+        let err = labgruppen::Error::Io(io::Error::other(why.to_string()));
+        self.heard.lock().unwrap().insert(protocol, Err(err));
+    }
+
+    /// Protocols searched so far, in order of the requests.
+    pub fn searched(&self) -> Vec<Protocol> {
+        self.searched.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl Finder for Heard {
+    async fn find(&self, protocol: Protocol, _window: Duration) -> labgruppen::Result<Vec<Ipv4Addr>> {
+        self.searched.lock().unwrap().push(protocol);
+        let delay = *self.delay.lock().unwrap();
+        sleep(delay).await;
+        match self.heard.lock().unwrap().get(&protocol) {
+            Some(Ok(ips)) => Ok(ips.clone()),
+            Some(Err(e)) => Err(labgruppen::Error::Io(io::Error::other(e.to_string()))),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+/// A hub that searches with `finder`; the connector reaches nothing, so found amps stay UNREACHABLE.
+pub fn hub_finding(store: Store, finder: Arc<Heard>) -> Hub {
+    Hub::new(store, Local::new(), finder, timing())
+}
+
+/// Read updates until a scan finishes; returns the ids it added and the errors it reports.
+pub async fn scan_finished(rx: &mut broadcast::Receiver<Update>) -> (Vec<AmpId>, Vec<String>) {
+    let wait = async {
+        loop {
+            match rx.recv().await {
+                Ok(Update::Scan(Scan::Finished { added, errors })) => return (added, errors),
+                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(e) => panic!("{e}"),
+            }
+        }
+    };
+    timeout(Duration::from_secs(15), wait).await.expect("a scan finishes")
 }
 
 /// Poll until the amp has `want`.

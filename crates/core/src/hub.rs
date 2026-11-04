@@ -1,10 +1,12 @@
 //! The connections (ARCH-3): one tokio task per amplifier owns its connection and tells the hub what
 //! happens; user intents go through the hub, which keeps the amp list, the tasks and the statuses
 //! together. A task only reads from its amp: connecting, reconnecting and starting never write
-//! (SEC-1), and nothing queues for an amp that is not ONLINE.
+//! (SEC-1), and nothing queues for an amp that is not ONLINE. The hub also runs discovery scans and
+//! adds what they find to the list.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -14,10 +16,10 @@ use tokio::sync::{broadcast, watch};
 use tokio::time::{MissedTickBehavior, interval, sleep};
 
 use crate::status::{Event, Status};
-use crate::store::{Amp, AmpId, Preset, Protocol, Store};
-use crate::{Connector, Result};
+use crate::store::{Amp, AmpId, Preset, Protocol, Store, Switches};
+use crate::{Connector, Finder, Result};
 
-/// Intervals of the connection tasks (BEH-12, BEH-42).
+/// Intervals and durations (BEH-12, BEH-18, BEH-42).
 #[derive(Clone, Copy, Debug)]
 pub struct Timing {
     /// Wait before the first retry of a failed attempt or a lost connection.
@@ -26,6 +28,8 @@ pub struct Timing {
     pub retry_max: Duration,
     /// Meters are passed on at most this often.
     pub meter_interval: Duration,
+    /// How long a scan searches. Over Wi-Fi an IPD can need a few seconds to answer a probe.
+    pub scan_window: Duration,
 }
 
 impl Default for Timing {
@@ -34,6 +38,7 @@ impl Default for Timing {
             retry_first: Duration::from_secs(1),
             retry_max: Duration::from_secs(15),
             meter_interval: Duration::from_millis(100),
+            scan_window: Duration::from_secs(5),
         }
     }
 }
@@ -46,6 +51,19 @@ pub enum Update {
     Meters(AmpId, Meters),
     /// A parameter changed on the amp (front panel, another controller).
     Changed(AmpId, Param, Value),
+    Scan(Scan),
+}
+
+/// A discovery scan (BEH-18). Whether one is running: [`Hub::scanning`].
+#[derive(Clone, Debug)]
+pub enum Scan {
+    Started,
+    Finished {
+        /// The amps this scan added to the list, in list order.
+        added: Vec<AmpId>,
+        /// One text per protocol that could not be searched, or per amp that could not be saved.
+        errors: Vec<String>,
+    },
 }
 
 /// What a connection task needs to know about its amp; a change restarts the task's attempts.
@@ -84,6 +102,8 @@ struct Shared {
     live: Mutex<HashMap<AmpId, Live>>,
     events: broadcast::Sender<Update>,
     connector: Arc<dyn Connector>,
+    finder: Arc<dyn Finder>,
+    scans: AtomicUsize,
     timing: Timing,
 }
 
@@ -143,10 +163,19 @@ struct Inner {
 pub struct Hub(Arc<Inner>);
 
 impl Hub {
-    /// Connects to every amp of the store that is not disconnected (BEH-42).
-    pub fn new(store: Store, connector: Arc<dyn Connector>, timing: Timing) -> Hub {
+    /// Connects to every amp of the store that is not disconnected (BEH-42). Starting searches
+    /// nothing (BEH-18).
+    pub fn new(store: Store, connector: Arc<dyn Connector>, finder: Arc<dyn Finder>, timing: Timing) -> Hub {
         let (events, _) = broadcast::channel(1024);
-        let shared = Shared { store: Mutex::new(store), live: Mutex::default(), events, connector, timing };
+        let shared = Shared {
+            store: Mutex::new(store),
+            live: Mutex::default(),
+            events,
+            connector,
+            finder,
+            scans: AtomicUsize::new(0),
+            timing,
+        };
         let hub = Hub(Arc::new(Inner { shared: Arc::new(shared), targets: Mutex::default() }));
         hub.reconcile();
         hub
@@ -206,6 +235,102 @@ impl Hub {
         let set = self.0.shared.store().set_connected(id, connected);
         self.reconcile();
         set
+    }
+
+    pub fn switches(&self) -> Switches {
+        self.0.shared.store().switches()
+    }
+
+    /// Saves the switches. A protocol that was off and is on now is searched at once (BEH-18).
+    pub fn set_switches(&self, switches: Switches) -> Result<()> {
+        let (before, saved) = {
+            let mut store = self.0.shared.store();
+            (store.switches(), store.set_switches(switches))
+        };
+        let newly_on = [Protocol::Ipd, Protocol::Ipx]
+            .into_iter()
+            .filter(|p| switches.allows(*p) && !before.allows(*p))
+            .collect();
+        self.scan(newly_on);
+        saved
+    }
+
+    /// SCAN NOW: search every protocol that is on. False, and nothing is searched, when both are off
+    /// (BEH-17) or a scan is already running.
+    pub fn scan_now(&self) -> bool {
+        if self.scanning() {
+            return false;
+        }
+        let switches = self.switches();
+        let on = [Protocol::Ipd, Protocol::Ipx].into_iter().filter(|p| switches.allows(*p)).collect();
+        self.scan(on)
+    }
+
+    pub fn scanning(&self) -> bool {
+        self.0.shared.scans.load(Ordering::SeqCst) > 0
+    }
+
+    /// Search `protocols` for [`Timing::scan_window`], then add the new amps to the list. A scan does
+    /// not keep the hub alive.
+    fn scan(&self, protocols: Vec<Protocol>) -> bool {
+        if protocols.is_empty() {
+            return false;
+        }
+        let shared = self.0.shared.clone();
+        shared.scans.fetch_add(1, Ordering::SeqCst);
+        shared.emit(Update::Scan(Scan::Started));
+        let hub = Arc::downgrade(&self.0);
+        tokio::spawn(async move {
+            let window = shared.timing.scan_window;
+            let search = |protocol: Protocol| {
+                let finder = shared.finder.clone();
+                let wanted = protocols.contains(&protocol);
+                async move {
+                    match wanted {
+                        true => Some(finder.find(protocol, window).await),
+                        false => None,
+                    }
+                }
+            };
+            let (ipx, ipd) = tokio::join!(search(Protocol::Ipx), search(Protocol::Ipd));
+            let (mut found, mut errors) = (Vec::new(), Vec::new());
+            for (protocol, result) in [(Protocol::Ipx, ipx), (Protocol::Ipd, ipd)] {
+                match result {
+                    Some(Ok(ips)) => found.extend(ips.into_iter().map(|ip| (protocol, ip))),
+                    Some(Err(e)) => errors.push(format!("{}: {e}", protocol.label())),
+                    None => {}
+                }
+            }
+            let added = match hub.upgrade() {
+                Some(inner) => Hub(inner).merge(found, &mut errors),
+                None => Vec::new(),
+            };
+            // not scanning any more by the time anyone hears that the scan finished
+            shared.scans.fetch_sub(1, Ordering::SeqCst);
+            shared.emit(Update::Scan(Scan::Finished { added, errors }));
+        });
+        true
+    }
+
+    /// Add what a scan found, unless its protocol was switched off meanwhile (BEH-17) or the IP is
+    /// known (BEH-19). Returns the new amps.
+    fn merge(&self, mut found: Vec<(Protocol, Ipv4Addr)>, errors: &mut Vec<String>) -> Vec<AmpId> {
+        found.sort_by_key(|(_, ip)| *ip);
+        let known: HashSet<AmpId> = self.0.shared.store().amps().iter().map(|a| a.id).collect();
+        {
+            let mut store = self.0.shared.store();
+            let switches = store.switches();
+            for (protocol, ip) in found {
+                if switches.allows(protocol)
+                    && let Err(e) = store.add_discovered(protocol, ip)
+                {
+                    errors.push(e.to_string());
+                }
+            }
+        }
+        self.reconcile();
+        let amps = self.0.shared.store().amps().to_vec();
+        amps.into_iter().map(|a| a.id).filter(|id| !known.contains(id)).collect()
     }
 
     /// Make the tasks match the list: start one for a new amp, hand a changed target to its task,

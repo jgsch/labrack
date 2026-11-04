@@ -8,11 +8,20 @@ use serde::{Deserialize, Serialize};
 use crate::config::{self, Entry, File};
 use crate::{Error, Result};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     Ipd,
     Ipx,
+}
+
+impl Protocol {
+    pub fn label(self) -> &'static str {
+        match self {
+            Protocol::Ipd => "IPD",
+            Protocol::Ipx => "IPX",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +61,20 @@ pub struct Switches {
 impl Default for Switches {
     fn default() -> Self {
         Switches { ipd: true, ipx: true }
+    }
+}
+
+impl Switches {
+    pub fn allows(self, protocol: Protocol) -> bool {
+        match protocol {
+            Protocol::Ipd => self.ipd,
+            Protocol::Ipx => self.ipx,
+        }
+    }
+
+    /// Both off: scanning is disabled.
+    pub fn none(self) -> bool {
+        !self.ipd && !self.ipx
     }
 }
 
@@ -134,6 +157,19 @@ impl Store {
     /// An empty name becomes "Amp n". The IP must be a valid IPv4 address no other amp has.
     pub fn add_manual(&mut self, name: &str, protocol: Protocol, ip: &str) -> Result<AmpId> {
         let ip = self.check_new_ip(ip, None)?;
+        self.push(name, protocol, ip, Source::Manual)
+    }
+
+    /// Adds an amp that discovery found, with a default name. `None`: the IP is already in the list.
+    pub fn add_discovered(&mut self, protocol: Protocol, ip: Ipv4Addr) -> Result<Option<AmpId>> {
+        match self.check_new_ip(&ip.to_string(), None) {
+            Ok(ip) => self.push("", protocol, ip, Source::Auto).map(Some),
+            Err(Error::DuplicateIp) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn push(&mut self, name: &str, protocol: Protocol, ip: String, source: Source) -> Result<AmpId> {
         let name = match name.trim() {
             "" => self.default_name(),
             name => name.to_string(),
@@ -144,7 +180,7 @@ impl Store {
             name,
             protocol,
             ip,
-            source: Source::Manual,
+            source,
             connected: true,
             load_ohms: config::default_load(),
             ceilings: Ceilings::default(),

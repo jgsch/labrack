@@ -119,6 +119,52 @@ fn manual_add_has_source_manual_and_starts_connected() {
     assert!(amp.connected);
 }
 
+// BEH-19, BEH-20
+#[test]
+fn a_discovered_amp_is_added_as_auto_with_a_default_name() {
+    let mut store = Store::in_memory();
+    store.add_manual("Mine", Protocol::Ipx, "10.0.0.1").unwrap();
+    let id = store.add_discovered(Protocol::Ipd, "10.0.0.5".parse().unwrap()).unwrap().unwrap();
+    let amp = store.get(id).unwrap();
+    assert_eq!((amp.name.as_str(), amp.protocol, amp.ip.as_str()), ("Amp 1", Protocol::Ipd, "10.0.0.5"));
+    assert_eq!((amp.source, amp.connected), (Source::Auto, true));
+    assert_eq!(store.index(id), Some(2));
+}
+
+// BEH-19
+#[test]
+fn a_known_ip_is_never_added_twice() {
+    let mut store = Store::in_memory();
+    store.add_manual("Mine", Protocol::Ipx, "10.0.0.1").unwrap();
+    let ip = "10.0.0.1".parse().unwrap();
+    assert_eq!(store.add_discovered(Protocol::Ipx, ip).unwrap(), None);
+    assert_eq!(store.add_discovered(Protocol::Ipd, ip).unwrap(), None, "whatever the protocol");
+
+    let other = "10.0.0.2".parse().unwrap();
+    assert!(store.add_discovered(Protocol::Ipx, other).unwrap().is_some());
+    assert_eq!(store.add_discovered(Protocol::Ipx, other).unwrap(), None);
+    assert_eq!(store.amps().len(), 2);
+}
+
+// BEH-19: an amp the user edited to another address does not make the old address "known"
+#[test]
+fn an_ip_that_is_no_longer_in_the_list_can_be_discovered() {
+    let mut store = Store::in_memory();
+    let id = store.add_manual("Mine", Protocol::Ipx, "10.0.0.1").unwrap();
+    store.set_ip(id, "10.0.0.9").unwrap();
+    assert!(store.add_discovered(Protocol::Ipx, "10.0.0.1".parse().unwrap()).unwrap().is_some());
+}
+
+// BEH-17
+#[test]
+fn switches_say_which_protocols_are_searched() {
+    use labrack_core::Switches;
+    let on = |ipd, ipx| Switches { ipd, ipx };
+    assert!(on(true, false).allows(Protocol::Ipd) && !on(true, false).allows(Protocol::Ipx));
+    assert!(!on(false, true).allows(Protocol::Ipd) && on(false, true).allows(Protocol::Ipx));
+    assert!(on(false, false).none() && !on(true, false).none());
+}
+
 // BEH-23
 #[test]
 fn rename_changes_the_name() {
