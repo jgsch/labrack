@@ -247,6 +247,7 @@ dependencies = [
  "async-trait",
  "dirs",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tokio",
