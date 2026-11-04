@@ -34,11 +34,11 @@ description = "Run the IPD simulator (extra arguments go to `labgruppen sim`)"
 run = "nix develop -c cargo run -p amps --bin labgruppen -- sim"
 
 [tasks.mockup]
-description = "Screenshot every board of spec/mockup/ into target/mockup/ (extra arguments go to `mockup.py render`)"
+description = "Screenshot every board of project/mockup/mockup/ into target/mockup/ (extra arguments go to `mockup.py render`)"
 run = "nix develop -c python3 scripts/mockup.py render"
 
 [tasks.mockup-unpack]
-description = "Replace spec/mockup/ with the contents of spec/mockup.html, fonts made local"
+description = "Replace project/mockup/mockup/ with the contents of project/mockup/mockup.html, fonts made local"
 run = """
 nix develop -c bash -ec '
 python3 scripts/mockup.py unpack
@@ -47,5 +47,5 @@ python3 scripts/mockup.py fonts
 """
 
 [tasks.mockup-pack]
-description = "Build spec/mockup.html from spec/mockup/"
+description = "Build project/mockup/mockup.html from project/mockup/mockup/"
 run = "nix develop -c python3 scripts/mockup.py pack"

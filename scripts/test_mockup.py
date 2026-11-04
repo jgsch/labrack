@@ -26,7 +26,7 @@ def png_size(path: Path) -> str:
 
 
 class Tree(unittest.TestCase):
-    """ARCH-9, ARCH-10: spec/mockup/ and spec/mockup.html are two forms of the same mockup."""
+    """ARCH-9, ARCH-10: project/mockup/mockup/ and project/mockup/mockup.html are two forms of the same mockup."""
 
     def test_tree_matches_html(self):
         self.assertEqual(sorted(mockup.unpack_html(committed_html())), sorted(mockup.read_tree(SRC)))

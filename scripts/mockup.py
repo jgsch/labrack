@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Tools for the UI mockup, spec/mockup.html (see plan/changes/mockup-tooling.md).
+"""Tools for the UI mockup, project/mockup/mockup.html.
 
 The mockup is a bundle: a loader script, a manifest of gzipped resources and a template. Its nine
 boards are bundles themselves (each with its own manifest of fonts and scripts). `unpack` turns it into
-a tree of plain files in spec/mockup/ and `pack` builds the single HTML file again:
+a tree of plain files in project/mockup/mockup/ and `pack` builds the single HTML file again:
 
     bundle.json        which board uses which resource (ids, mime types, compression)
     licenses.txt       the licence text of the bundled fonts (the comment at the top of the bundle)
@@ -35,8 +35,8 @@ from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
-HTML = ROOT / "spec" / "mockup.html"
-SRC = ROOT / "spec" / "mockup"
+HTML = ROOT / "project" / "mockup" / "mockup.html"
+SRC = ROOT / "project" / "mockup" / "mockup"
 OUT = ROOT / "target" / "mockup"
 
 FORMAT = 1
@@ -238,7 +238,7 @@ def pack_page(files: dict[str, bytes], page: dict) -> str:
 
 
 def pack_files(files: dict[str, bytes]) -> str:
-    """The bundle (spec/mockup.html) for a tree."""
+    """The bundle (project/mockup/mockup.html) for a tree."""
     meta = json.loads(files["bundle.json"])
     if meta.get("format") != FORMAT:
         raise Error(f"bundle.json has format {meta.get('format')}, expected {FORMAT}")
@@ -480,8 +480,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, help_ in (
-        ("unpack", "write the tree spec/mockup/ from spec/mockup.html (replaces the tree)"),
-        ("pack", "build spec/mockup.html from the tree spec/mockup/"),
+        ("unpack", "write the tree project/mockup/mockup/ from project/mockup/mockup.html (replaces the tree)"),
+        ("pack", "build project/mockup/mockup.html from the tree project/mockup/mockup/"),
         ("fonts", "download the Latin faces the mockup links and use them from assets/"),
     ):
         p = sub.add_parser(name, help=help_)

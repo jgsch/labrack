@@ -48,29 +48,30 @@
 
 - Commit only changes you made, one logical change per commit. Report
   unrelated uncommitted or untracked changes instead of committing them.
+- Start every commit message for a change with its change file name, e.g.
+  `add-preset-recall: store presets per channel`.
 
 ## Documentation routing
 
-Project docs live in `spec/` and `plan/` and are not loaded automatically.
+Project management docs live in `project/` and are not loaded automatically.
+
 Read only what the task needs:
-
-- `spec/index.md` first, then only the spec files the task touches. The spec
-  describes the agreed behavior; a project starts by writing a small spec.
-- `plan/changes/` for changes in progress (every file except `template.md`).
-- `plan/backlog.md` for prioritized bugs, features, and chores.
-- `plan/roadmap.md` for initiatives too large for one change.
-
-Git is the history: do not keep archives of finished work in `spec/` or
-`plan/`.
+- `project/spec/index.md` first, then only the spec files the task touches. The
+  spec describes the agreed behavior; a project starts by writing a small spec.
+- `project/changes/active/` for changes in progress. `project/changes/archive/`
+  holds finished changes; read one only when its history matters.
+- `project/backlog.md` for prioritized bugs, features, and chores.
+- `project/roadmap.md` for initiatives too large for one change.
 
 ## Changes
 
 - Small fix: write the failing test, fix, commit. No change file.
-- Work spanning several steps or sessions: copy `plan/changes/template.md` to
-  `plan/changes/<short-name>.md`, edit the spec directly, write tests for the
-  requirement IDs touched, then implement.
-- A change is done when the tests for its requirement IDs pass. Delete its
-  change file and its backlog item in the same commit.
+- Work spanning several steps or sessions: copy `project/changes/template.md`
+  to `project/changes/active/<short-name>.md`, edit the spec directly, write
+  tests for the requirement IDs touched, then implement.
+- A change is done when the tests for its requirement IDs pass. Move its change
+  file to `project/changes/archive/` and delete its backlog item in the same
+  commit.
 
 ## Testing
 

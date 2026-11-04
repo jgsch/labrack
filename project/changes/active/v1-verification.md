@@ -23,13 +23,13 @@ No spec change; checks:
 - [ ] Load test with 16 simulated amps; measure meter rate and UI frame time
 - [ ] Measure startup time
 - [ ] Hardware checklist (in this file), run on both amps
-- [ ] Record the measured values in `spec/performance.md` (drop "not yet verified")
+- [ ] Record the measured values in `project/spec/performance.md` (drop "not yet verified")
 
 ## Done when
 
-- [ ] All Phase 1 exit criteria in `plan/roadmap.md` are met
+- [ ] All Phase 1 exit criteria in `project/roadmap.md` are met
 - [ ] `mise run lint` and `mise run test` pass
 
 ## Notes
 
-- Delete this file and mark Phase 1 done in the same commit.
+- Move this file to `project/changes/archive/` and mark Phase 1 done in the same commit.

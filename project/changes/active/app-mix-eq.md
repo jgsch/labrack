@@ -38,4 +38,4 @@ No spec change; implements:
   `app-controls`.
 - The mockup shows a fixed list of three amps; the app uses the real list.
 - Where preset actions sit is not in the spec or confirmed from the mockup; check the boards
-  and record it in `spec/ux.md`.
+  and record it in `project/spec/ux.md`.

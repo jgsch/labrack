@@ -9,7 +9,7 @@ Use Phases until v1 ships, then Now / Next / Later.
 
 - Goal: control IPD and IPX amplifiers from LAB.RACK safely, as specified.
 - Spec: BEH-1 to BEH-41, UX-1 to UX-27, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
-- Changes (`plan/changes/`), in dependency order:
+- Changes (`project/changes/active/`), in dependency order:
   1. `core-amp-list`, then `core-connections` and `core-discovery`
   2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link`
   3. `app-shell`, then `app-controls`

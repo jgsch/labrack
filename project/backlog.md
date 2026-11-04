@@ -6,6 +6,10 @@ committed.
 
 ## Bugs
 
+- BEH-5 says the IPX amp stores only Vpk and Ohm and that Watt and dBu are calculated.
+  `docs/ipx-protocol.md` says all four limiter fields are plain stored values that the vendor app
+  derives (verified live). Reword BEH-5; `core-limiter` writes all four. Spec: BEH-5
+
 ## Features
 
 ## Chores
