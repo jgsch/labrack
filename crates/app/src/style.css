@@ -1,6 +1,8 @@
 /* The look of the mockup (project/mockup/mockup/boards): Catppuccin Mocha with a lavender accent. */
 :root{--base:#11111b;--panel:#1e1e2e;--inset:#181825;--border:#45475a;--border-strong:#585b70;--button:#313244;--text:#cdd6f4;--muted:#a6adc8;--lavender:#b4befe;--sapphire:#74c7ec;--mauve:#cba6f7;--green:#a6e3a1;--yellow:#f9e2af;--red:#f38ba8;--peach:#fab387;--maroon:#eba0ac}
 html,body{margin:0;background:var(--base)}
+/* native controls in their dark form: WebKitGTK draws them with the GTK theme otherwise */
+:root{color-scheme:dark}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer}
 button:hover,a.tab:hover{filter:brightness(1.18)}
@@ -164,7 +166,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 /* EQ tabs (UX-20). --c is the colour of the side: sapphire for inputs, lavender for outputs. */
 .tab-panel{--c:var(--lavender)}
 .tab-panel.in{--c:var(--sapphire)}
-select{min-height:44px;border-radius:4px;background:var(--button);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;padding:0 8px;width:100%;box-sizing:border-box}
+select{appearance:none;-webkit-appearance:none;min-height:44px;border-radius:4px;background:linear-gradient(45deg,transparent 50%,var(--text) 50%) no-repeat right 13px center/5px 5px,linear-gradient(135deg,var(--text) 50%,transparent 50%) no-repeat right 8px center/5px 5px,var(--button);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;padding:0 24px 0 8px;width:100%;box-sizing:border-box}
+option{background:var(--button);color:var(--text)}
+input:disabled,select:disabled{-webkit-text-fill-color:currentColor;opacity:1}
 select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-offset:2px}
 .eq-layout{display:flex;flex-wrap:wrap;gap:20px;align-items:stretch}
 .eq-left{flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px}
@@ -180,7 +184,7 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-extra{display:flex;flex-direction:column;gap:2px;background:var(--base);border:1px solid #7f849c;border-radius:4px;padding:8px 14px}
 .eq-extra.in{border-color:#3f6a85}
 .eq-extra-row{display:grid;grid-template-columns:84px 116px minmax(0,1fr);gap:8px;align-items:center}
-.eq-extra-row.off{opacity:0.6}
+.eq-extra-row.off{opacity:0.65}
 .eq-extra-name{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:15px;font-weight:600}
 .eq-extra-name.plain{cursor:default}
 .eq-extra-name input,.eq-on input{width:22px;height:22px;margin:0 10px 0 0;accent-color:var(--c)}
@@ -196,13 +200,13 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-actions{display:flex;gap:8px}
 .button.eq-action{padding:0 14px;font-size:12px;letter-spacing:0}
 .eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:1px 0;border-bottom:1px solid var(--border)}
-.eq-row.off{opacity:0.5}
+.eq-row.off{opacity:0.65}
 .eq-row.eq-columns{padding:4px 0;border-bottom:2px solid var(--c);font-size:11px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
 .eq-columns .center{text-align:center}
 .eq-columns .right{text-align:right}
 .eq-on{display:flex;align-items:center;justify-content:center;height:44px;cursor:pointer}
 .eq-n{font-size:13px;font-weight:600}
-.eq-row select{padding:0 4px}
+.eq-row select{padding:0 22px 0 6px;background-position:right 12px center,right 7px center,0 0}
 .eq-row .value-box input{padding:0 26px 0 6px;background:var(--base);font-weight:400}
 .eq-row .value-unit{right:7px;font-size:10px}
 .eq-none{opacity:0.3}
