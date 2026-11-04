@@ -155,6 +155,8 @@ pub struct EqView {
     pub bands: Vec<Band>,
     pub filters: Option<(Filter, Filter)>,
     pub delay_ms: f64,
+    /// The time ticking DELAY again restores: the last one it was unticked from, while the app runs.
+    pub delay_restore: Option<f64>,
     pub bounds: EqBounds,
 }
 
@@ -456,18 +458,14 @@ fn BandRow(
             } else {
                 div { class: "eq-none", NoValue { label: "Band {n} gain", unit: "dB" } }
             }
-            if eq::has_q(&value.kind) {
-                ValueField {
-                    label: "Band {n} width Q",
-                    value: value.q,
-                    bounds: bounds.q,
-                    unit: "",
-                    digits: 2,
-                    ask_raise: false,
-                    on_change: move |q| set(EqField::Q, Value::Float(q)),
-                }
-            } else {
-                div { class: "eq-none", NoValue { label: "Band {n} width Q" } }
+            ValueField {
+                label: "Band {n} width Q",
+                value: value.q,
+                bounds: bounds.q,
+                unit: "",
+                digits: 2,
+                ask_raise: false,
+                on_change: move |q| set(EqField::Q, Value::Float(q)),
             }
         }
     }
@@ -476,8 +474,19 @@ fn BandRow(
 /// An EQ tab (UX-20): the curve with its handles, the filters and delay under it, and the ten bands.
 /// Every change goes out as the writes it makes.
 #[component]
-pub fn EqPage(eq: EqView, #[props(default)] on_set: EventHandler<Vec<(Param, Value)>>) -> Element {
+pub fn EqPage(
+    eq: EqView,
+    #[props(default)] on_set: EventHandler<Vec<(Param, Value)>>,
+    /// DELAY ticked or unticked, with the time it showed (UX-20).
+    #[props(default)]
+    on_delay: EventHandler<(Channel, bool, f64)>,
+) -> Element {
     let ch = eq.channel;
+    // ticked with nothing to restore: the box is open for a time, on this channel only
+    let mut armed = use_signal(|| None::<Channel>);
+    let delay_on = eq.delay_ms > 0.0 || armed() == Some(ch);
+    let delay_ms = eq.delay_ms;
+    let restore = eq.delay_restore;
     let side = if ch.is_input() { "in" } else { "out" };
     let filters: Vec<(Filter, bool)> =
         eq.filters.iter().flat_map(|(hp, lp)| [(hp.clone(), true), (lp.clone(), false)]).collect();
@@ -526,17 +535,29 @@ pub fn EqPage(eq: EqView, #[props(default)] on_set: EventHandler<Vec<(Param, Val
                             FilterRow { channel: ch, high: true, filter: hp, bounds: bounds.hpf, on_set }
                             FilterRow { channel: ch, high: false, filter: lp, bounds: bounds.lpf, on_set }
                         }
-                        div { class: "eq-extra-row",
-                            span { class: "eq-extra-name plain", "DELAY" }
+                        div { class: if delay_on { "eq-extra-row" } else { "eq-extra-row off" },
+                            label { class: "eq-extra-name",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: delay_on,
+                                    "aria-label": "Delay on",
+                                    onchange: move |e| {
+                                        let on = e.checked();
+                                        armed.set((on && restore.is_none()).then_some(ch));
+                                        on_delay.call((ch, on, delay_ms));
+                                    },
+                                }
+                                "DELAY"
+                            }
                             ValueField {
                                 label: if ch.is_input() { "Input delay in milliseconds" } else { "Delay in milliseconds" },
                                 value: eq.delay_ms,
                                 bounds: bounds.delay,
                                 unit: "ms",
                                 ask_raise: false,
+                                disabled: !delay_on,
                                 on_change: move |ms| on_set.call(vec![(Param::Delay(ch), Value::Float(ms))]),
                             }
-                            span { class: "eq-air", "{eq::air(eq.delay_ms)}" }
                         }
                     }
                 }
@@ -609,6 +630,7 @@ pub fn MixeqPage(
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
     #[props(default)] on_set: EventHandler<Vec<(Param, Value)>>,
+    #[props(default)] on_delay: EventHandler<(Channel, bool, f64)>,
 ) -> Element {
     let tabs = MixTab::row(view.linked_inputs, view.linked_outputs);
     let tab = view.tab.visible(view.linked_inputs, view.linked_outputs).unwrap_or(MixTab::Levels);
@@ -667,7 +689,7 @@ pub fn MixeqPage(
                 MixTab::Levels => rsx! { LevelsPage { view: view.clone(), on_gain, on_mute, on_limiter } },
                 MixTab::Mixer => rsx! { MixerPage { rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
                 _ => match view.eq.clone() {
-                    Some(eq) => rsx! { EqPage { eq, on_set } },
+                    Some(eq) => rsx! { EqPage { eq, on_set, on_delay } },
                     None => rsx! { section { class: "tab-panel {side_class}" } },
                 },
             }
@@ -793,6 +815,7 @@ mod tests {
                 )
             }),
             delay_ms: 10.0,
+            delay_restore: None,
             bounds: EqBounds { freq: b, gain: b, q: b, delay: b, hpf: b, lpf: b },
         }
     }
@@ -815,7 +838,11 @@ mod tests {
         assert_eq!(out.matches("class=\"eq-row\"").count() + out.matches("class=\"eq-row off\"").count(), 10);
         assert_eq!(out.matches("class=\"eq-row off\"").count(), 9, "only band 2 is on: {out}");
         assert!(out.contains("aria-label=\"Band 10 type\""));
-        assert!(out.contains("Band 1 width Q") && out.contains("value=\"—\""), "a shelf has no Q: {out}");
+        assert!(
+            out.contains("Band 1 width Q") && out.contains("Band 10 width Q"),
+            "the shelves have a Q: {out}"
+        );
+        assert!(!out.contains("value=\"—\""), "no box without a value: {out}");
         assert_eq!(out.matches("class=\"eq-handle\"").count(), 1, "one band on, one handle");
         assert!(out.contains(">Low shelf<") && out.contains(">High-pass<"), "the amps' types: {out}");
         assert!(out.contains("10-band EQ") && out.contains("ALL OFF") && out.contains("RESET"));
@@ -828,11 +855,30 @@ mod tests {
         let out = eq_html(Channel::Output(0));
         assert!(out.contains(">HPF") && out.contains(">LPF"), "{out}");
         assert!(out.contains(">Linkwitz-Riley 24 dB/oct<") && out.contains(">Bessel 12 dB/oct<"));
-        assert!(out.contains(">DELAY<") && out.contains("3.43 m of air"));
+        assert!(out.contains("DELAY<") && out.contains("aria-label=\"Delay on\""), "{out}");
+        assert!(!out.contains("m of air"));
         let input = eq_html(Channel::Input(1));
         assert!(!input.contains(">HPF") && !input.contains(">LPF"), "{input}");
-        assert!(input.contains(">DELAY<") && input.contains("Input delay in milliseconds"));
+        assert!(input.contains("DELAY<") && input.contains("Input delay in milliseconds"));
         assert!(input.contains("tab-panel in"), "in the inputs' colour");
+    }
+
+    // UX-20: DELAY is ticked while there is a delay; at 0 ms it is unticked and its box closed
+    #[test]
+    fn delay_is_ticked_while_there_is_one() {
+        let out = eq_html(Channel::Input(0));
+        assert!(out.contains("checked=true") || out.contains("checked=\"true\""), "10 ms: {out}");
+        assert!(!out.contains("class=\"eq-extra-row off\""), "{out}");
+
+        let mut dom = VirtualDom::new(|| {
+            let mut eq = eq_view(Channel::Input(0));
+            eq.delay_ms = 0.0;
+            rsx! { EqPage { eq } }
+        });
+        dom.rebuild_in_place();
+        let off = dioxus_ssr::render(&dom);
+        assert!(off.contains("class=\"eq-extra-row off\""), "0 ms: {off}");
+        assert!(off.contains("disabled"), "the box is closed: {off}");
     }
 
     // UX-16: the EQ tab shows the open channel's EQ

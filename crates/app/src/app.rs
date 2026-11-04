@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use dioxus::prelude::*;
@@ -35,6 +36,8 @@ pub fn App() -> Element {
     let mut page = use_signal(|| Page::Amplifiers);
     let mut picked = use_signal(|| 0usize);
     let mut tab = use_signal(|| MixTab::Levels);
+    // the delay each channel had when its DELAY was unticked, so ticking it restores it (UX-20)
+    let mut delays = use_signal(HashMap::<(AmpId, Channel), f64>::new);
 
     // WebKitGTK can be told a scale that is not the screen's, and everything shrinks to a fraction of
     // its size (seen on niri at a fractional scale: a device pixel ratio of -2/96). The page reports
@@ -166,7 +169,7 @@ pub fn App() -> Element {
                     },
                     Page::MixEq => rsx! {
                         MixeqPage {
-                            view: mixeq_view(&hub, picked(), tab()),
+                            view: mixeq_view(&hub, picked(), tab(), &delays.read()),
                             on_pick: move |index| picked.set(index),
                             on_tab: move |next| tab.set(next),
                             on_link: {
@@ -189,6 +192,24 @@ pub fn App() -> Element {
                                         for (param, value) in writes {
                                             let _ = hub.set(id, param, value);
                                         }
+                                    }
+                                }
+                            },
+                            on_delay: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(ch, on, ms): (Channel, bool, f64)| {
+                                    let Some(id) = ids.get(picked()).copied() else { return };
+                                    let to = if on {
+                                        delays.read().get(&(id, ch)).copied()
+                                    } else {
+                                        if ms > 0.0 {
+                                            delays.write().insert((id, ch), ms);
+                                        }
+                                        Some(0.0)
+                                    };
+                                    if let Some(to) = to {
+                                        let _ = hub.set(id, Param::Delay(ch), Value::Float(to));
                                     }
                                 }
                             },
@@ -355,7 +376,12 @@ pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
 }
 
 /// What the Mix & EQ page draws for one amplifier.
-pub fn mixeq_view(hub: &Hub, selected: usize, tab: MixTab) -> MixeqView {
+pub fn mixeq_view(
+    hub: &Hub,
+    selected: usize,
+    tab: MixTab,
+    delays: &HashMap<(AmpId, Channel), f64>,
+) -> MixeqView {
     let amps = hub.amps();
     let Some(amp) = amps.get(selected) else {
         return MixeqView { tab, ..MixeqView::default() };
@@ -431,8 +457,10 @@ pub fn mixeq_view(hub: &Hub, selected: usize, tab: MixTab) -> MixeqView {
         Bounds::new(range.and_then(|r| r.min).unwrap_or(min), range.and_then(|r| r.max).unwrap_or(max));
     let linked_inputs = hub.linked(id, Side::Inputs);
     let linked_outputs = hub.linked(id, Side::Outputs);
-    let eq =
-        tab.visible(linked_inputs, linked_outputs).and_then(MixTab::channel).map(|ch| eq_view(hub, id, ch));
+    let eq = tab
+        .visible(linked_inputs, linked_outputs)
+        .and_then(MixTab::channel)
+        .map(|ch| EqView { delay_restore: delays.get(&(id, ch)).copied(), ..eq_view(hub, id, ch) });
     MixeqView { amps: cards, selected, tab, linked_inputs, linked_outputs, rows, mixer, mixer_bounds, eq }
 }
 
@@ -474,6 +502,7 @@ fn eq_view(hub: &Hub, id: AmpId, ch: Channel) -> EqView {
         bands,
         filters,
         delay_ms: number(Param::Delay(ch), 0.0),
+        delay_restore: None,
         bounds: EqBounds {
             freq: bounds(field(0, EqField::Freq)),
             gain: bounds(field(0, EqField::Gain)),

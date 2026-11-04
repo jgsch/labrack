@@ -50,8 +50,9 @@ No spec change; implements:
   type has, the curve from the cookbook biquads and the Butterworth / Linkwitz-Riley / Bessel filters at
   48 kHz, ALL OFF and RESET). A shared tab edits channel 1. The types offered are `EQ_TYPES` and
   `XOVER_TYPES`, the amps' own, not the mockup's list. Decided with the user and written in UX-20: RESET
-  is all off, 0 dB, Q 1.4, keeping type and frequency; DELAY has no checkbox (the amps store a time
-  only). `mise run app-shot` renders `eq-in-demo` and `eq-out-demo` beside boards 04 and 05.
+  is all off, 0 dB, Q 1.4, keeping type and frequency. DELAY then got a checkbox on the user's
+  request (the amps store a time only: unticking writes 0 ms, ticking restores the time, kept by `App`
+  while it runs), and Q is open on every type, the shelves included. `mise run app-shot` renders `eq-in-demo` and `eq-out-demo` beside boards 04 and 05.
 - **Mixer** (2026-11-04): `MixerPage` in `mixeq.rs`, the source cards are the Levels' `LevelCard`
   (a muted source dims its fader). `→ IN n` opens that input's EQ. The faders take the model's mixer
   range (-48 to 0 dB on the IPD), not the board's +12. The card meters are the IPD's `raw_input` plus

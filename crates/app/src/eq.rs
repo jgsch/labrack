@@ -68,11 +68,6 @@ pub fn has_gain(kind: &str) -> bool {
     matches!(kind, "bell" | "low_shelf" | "high_shelf")
 }
 
-/// Whether a type has a Q (not the shelves nor the high and low pass).
-pub fn has_q(kind: &str) -> bool {
-    matches!(kind, "bell" | "notch" | "allpass" | "band_pass")
-}
-
 /// The graph spans 20 Hz to 20 kHz across 1000 units, and ±15 dB around its middle line.
 pub const GRAPH_DB: f64 = 15.0;
 
@@ -107,11 +102,8 @@ pub fn band_db(band: &Band, f: f64) -> f64 {
     }
     let w0 = std::f64::consts::TAU * band.freq.min(RATE * 0.49) / RATE;
     let (sin, cos) = w0.sin_cos();
-    let q = if has_q(&band.kind) || matches!(band.kind.as_str(), "high_pass" | "low_pass") {
-        band.q.max(0.05)
-    } else {
-        std::f64::consts::FRAC_1_SQRT_2
-    };
+    // every type has a Q in the amps; on a shelf it is the slope
+    let q = band.q.max(0.05);
     let alpha = sin / (2.0 * q);
     let a = 10f64.powf(band.gain / 40.0);
     let (b, den) = match band.kind.as_str() {
@@ -205,11 +197,6 @@ pub fn curve(bands: &[Band], filters: &[(Filter, bool)]) -> (String, String) {
     (line, fill)
 }
 
-/// The distance sound travels in `ms` at 20 °C, as the DELAY row says it.
-pub fn air(ms: f64) -> String {
-    format!("\u{2248} {:.2} m of air at 20 \u{b0}C", ms * 0.343)
-}
-
 /// ALL OFF (UX-20): every band of `ch` switched off.
 pub fn all_off(ch: Channel) -> Vec<(Param, Value)> {
     (0..EQ_BANDS).map(|band| (Param::Eq { ch, band, field: EqField::Enabled }, Value::Bool(false))).collect()
@@ -262,6 +249,10 @@ mod tests {
         let high = band("high_shelf", 5000.0, -6.0, 1.4);
         assert!(close(band_db(&high, 19000.0), -6.0, 0.5), "{}", band_db(&high, 19000.0));
         assert!(band_db(&high, 100.0).abs() < 0.1);
+        // the Q of a shelf is its slope: it changes the curve around the frequency, not the middle
+        let soft = band("low_shelf", 100.0, 6.0, 0.5);
+        assert!((band_db(&soft, 200.0) - band_db(&low, 200.0)).abs() > 0.3);
+        assert!(close(band_db(&soft, 100.0), 3.0, 0.1));
     }
 
     // BEH-29: a notch cuts deep at its frequency, the filters cut their side, an all-pass is flat
@@ -311,18 +302,16 @@ mod tests {
         assert_ne!(lifted, line);
     }
 
-    // UX-20: which boxes a type has, and the names of the lists
+    // UX-20: which types have a gain, and the names of the lists
     #[test]
     fn types_and_their_boxes() {
         assert!(has_gain("bell") && has_gain("low_shelf") && !has_gain("notch"));
-        assert!(has_q("bell") && has_q("notch") && !has_q("low_shelf") && !has_q("high_pass"));
         assert_eq!(eq_label("low_shelf"), "Low shelf");
         assert_eq!(filter_label("linkwitz_riley_24"), "Linkwitz-Riley 24 dB/oct");
         assert_eq!(filter_label("bessel_6"), "Bessel 6 dB/oct");
         for kind in labgruppen::EQ_TYPES {
             assert_ne!(eq_label(kind), *kind, "every type has a name: {kind}");
         }
-        assert_eq!(air(10.0), "\u{2248} 3.43 m of air at 20 \u{b0}C");
     }
 
     // UX-20: ALL OFF switches the ten bands off; RESET also flattens them, keeping type and frequency

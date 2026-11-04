@@ -216,6 +216,7 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
             )
         }),
         delay_ms: 0.0,
+        delay_restore: None,
         bounds: labrack_app::EqBounds {
             freq: Bounds::new(20.0, 20000.0),
             gain: Bounds::new(-12.0, 12.0),
