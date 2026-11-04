@@ -10,7 +10,7 @@ use common::*;
 use labgruppen::amps::ipd::IpdAmp;
 use labgruppen::amps::ipd::client::Options;
 use labgruppen::amps::ipd::params::slot as ipd_slot;
-use labgruppen::amps::ipd::protocol::{CMD_LOAD_PRESET, Key, M_COMMAND, S_COMMAND};
+use labgruppen::amps::ipd::protocol::{CMD_LOAD_PRESET, Key, M_COMMAND, M_MUTE, S_COMMAND, S_MUTE};
 use labgruppen::amps::ipd::sim::SimServer;
 use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params as ipx_params;
@@ -161,6 +161,44 @@ async fn mute_all_acts_on_the_amps_that_are_online() {
     wait_loaded(&hub, b).await;
     sleep(Duration::from_millis(300)).await;
     assert_eq!(other.writes(), 0);
+}
+
+// BEH-25: MUTE ALL and UNMUTE ALL reach the two outputs of an amp and nothing else: no input, no mixer
+#[tokio::test(flavor = "multi_thread")]
+async fn mute_all_writes_the_two_output_mutes_only() {
+    let (hub, id, sim) = online_ipd().await;
+    let before = sim.writes().len();
+    assert_eq!(hub.unmute_all(), 1);
+    wait_value(&hub, id, "out1.mute", FALSE).await;
+    wait_value(&hub, id, "out2.mute", FALSE).await;
+    assert_eq!(hub.mute_all(), 1);
+    wait_value(&hub, id, "out1.mute", TRUE).await;
+    wait_value(&hub, id, "out2.mute", TRUE).await;
+    sleep(Duration::from_millis(200)).await;
+    let mut written: Vec<_> =
+        sim.writes()[before..].iter().map(|k| (k.struct_id, k.member_id, k.channel)).collect();
+    written.sort();
+    written.dedup();
+    let mute = |channel| (S_MUTE, M_MUTE, channel);
+    assert_eq!(
+        written,
+        [mute(0x80), mute(0x81)],
+        "only the two output mutes, nothing of the inputs or the mixer"
+    );
+
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let before = fake.writes();
+    assert_eq!(hub.unmute_all(), 1);
+    wait_value(&hub, id, "out1.mute", FALSE).await;
+    wait_value(&hub, id, "out2.mute", FALSE).await;
+    assert_eq!(hub.mute_all(), 1);
+    wait_value(&hub, id, "out1.mute", TRUE).await;
+    wait_value(&hub, id, "out2.mute", TRUE).await;
+    sleep(Duration::from_millis(200)).await;
+    assert_eq!(fake.writes() - before, 4, "two outputs, unmuted and muted");
+    for name in ["in1.gain", "in2.gain"] {
+        assert_eq!(hub.value(id, &param(name)), Some(ipx_value(&fake, name)), "{name} untouched");
+    }
 }
 
 // BEH-26: a mute made elsewhere shows at once (IPX: the amp tells)
