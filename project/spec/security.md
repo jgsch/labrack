@@ -21,9 +21,18 @@ The app controls the volume of a sound system. A wrong value can damage speakers
 - **SEC-5** **Confirm dangerous actions:** UNMUTE ALL, preset recall, loading a file (see
   `UX-24`).
 - **SEC-6** **Bulk changes mute first.** Preset recall, file load and link copy mute the affected
-  outputs first, write, then restore the mute states from before the change (the library's restore
-  order). A recall never leaves an output unmuted that was muted before, even if the stored preset
-  says unmuted.
+  outputs first, write, then put the mutes right (the library's restore order), and no output ends
+  unmuted that was muted before:
+  - recall: the amp swaps its whole configuration, so an output ends muted if it was muted before
+    or the preset mutes it, even if the stored preset says unmuted;
+  - file load: output mutes in the file are never applied, and each output goes back to what it
+    was;
+  - what still waits to be written when a bulk change starts is dropped, not written over the new
+    settings;
+  - if anything fails after the outputs were muted, they stay muted and the user is told. A muted
+    output is never the dangerous state.
+  The window between the amp applying a preset that unmutes an output and the app muting it again
+  is one round trip; the amps offer no way to avoid it.
 - **SEC-7** **Never unmute automatically:** not after a reconnect, a preset recall, a file load or
   an app start.
 - **SEC-8** **Network.** Neither firmware has real authentication, and both hand out passwords. The

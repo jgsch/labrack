@@ -5,71 +5,13 @@ mod common;
 use std::time::{Duration, Instant};
 
 use common::*;
+use labgruppen::Value;
 use labgruppen::amps::ipd::params::slot as ipd_slot;
-use labgruppen::amps::ipd::sim::SimServer;
 use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params as ipx_params;
 use labgruppen::amps::ipx::protocol::{Env, Main, build_frame};
-use labgruppen::amps::ipx::structs::DeviceState;
-use labgruppen::{Param, Value};
-use labrack_core::{AmpId, Ceilings, Error, Hub, Protocol, Status, Store, Timing, Update};
+use labrack_core::{Ceilings, Error, Protocol, Status, Store, Timing, Update};
 use tokio::time::{sleep, timeout};
-
-fn param(s: &str) -> Param {
-    s.parse().unwrap()
-}
-
-fn f(v: f64) -> Value {
-    Value::Float(v)
-}
-
-/// What the fake IPX holds for `name`.
-fn ipx_value(fake: &FakeAmp, name: &str) -> Value {
-    let state = DeviceState::parse(&fake.state().sync).unwrap();
-    let slot = ipx_params::slot(&param(name)).unwrap();
-    slot.decode(state.audio_bytes(slot.addr, slot.wire_len()).unwrap()).unwrap()
-}
-
-async fn online_ipx(timing: Timing) -> (Hub, AmpId, FakeAmp) {
-    let fake = FakeAmp::start().await;
-    let (hub, local) = hub_with(Store::in_memory(), timing);
-    local.route("10.0.0.1", fake.port);
-    let id = hub.add_manual("Left", Protocol::Ipx, "10.0.0.1").unwrap();
-    wait_loaded(&hub, id).await;
-    (hub, id, fake)
-}
-
-async fn online_ipd() -> (Hub, AmpId, SimServer) {
-    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
-    let (hub, local) = hub();
-    local.route("10.0.0.1", sim.addr.port());
-    let id = hub.add_manual("Right", Protocol::Ipd, "10.0.0.1").unwrap();
-    wait_loaded(&hub, id).await;
-    (hub, id, sim)
-}
-
-/// ONLINE and the state read.
-async fn wait_loaded(hub: &Hub, id: AmpId) {
-    wait_status(hub, id, Status::Online).await;
-    let loaded = async {
-        while !hub.loaded(id) {
-            sleep(Duration::from_millis(10)).await;
-        }
-    };
-    timeout(Duration::from_secs(20), loaded).await.expect("the state is read");
-}
-
-async fn wait_value(hub: &Hub, id: AmpId, name: &str, want: Value) {
-    let p = param(name);
-    let seen = async {
-        while hub.value(id, &p).as_ref() != Some(&want) {
-            sleep(Duration::from_millis(10)).await;
-        }
-    };
-    if timeout(Duration::from_secs(10), seen).await.is_err() {
-        panic!("{name} stayed {:?}, expected {want:?}", hub.value(id, &p));
-    }
-}
 
 // BEH-8, SEC-1: the state is read when the amp goes ONLINE, and nothing is written
 #[tokio::test]

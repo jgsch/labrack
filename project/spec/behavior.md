@@ -45,6 +45,7 @@ statement with a `BEH-<n>` ID.
   controls stay visible but are disabled (nothing can be written to it, see `SEC-1`).
 - **BEH-11** The preset line shows number and name, plus a MODIFIED flag (see `BEH-38`).
 - **BEH-12** Level, gain reduction and mute state of both outputs refresh about every 100 ms.
+  The IPX reports mute changes itself; the app asks an IPD for the two output mutes every 100 ms.
 - **BEH-42** The app connects to every amp that is not DISCONNECTED when it starts. A failed attempt
   (BUSY, UNREACHABLE) and a lost connection are retried after 1 s, then after twice as long each
   time, up to 15 s; the status shows the outcome of the latest attempt, and a lost connection shows
@@ -136,9 +137,14 @@ statement with a `BEH-<n>` ID.
 - **BEH-36** 50 presets per amplifier, identified by number and name.
 - **BEH-37** Actions: recall a stored preset, store the current settings to a slot under a name,
   save the settings to a JSON file on the computer, load such a file into an amp. The file format
-  is the library's snapshot (`labgruppen dump`).
+  is the library's snapshot (`labgruppen dump`). A file is checked as a whole before anything is
+  written: if one value is outside the range of the amp or above a user ceiling, the load is
+  refused. Entries that cannot be set from a file are skipped and listed: output mutes (`SEC-6`),
+  and the controls that only have their own change yet (the limiter, link).
 - **BEH-38** MODIFIED means "changed since this app recalled or loaded the preset": any change made
   in the app, and any change from elsewhere (front panel, another controller) that the app sees.
+  Recalling or storing a preset clears it; loading a file sets it, as the file is not the stored
+  preset. Reading the state of the amp is not a change.
   The app does not compare with the stored preset, so:
   - after the app starts or reconnects, the flag is cleared (the app cannot know);
   - changes made elsewhere that the app does not see are missed.

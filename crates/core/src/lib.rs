@@ -14,6 +14,6 @@ pub use connector::{Connector, Network};
 pub use discovery::{Finder, Lan};
 pub use dsp::Range;
 pub use error::{Error, Result};
-pub use hub::{Hub, Scan, Timing, Update};
+pub use hub::{Hub, LoadReport, Scan, Timing, Update};
 pub use status::Status;
 pub use store::{Amp, AmpId, Ceilings, Preset, Protocol, Source, Store, Switches};

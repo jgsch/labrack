@@ -18,6 +18,12 @@ pub enum Error {
     Invalid(String),
     #[error("Above the ceiling of {ceiling} {unit}")]
     AboveCeiling { ceiling: f64, unit: &'static str },
+    /// The amp refused or did not confirm something (a protected slot, a missing right, a timeout).
+    #[error("{0}")]
+    Amp(#[from] labgruppen::Error),
+    /// A bulk change failed after the outputs were muted for it: they stay muted.
+    #[error("{0}. The outputs that were muted for it stay muted.")]
+    LeftMuted(String),
     #[error("Cannot read or write the config file: {0}")]
     Io(#[from] std::io::Error),
     #[error("The config file is not valid: {0}")]

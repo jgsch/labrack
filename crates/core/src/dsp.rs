@@ -112,6 +112,13 @@ impl Coalescer {
         self.slots.entry(param).or_default().waiting = Some(value);
     }
 
+    /// Drop what is waiting; what was sent stays counted for the interval.
+    pub fn clear(&mut self) {
+        for slot in self.slots.values_mut() {
+            slot.waiting = None;
+        }
+    }
+
     /// The values that may go out at `now` (they count as sent), and how long until the next one may.
     pub fn take_due(&mut self, now: Instant) -> (Vec<(Param, Value)>, Option<Duration>) {
         let mut due = Vec::new();
@@ -145,6 +152,11 @@ impl Writer {
     pub fn push(&self, param: Param, value: Value) {
         self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).push(param, value);
         self.wake.notify_one();
+    }
+
+    /// A bulk change replaces the settings these values were meant for.
+    pub fn clear(&self) {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     pub fn take_due(&self) -> (Vec<(Param, Value)>, Option<Duration>) {

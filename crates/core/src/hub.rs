@@ -10,11 +10,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use labgruppen::{AmpEvent, Meters, Param, Value};
+use labgruppen::{AmpEvent, Channel, Meters, Param, Value};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinSet;
-use tokio::time::{MissedTickBehavior, interval, sleep};
+use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
+
+mod mute;
+mod presets;
+
+pub use presets::LoadReport;
 
 use crate::dsp::{self, Range, Writer};
 use crate::status::{Event, Status};
@@ -61,6 +66,10 @@ pub enum Update {
     /// The amp did not take a value that was accepted: the text says why. The state still holds
     /// what the amp has.
     WriteFailed(AmpId, Param, String),
+    /// The MODIFIED flag of the amp changed ([`Hub::modified`]).
+    Modified(AmpId, bool),
+    /// The loaded preset of the amp changed (`Hub::amps`).
+    Preset(AmpId),
     Scan(Scan),
 }
 
@@ -108,6 +117,8 @@ struct Live {
     /// The DSP state, while ONLINE. The IPD fills it as the amp answers; `loaded` says it is all there.
     values: HashMap<Param, Value>,
     loaded: bool,
+    /// Changed since the app recalled or loaded the preset (BEH-38).
+    modified: bool,
     /// The open connection, while ONLINE and until it ends.
     session: Option<Session>,
 }
@@ -116,6 +127,8 @@ struct Live {
 struct Session {
     amp: Arc<dyn labgruppen::Amp>,
     writer: Arc<Writer>,
+    /// Held while something writes to the amp: the writer for each batch, a bulk change throughout.
+    gate: Arc<tokio::sync::Mutex<()>>,
 }
 
 struct Shared {
@@ -155,6 +168,7 @@ impl Shared {
                 amp.meters = Meters::default();
                 amp.values.clear();
                 amp.loaded = false;
+                amp.modified = false;
                 amp.session = None;
             }
             next
@@ -178,20 +192,60 @@ impl Shared {
         }
     }
 
-    /// The amp has `value` for `param`.
-    fn record(&self, id: AmpId, param: &Param, value: &Value) {
-        if let Some(amp) = lock(&self.live).get_mut(&id)
-            && amp.session.is_some()
-        {
-            amp.values.insert(param.clone(), value.clone());
+    /// The amp has `value` for `param`; `own` when the app just wrote it. Views are told of a real
+    /// change, and of every confirmed write of the app. A change of something the app already knew
+    /// marks the preset MODIFIED (BEH-38); the first sight of a value, as the state is read, does not.
+    fn observed(&self, id: AmpId, param: &Param, value: &Value, own: bool) {
+        let (changed, flipped) = {
+            let mut live = lock(&self.live);
+            let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
+            let old = amp.values.insert(param.clone(), value.clone());
+            let changed = old.as_ref() != Some(value);
+            let modifies = changed && (old.is_some() || own);
+            let flipped = modifies && !amp.modified;
+            amp.modified |= modifies;
+            (changed, flipped)
+        };
+        if changed || own {
+            self.emit(Update::Changed(id, param.clone(), value.clone()));
+        }
+        if flipped {
+            self.emit(Update::Modified(id, true));
         }
     }
 
-    /// The state read on connect. What changed since the connect is newer and stays.
-    fn load(&self, id: AmpId, snapshot: labgruppen::Snapshot) {
+    fn set_modified(&self, id: AmpId, modified: bool) {
+        let flipped = {
+            let mut live = lock(&self.live);
+            let Some(amp) = live.get_mut(&id) else { return };
+            let flipped = amp.modified != modified;
+            amp.modified = modified;
+            flipped
+        };
+        if flipped {
+            self.emit(Update::Modified(id, modified));
+        }
+    }
+
+    fn set_loaded_preset(&self, id: AmpId, preset: Option<Preset>) {
+        let _ = self.store().set_preset(id, preset);
+        self.emit(Update::Preset(id));
+    }
+
+    /// Forget the state except the output mutes, which are known to be right, and read it again.
+    fn begin_reload(&self, id: AmpId) {
+        if let Some(amp) = lock(&self.live).get_mut(&id) {
+            amp.values.retain(|param, _| matches!(param, Param::Mute(Channel::Output(_))));
+            amp.loaded = false;
+        }
+    }
+
+    /// The state read from the connection of `token`. What changed since is newer and stays.
+    fn load(&self, id: AmpId, token: &Arc<Writer>, snapshot: labgruppen::Snapshot) {
         {
             let mut live = lock(&self.live);
-            let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
+            let current = |amp: &Live| amp.session.as_ref().is_some_and(|s| Arc::ptr_eq(&s.writer, token));
+            let Some(amp) = live.get_mut(&id).filter(|amp| current(amp)) else { return };
             for (name, value) in snapshot.params {
                 if let Ok(param) = name.parse::<Param>() {
                     amp.values.entry(param).or_insert(value);
@@ -260,6 +314,12 @@ impl Hub {
     /// What the amp has for `param`; `None` until the state is read, and when the amp is not ONLINE.
     pub fn value(&self, id: AmpId, param: &Param) -> Option<Value> {
         lock(&self.0.shared.live).get(&id)?.values.get(param).cloned()
+    }
+
+    /// MODIFIED (BEH-38): the app changed something, or saw it changed, since it recalled or loaded the
+    /// preset. Cleared when the amp goes ONLINE, because the app cannot know then.
+    pub fn modified(&self, id: AmpId) -> bool {
+        lock(&self.0.shared.live).get(&id).is_some_and(|amp| amp.modified)
     }
 
     /// Whether the whole state of the amp has been read since it went ONLINE ([`Update::Loaded`]).
@@ -479,6 +539,7 @@ impl Hub {
                         meters: Meters::default(),
                         values: HashMap::new(),
                         loaded: false,
+                        modified: false,
                         session: None,
                     };
                     lock(&shared.live).insert(amp.id, live);
@@ -528,12 +589,15 @@ async fn session(
                 // the preset first: whoever sees ONLINE finds it
                 let _ = shared.store().set_preset(id, link.preset.take());
                 let writer = Arc::new(Writer::new(timing.write_interval));
-                shared.attach(id, Session { amp: link.amp.clone(), writer: writer.clone() });
+                let gate = Arc::new(tokio::sync::Mutex::new(()));
+                let session = Session { amp: link.amp.clone(), writer: writer.clone(), gate: gate.clone() };
+                shared.attach(id, session);
                 shared.apply(id, Event::Connected);
                 // the helpers end with the connection: what they still hold is dropped, never sent later
                 let mut helpers = JoinSet::new();
-                helpers.spawn(load_state(shared.clone(), id, link.amp.clone()));
-                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer));
+                helpers.spawn(load_state(shared.clone(), id, link.amp.clone(), writer.clone()));
+                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer, gate));
+                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -591,37 +655,64 @@ async fn connect_and_read(shared: &Shared, target: &Target) -> labgruppen::Resul
 
 /// Read the whole DSP state (reads only, SEC-1). It takes a while on an IPD, which is why the amp is
 /// ONLINE before it is done.
-async fn load_state(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
+async fn load_state(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>, token: Arc<Writer>) {
     if let Ok(snapshot) = amp.snapshot().await {
-        shared.load(id, snapshot);
+        shared.load(id, &token, snapshot);
+    }
+}
+
+/// The IPD tells nothing of a mute made on its front panel, so the output mutes are asked for about
+/// as often as the meters arrive (BEH-12). The IPX tells by itself.
+async fn poll_mutes(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
+    if amp.info().driver != "ipd" {
+        return;
+    }
+    let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
+    let mut tick = interval(shared.timing.meter_interval);
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        tick.tick().await;
+        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&outputs)).await {
+            for (param, value) in outputs.iter().zip(values) {
+                shared.observed(id, param, &value, false);
+            }
+        }
     }
 }
 
 /// Write the values that [`Hub::set`] accepted, each at its turn (SEC-4).
-async fn write_loop(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>, writer: Arc<Writer>) {
+async fn write_loop(
+    shared: Arc<Shared>,
+    id: AmpId,
+    amp: Arc<dyn labgruppen::Amp>,
+    writer: Arc<Writer>,
+    gate: Arc<tokio::sync::Mutex<()>>,
+) {
     loop {
-        let (due, next) = writer.take_due();
-        if due.is_empty() {
-            match next {
-                Some(wait) => {
-                    tokio::select! {
-                        () = sleep(wait) => {}
-                        () = writer.wake.notified() => {}
+        let next = {
+            // a bulk change holds the gate and drops what waited: take the batch only once it is ours
+            let _gate = gate.lock().await;
+            let (due, next) = writer.take_due();
+            if !due.is_empty() {
+                let results = amp.set_many(&due).await;
+                for ((param, value), result) in due.into_iter().zip(results) {
+                    match result {
+                        Ok(()) => shared.observed(id, &param, &value, true),
+                        Err(e) => shared.emit(Update::WriteFailed(id, param, e.to_string())),
                     }
                 }
-                None => writer.wake.notified().await,
+                continue;
             }
-            continue;
-        }
-        let results = amp.set_many(&due).await;
-        for ((param, value), result) in due.into_iter().zip(results) {
-            match result {
-                Ok(()) => {
-                    shared.record(id, &param, &value);
-                    shared.emit(Update::Changed(id, param, value));
+            next
+        };
+        match next {
+            Some(wait) => {
+                tokio::select! {
+                    () = sleep(wait) => {}
+                    () = writer.wake.notified() => {}
                 }
-                Err(e) => shared.emit(Update::WriteFailed(id, param, e.to_string())),
             }
+            None => writer.wake.notified().await,
         }
     }
 }
@@ -636,10 +727,7 @@ async fn pump(shared: &Shared, id: AmpId, events: &mut broadcast::Receiver<AmpEv
         tokio::select! {
             event = events.recv() => match event {
                 Ok(AmpEvent::Meters(meters)) => latest = Some(meters),
-                Ok(AmpEvent::Changed(param, value)) => {
-                    shared.record(id, &param, &value);
-                    shared.emit(Update::Changed(id, param, value));
-                }
+                Ok(AmpEvent::Changed(param, value)) => shared.observed(id, &param, &value, false),
                 Ok(AmpEvent::Disconnected(_)) | Err(RecvError::Closed) => return,
                 Err(RecvError::Lagged(_)) => {}
             },
