@@ -6,7 +6,8 @@ mod app;
 pub mod components;
 pub mod control;
 mod header;
-mod page;
+pub mod page;
+pub mod search;
 mod style;
 
 pub use amplifiers::{AmpView, AmplifierPanel, AmplifiersPage, Level};
@@ -15,4 +16,5 @@ pub use components::{ConfirmButton, ErrorText, Fader, Meter, ValueField};
 pub use header::Header;
 pub use labrack_core::Status;
 pub use page::Page;
+pub use search::{SearchPage, SearchView, Switch};
 pub use style::{Style, stylesheet};

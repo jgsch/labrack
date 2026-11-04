@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use labgruppen::{Channel, Param, Value};
-use labrack_core::{Hub, Lan, Network, Store, Timing, Update};
+use labrack_core::{Hub, Lan, Network, Scan, Store, Timing, Update};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::amplifiers::{AmpView, Level};
-use crate::{AmplifiersPage, Header, Page, Style};
+use crate::search::{KnownAmp, SearchView};
+use crate::{AmplifiersPage, Header, Page, SearchPage, Style};
 
 /// The amp list from the config file, or an empty one that is never written when the file cannot be
 /// read: a file the app does not understand must not be replaced by an empty list.
@@ -50,6 +51,10 @@ pub fn App() -> Element {
         });
     });
 
+    let add_error = use_signal(String::new);
+    let mut scan_message = use_signal(String::new);
+    let mut scanning = use_signal(|| false);
+
     // everything the core tells but the meters, which pages that show them follow themselves
     let mut changes = use_signal(|| 0u64);
     use_future({
@@ -60,6 +65,22 @@ pub fn App() -> Element {
                 loop {
                     match updates.recv().await {
                         Ok(Update::Meters(..)) => {}
+                        Ok(Update::Scan(Scan::Started)) => {
+                            scanning.set(true);
+                            scan_message.set(String::new());
+                            changes += 1;
+                        }
+                        Ok(Update::Scan(Scan::Finished { added, errors })) => {
+                            scanning.set(false);
+                            scan_message.set(if !errors.is_empty() {
+                                errors.join("; ")
+                            } else if added.is_empty() {
+                                "No new amplifier found".into()
+                            } else {
+                                format!("Found {} new", added.len())
+                            });
+                            changes += 1;
+                        }
                         Ok(_) | Err(RecvError::Lagged(_)) => changes += 1,
                         Err(RecvError::Closed) => break,
                     }
@@ -136,7 +157,63 @@ pub fn App() -> Element {
                         }
                     },
                     Page::MixEq => rsx! { p { class: "todo", "Mix & EQ is the next page." } },
-                    Page::Search => rsx! { p { class: "todo", "Search is the next page." } },
+                    Page::Search => rsx! {
+                        SearchPage {
+                            view: search_view(&hub, scanning(), scan_message()),
+                            add_error: add_error(),
+                            on_ipd: {
+                                let hub = hub.clone();
+                                move |on| {
+                                    let mut switches = hub.switches();
+                                    switches.ipd = on;
+                                    let _ = hub.set_switches(switches);
+                                }
+                            },
+                            on_ipx: {
+                                let hub = hub.clone();
+                                move |on| {
+                                    let mut switches = hub.switches();
+                                    switches.ipx = on;
+                                    let _ = hub.set_switches(switches);
+                                }
+                            },
+                            on_scan: {
+                                let hub = hub.clone();
+                                move |_| {
+                                    hub.scan_now();
+                                }
+                            },
+                            on_add: {
+                                let hub = hub.clone();
+                                let mut add_error = add_error;
+                                move |(name, ipd, ip): (String, bool, String)| {
+                                    let protocol = if ipd { labrack_core::Protocol::Ipd } else { labrack_core::Protocol::Ipx };
+                                    match hub.add_manual(&name, protocol, &ip) {
+                                        Ok(_) => add_error.set(String::new()),
+                                        Err(e) => add_error.set(e.to_string()),
+                                    }
+                                }
+                            },
+                            on_rename: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, name): (usize, String)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = hub.rename(id, &name);
+                                    }
+                                }
+                            },
+                            on_remove: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |index| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = hub.remove(id);
+                                    }
+                                }
+                            },
+                        }
+                    },
                 }
             }
         }
@@ -179,6 +256,36 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             view
         })
         .collect()
+}
+
+/// What the Search page draws: the switches, what the last scan did, and the known amplifiers.
+pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
+    let amps = hub.amps();
+    let switches = hub.switches();
+    let count = |protocol| amps.iter().filter(|amp| amp.protocol == protocol).count();
+    SearchView {
+        ipd: switches.ipd,
+        ipx: switches.ipx,
+        scanning,
+        ipd_count: count(labrack_core::Protocol::Ipd),
+        ipx_count: count(labrack_core::Protocol::Ipx),
+        message,
+        amps: amps
+            .iter()
+            .enumerate()
+            .map(|(index, amp)| KnownAmp {
+                index,
+                name: amp.name.clone(),
+                protocol: if amp.protocol == labrack_core::Protocol::Ipd { "IPD" } else { "IPX" }.into(),
+                ip: amp.ip.clone(),
+                source: match amp.source {
+                    labrack_core::Source::Auto => "AUTO",
+                    labrack_core::Source::Manual => "MANUAL",
+                }
+                .into(),
+            })
+            .collect(),
+    }
 }
 
 /// The zoom that makes the page report `scale`, or `None` when it already does (within 1 %) or when

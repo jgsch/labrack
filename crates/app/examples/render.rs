@@ -3,6 +3,7 @@
 
 use dioxus::prelude::*;
 use labrack_app::control::Bounds;
+use labrack_app::search::KnownAmp;
 use labrack_app::{
     AmpView, AmplifiersPage, ConfirmButton, Fader, Header, Level, Meter, Page, Status, Style, ValueField,
 };
@@ -50,6 +51,14 @@ fn main() {
         dioxus_ssr::render(&dom)
     );
     std::fs::write(dir.join("amplifiers-demo.html"), html).expect("write the amplifiers");
+
+    let mut dom = VirtualDom::new(search_demo);
+    dom.rebuild_in_place();
+    let html = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>{}</body></html>",
+        dioxus_ssr::render(&dom)
+    );
+    std::fs::write(dir.join("search-demo.html"), html).expect("write the search page");
 }
 
 /// A row of the controls, for the visual check of `mise run app-shot` (not a page of the app).
@@ -86,5 +95,42 @@ fn amplifiers_demo() -> Element {
     rsx! {
         Style {}
         div { class: "frame", AmplifiersPage { amps: vec![a, b, c] } }
+    }
+}
+
+/// The Search page with a few amplifiers, for the visual check of the page.
+fn search_demo() -> Element {
+    let view = labrack_app::SearchView {
+        ipd_count: 2,
+        ipx_count: 1,
+        message: "Found 2 new".into(),
+        amps: vec![
+            KnownAmp {
+                index: 0,
+                name: "FOH Main L".into(),
+                protocol: "IPD".into(),
+                ip: "192.168.1.21".into(),
+                source: "AUTO".into(),
+            },
+            KnownAmp {
+                index: 1,
+                name: "Subs".into(),
+                protocol: "IPX".into(),
+                ip: "192.168.1.31".into(),
+                source: "AUTO".into(),
+            },
+            KnownAmp {
+                index: 2,
+                name: "Delays".into(),
+                protocol: "IPD".into(),
+                ip: "192.168.1.24".into(),
+                source: "MANUAL".into(),
+            },
+        ],
+        ..labrack_app::SearchView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame", labrack_app::SearchPage { view } }
     }
 }
