@@ -209,7 +209,7 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-head h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;letter-spacing:0.08em;text-transform:uppercase}
 .eq-actions{display:flex;gap:8px}
 .button.eq-action{padding:0 14px;font-size:12px;letter-spacing:0}
-.eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:1px 0;border-bottom:1px solid var(--border)}
+.eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
 .eq-row.off{opacity:0.65}
 .eq-row.eq-columns{padding:4px 0;border-bottom:2px solid var(--c);font-size:11px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
 .eq-columns .center{text-align:center}
