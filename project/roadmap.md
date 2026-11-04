@@ -13,7 +13,7 @@ Use Phases until v1 ships, then Now / Next / Later.
   1. `core-amp-list`, then `core-connections` and `core-discovery` (done, archived)
   2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link` (done, archived)
   3. `ipd-access`, core part: user level, rights, login (done; the change stays active for its UI task)
-  4. `app-shell` (done, archived), then `app-controls`
+  4. `app-shell` (done, archived), then `app-controls` (done, archived)
   5. `app-amplifiers-page`, `app-search-page`, `app-mix-eq`, then the UI of `ipd-access` (level on the
      amp panel, disabled controls, login dialog), which needs the amp panel
   6. `v1-verification`
