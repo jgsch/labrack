@@ -61,3 +61,12 @@ copies, the same on both families); implements:
   channel 2 (the app only copies what it writes); said in `BEH-32`. Reacting to such an event would
   mean the app writing by itself on an amp's say-so, which `SEC-1` is wary of.
 - Unlinking is a single flag write and changes no value; the cache keeps both channels' values.
+
+## Revised after the first review
+
+- Read on a real IPX 1200: the link flag is set on channel 1 only (`in1.link`, `out1.link` on; the
+  channel 2 flags off), as implemented. Its inputs and outputs were linked and equal.
+- Linking a pair that is already linked does nothing on an IPD (it used to copy over channel 2).
+  On an IPX it syncs a drifted pair.
+- `Hub::link_drift(id, side)` lists the settings of channel 1 that channel 2 does not have (within
+  0.2 %), for the UI to warn about. An IPD cannot drift.

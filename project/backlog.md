@@ -20,12 +20,16 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   fader. Spec: BEH-27, UX-18, SEC-2
 - Choose defaults for the user ceilings. Spec: SEC-3, BEH-40
 - IPD MK2 units (different framing) have not been tried on hardware. Spec: BEH-1
-- Limiter ranges per model. Measured in the vendor Windows app: IPX 1200 19.22 to 35.99 dBu (10 to
-  69 Vpk), used for every IPX; IPD 2400 19.22 to 39.04 dBu (10 to 98 Vpk), while the library says
-  16.78 to 36.78 for the IPD 2400 (vendor config). Read the other IPX models (2400, 4800) and the IPD
-  1200 / 4800 in the Windows app, and compare the IPD's stored threshold (`labgruppen get
-  out1.limiter.threshold`) with what the app shows for it: the ranges differ by about 2.3 dB at both
-  ends, which looks like an offset between the stored value and the displayed dBu. Spec: BEH-5, SEC-3
+- **IPD limiter display may be about 2.2 dB off, before any UI shows Vpk or Watt for an IPD.**
+  Read on a live IPD 2400 (MK1, fw 1.2.6): it stores 32.56 dBu on both outputs, while the Windows
+  app shows 34.78 dBu / 60 Vpk for them. The Windows app also allows 19.22 to 39.04 dBu (10 to 98
+  Vpk) on the IPD 2400, where the library (vendor config) says 16.78 to 36.78: 2.44 and 2.26 dB
+  lower. The IPX shows no such offset (69 Vpk is 35.99 dBu). If the app converts the stored value
+  with the formula alone, it shows 47 Vpk for what the vendor app calls 60 Vpk, and a threshold typed
+  in Vpk would be stored about 2.2 dB higher than meant. Needed: a few more pairs (set a threshold in
+  the Windows app, read `labgruppen get out1.limiter.threshold`), at the floor, the ceiling and
+  between, to tell an offset from a different formula. Also the IPD 1200 and 4800. Spec: BEH-5,
+  SEC-3
 - When there is access to an IPX 4800: read its limiter range in the Windows app (lowest and highest
   threshold in dBu and Vpk) and add it to `LIMITER_DBU` in `amps` (`ipx/params.rs`), which now holds
   the IPX 1200's range, 19.22 to 35.99 dBu (10 to 69 Vpk), for every IPX. Do the same for the IPX 2400
@@ -37,3 +41,9 @@ Open questions to resolve; each blocks or shapes the requirements listed.
 - IPX limiter: which of the four stored figures does the DSP limit on? The out2 of the live amp held
   a dBu that its Vpk does not give. Until known, the app shows the figures derived from Vpk and
   load, and a threshold edit writes all four. Spec: BEH-5
+- IPX discovery address: a live IPX 1200 reports its own IP as 192.168.5.200 in its status while it
+  answers on 192.168.1.87. Discovery uses the IP text inside the IPX broadcast; if that is the
+  amp's configured address, it can be unreachable from where the amp is heard. Prefer the sender
+  address of the datagram, once a real broadcast has been seen (none was on this network). Spec: BEH-19
+- Discovery of the IPD only probes the /24 of the default route. On a machine with Wi-Fi to the amps
+  and a wired default route (like the development machine) it finds nothing. Spec: BEH-18

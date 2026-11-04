@@ -138,7 +138,9 @@ statement with a `BEH-<n>` ID.
     writes channel 2 while linked (the amp ignores it and may stop answering).
   - IPX: the amp copies the gain and the limiter dBu once when the link is switched on, then keeps
     the channels independent. The app writes every channel 1 change to channel 2 as well. A change
-    made on the front panel to a linked channel 1 is not copied.
+    made on the amp itself (front panel) to a linked channel 1 is not copied: the pair then differs
+    while still flagged linked. The app reports such a pair (`Hub::link_drift`) so that it can be
+    shown, and linking again syncs it. An IPD cannot drift.
 - **BEH-33** Linked inputs share one Inputs EQ; linked outputs share one Outputs EQ.
 - **BEH-34** In Levels, linked outputs show one fader and one limiter, with stereo meters (two
   meters and two gain reduction bars).
@@ -147,7 +149,7 @@ statement with a `BEH-<n>` ID.
 ## Presets
 
 - **BEH-36** 50 presets per amplifier, identified by number and name.
-- **BEH-37** Actions: recall a stored preset, store the current settings to a slot under a name,
+- **BEH-37** Actions (recall, store and load leave both outputs muted, `SEC-6`): recall a stored preset, store the current settings to a slot under a name,
   save the settings to a JSON file on the computer, load such a file into an amp. The file format
   is the library's snapshot (`labgruppen dump`). A file is checked as a whole before anything is
   written: if one value is outside the range of the amp or above a user ceiling, the load is

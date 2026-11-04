@@ -9,9 +9,10 @@ use common::*;
 use labgruppen::amps::ipd::params::slot as ipd_slot;
 use labgruppen::amps::ipd::protocol::{Key, S_MIXER, S_MUTE};
 use labgruppen::amps::ipd::sim::SimServer;
-use labgruppen::amps::ipx::fake::FakeAmp;
+use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params as ipx_params;
-use labgruppen::amps::ipx::protocol::Address;
+use labgruppen::amps::ipx::protocol::{Address, Main, build_frame};
+use labgruppen::amps::ipx::structs::{DeviceState, audio_dword};
 use labgruppen::{Channel, Value};
 use labrack_core::{AmpId, Ceilings, Error, Hub, Side, Unit};
 use tokio::time::sleep;
@@ -466,7 +467,11 @@ async fn a_file_load_into_a_linked_pair_makes_channel_2_follow_channel_1_on_the_
 
     assert_eq!(ipx_value(&fake, "out1.gain"), f(-4.0));
     assert_eq!(ipx_value(&fake, "out2.gain"), f(-4.0), "the pair stays together");
-    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, FALSE));
+    assert_eq!(
+        (ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")),
+        (TRUE, TRUE),
+        "a load leaves the outputs muted"
+    );
 }
 
 // a pair that is not linked is loaded as it is
@@ -481,4 +486,74 @@ async fn a_file_load_into_unlinked_channels_writes_both() {
 
     hub.load_file(id, &path).await.unwrap();
     assert_eq!((ipx_value(&fake, "out1.gain"), ipx_value(&fake, "out2.gain")), (f(-10.0), f(-20.0)));
+}
+
+// ---- an already linked pair, and a pair that drifted -----------------------------------------------
+
+/// Someone changes `name` on the amp itself (front panel): the amp holds it and says so.
+fn front_panel(fake: &FakeAmp, name: &str, value: Value) {
+    let slot = ipx_params::slot(&param(name)).unwrap();
+    let bytes = slot.encode(&value).unwrap();
+    let at = DeviceState::AUDIO_OFFSET + audio_dword(slot.addr).unwrap() * 4;
+    fake.state().sync[at..at + bytes.len()].copy_from_slice(&bytes);
+    let frame = build_frame(Main::DEVPRMCHAGE, slot.addr.pack(), &bytes).unwrap();
+    fake.cmd.send(Cmd::Push(frame)).unwrap();
+}
+
+// BEH-32: an IPD keeps a linked pair equal itself and channel 2 is never written: linking a pair that is
+// linked already is nothing to do (it used to copy over channel 2, which a linked IPD must not get)
+#[tokio::test(flavor = "multi_thread")]
+async fn linking_a_linked_ipd_again_writes_nothing() {
+    let (hub, id, sim) = ipd_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    let writes = sim.writes().len();
+
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+
+    assert_eq!(sim.writes().len(), writes);
+    assert_eq!(sim.link_violations(), []);
+    assert!(hub.linked(id, Side::Outputs));
+}
+
+// a pair that is not linked has no drift, and neither has a pair the app just linked
+#[tokio::test]
+async fn a_pair_that_is_not_linked_or_just_linked_has_no_drift() {
+    let (hub, id, _fake) = ipx_ready().await;
+    assert!(hub.link_drift(id, Side::Outputs).is_empty(), "not linked: the channels are meant to differ");
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    assert!(hub.link_drift(id, Side::Outputs).is_empty());
+    assert!(hub.link_drift(id, Side::Inputs).is_empty());
+}
+
+// BEH-32: the IPX does not keep a linked pair equal; a change on the amp itself leaves channel 2 behind
+#[tokio::test]
+async fn a_change_on_the_ipx_itself_makes_a_linked_pair_drift_and_syncing_fixes_it() {
+    let (hub, id, fake) = ipx_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+
+    front_panel(&fake, "out1.gain", f(-3.0));
+    front_panel(&fake, "out1.eq.2.freq", Value::Int(3000));
+    wait_value(&hub, id, "out1.gain", f(-3.0)).await;
+    wait_value(&hub, id, "out1.eq.2.freq", Value::Int(3000)).await;
+
+    let drift = hub.link_drift(id, Side::Outputs);
+    assert_eq!(drift, [param("out1.eq.2.freq"), param("out1.gain")], "what differs, by name");
+    assert!(hub.link_drift(id, Side::Inputs).is_empty(), "the other pair is fine");
+    assert!(hub.linked(id, Side::Outputs), "still flagged linked");
+
+    // SYNC is linking again: channel 2 gets channel 1's values (checked, outputs muted around it)
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    assert!(hub.link_drift(id, Side::Outputs).is_empty());
+    assert_eq!(ipx_value(&fake, "out2.gain"), f(-3.0));
+    assert_eq!(ipx_value(&fake, "out2.eq.2.freq"), Value::Int(3000));
+}
+
+// an IPD cannot drift: the amp mirrors, and so does the state
+#[tokio::test(flavor = "multi_thread")]
+async fn a_linked_ipd_never_drifts() {
+    let (hub, id, _sim) = ipd_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    set_and_wait(&hub, id, "out1.gain", f(-3.0)).await;
+    wait_value(&hub, id, "out2.gain", f(-3.0)).await;
+    assert!(hub.link_drift(id, Side::Outputs).is_empty());
 }

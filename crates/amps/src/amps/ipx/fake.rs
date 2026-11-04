@@ -54,6 +54,8 @@ pub struct State {
     pub busy: bool,
     /// How many SETPRMs had arrived when each RECALLPRESET did: tells the order of writes.
     pub recall_marks: Vec<usize>,
+    /// The same for each SETPRESET.
+    pub store_marks: Vec<usize>,
 }
 
 pub struct FakeAmp {
@@ -216,6 +218,8 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
             }
             Ctrl::SETPRESET => {
                 st.store_payloads.push(fr.payload.clone());
+                let marked = st.setprm.len();
+                st.store_marks.push(marked);
                 if !st.ignore_store && fr.payload.len() == 20 {
                     let index = u32::from_le_bytes(fr.payload[16..20].try_into().unwrap());
                     let audio = st.sync[AUDIO..AUDIO + AUDCFG_SIZE].to_vec();

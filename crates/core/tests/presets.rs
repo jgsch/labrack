@@ -15,6 +15,7 @@ use labgruppen::amps::ipd::sim::SimServer;
 use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params as ipx_params;
 use labgruppen::amps::ipx::protocol::{Address, Env, Main, build_frame};
+use labgruppen::amps::ipx::structs::{AUDCFG_SIZE, DeviceState, audio_dword};
 use labgruppen::{Snapshot, Value};
 use labrack_core::{AmpId, Ceilings, Error, Hub, Preset, Protocol, Status, Update};
 use tokio::time::{sleep, timeout};
@@ -36,6 +37,14 @@ async fn ipd_elsewhere_set(sim: &SimServer, name: &str, value: Value) {
     let options = Options { mk2: None, timeout: Duration::from_secs(5) };
     let amp = IpdAmp::connect_with("127.0.0.1", sim.addr.port(), options).await.unwrap();
     labgruppen::Amp::set(&amp, &param(name), value).await.unwrap();
+    labgruppen::Amp::close(&amp).await;
+}
+
+/// Another controller stores the settings of the simulated IPD in a slot.
+async fn ipd_elsewhere_store(sim: &SimServer, slot: u32, name: &str) {
+    let options = Options { mk2: None, timeout: Duration::from_secs(5) };
+    let amp = IpdAmp::connect_with("127.0.0.1", sim.addr.port(), options).await.unwrap();
+    labgruppen::Amp::store_preset(&amp, slot, name).await.unwrap();
     labgruppen::Amp::close(&amp).await;
 }
 
@@ -178,107 +187,192 @@ async fn a_mute_from_the_ipd_front_panel_is_seen() {
     assert!(!hub.amp_muted(id));
 }
 
-// ---- recall (SEC-6, SEC-7) ----------------------------------------------------------------------
+// ---- recall, store and file load: the outputs end muted (SEC-6, SEC-7) -------------------------
+//
+// Whatever the preset or the file says, an output is unmuted by the user only.
 
-/// out1 muted by the user, out2 not; the preset in slot 7 has both unmuted.
+/// Put a preset into the fake IPX as another tool (the vendor app) stores it, with the outputs unmuted:
+/// the current settings with `edits` applied.
+fn legacy_preset(fake: &FakeAmp, slot: u32, name: &str, edits: &[(&str, Value)]) {
+    let mut st = fake.state();
+    let from = DeviceState::AUDIO_OFFSET;
+    let mut audio = st.sync[from..from + AUDCFG_SIZE].to_vec();
+    for (edited, value) in edits {
+        let slot = ipx_params::slot(&param(edited)).unwrap();
+        let at = audio_dword(slot.addr).unwrap() * 4;
+        let bytes = slot.encode(value).unwrap();
+        audio[at..at + bytes.len()].copy_from_slice(&bytes);
+    }
+    st.stored.insert(slot - 1, (name.to_string(), audio));
+}
+
+/// out1 muted by the user, out2 not; slot 7 holds a preset of another tool with both unmuted and
+/// -7.5 dB on out1.
 async fn ipx_with_a_preset_that_unmutes() -> (Hub, AmpId, FakeAmp) {
     let (hub, id, fake) = online_ipx(timing()).await;
-    set_and_wait(&hub, id, "out1.mute", FALSE).await;
-    set_and_wait(&hub, id, "out2.mute", FALSE).await;
-    set_and_wait(&hub, id, "out1.gain", f(-7.5)).await;
-    hub.store_preset(id, 7, "Loud").await.unwrap();
+    legacy_preset(&fake, 7, "Loud", &[("out1.mute", FALSE), ("out2.mute", FALSE), ("out1.gain", f(-7.5))]);
     set_and_wait(&hub, id, "out1.mute", TRUE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
     set_and_wait(&hub, id, "out1.gain", f(0.0)).await;
     (hub, id, fake)
 }
 
-// SEC-6, SEC-7: a muted output stays muted even when the stored preset says unmuted
+// SEC-6, SEC-7: after a recall every output is muted, even if the preset says unmuted
 #[tokio::test]
-async fn recall_keeps_a_muted_output_muted_and_mutes_first_on_the_ipx() {
+async fn recall_leaves_every_output_muted_and_mutes_first_on_the_ipx() {
     let (hub, id, fake) = ipx_with_a_preset_that_unmutes().await;
     let before = fake.state().setprm.len();
 
     hub.recall_preset(id, 7).await.unwrap();
 
-    assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "it was muted, the preset said unmuted");
-    assert_eq!(ipx_value(&fake, "out2.mute"), FALSE, "it was not muted and the preset does not mute it");
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, TRUE));
     assert_eq!(ipx_value(&fake, "out1.gain"), f(-7.5), "the preset was applied");
     let st = fake.state();
     let mark = st.recall_marks[0];
-    // before the recall: the one output that was not muted gets muted; after it: the muted one again
+    // before the recall: the one output that sounded gets muted; after it, where the preset unmuted
+    // both: both are muted again
     assert_eq!(st.setprm[before..mark], [addr("out2.mute")]);
-    assert_eq!(st.setprm[mark..], [addr("out1.mute")]);
+    assert_eq!(st.setprm[mark..], [addr("out1.mute"), addr("out2.mute")]);
     drop(st);
     // the shared state says so at once
-    assert_eq!(hub.value(id, &param("out1.mute")), Some(TRUE));
-    assert_eq!(hub.value(id, &param("out2.mute")), Some(FALSE));
-    assert!(!hub.amp_muted(id));
+    assert_eq!(
+        (hub.value(id, &param("out1.mute")), hub.value(id, &param("out2.mute"))),
+        (Some(TRUE), Some(TRUE))
+    );
+    assert!(hub.amp_muted(id));
 }
 
-// SEC-6: an output the preset mutes stays muted; one it leaves alone is restored
+// SEC-6: a preset the app stored has the outputs muted, so recalling it has no unmuted moment at all
 #[tokio::test]
-async fn recall_restores_the_outputs_it_muted_unless_the_preset_mutes_them() {
+async fn recalling_a_preset_the_app_stored_never_unmutes_an_output() {
     let (hub, id, fake) = online_ipx(timing()).await;
-    set_and_wait(&hub, id, "out1.mute", TRUE).await;
-    set_and_wait(&hub, id, "out2.mute", TRUE).await;
-    hub.store_preset(id, 8, "Silent").await.unwrap();
     set_and_wait(&hub, id, "out1.mute", FALSE).await;
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
+    set_and_wait(&hub, id, "out1.gain", f(-7.5)).await;
+    hub.store_preset(id, 8, "Quiet").await.unwrap(); // mutes the outputs first
+    set_and_wait(&hub, id, "out1.mute", FALSE).await; // the user decides to unmute
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+    set_and_wait(&hub, id, "out1.gain", f(0.0)).await;
     let before = fake.state().setprm.len();
 
     hub.recall_preset(id, 8).await.unwrap();
 
     assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, TRUE));
+    assert_eq!(ipx_value(&fake, "out1.gain"), f(-7.5));
     let st = fake.state();
-    assert_eq!(
-        st.setprm[before..st.recall_marks[0]],
-        [addr("out1.mute"), addr("out2.mute")],
-        "both muted first"
-    );
-    assert_eq!(st.setprm.len(), st.recall_marks[0], "nothing to put back: the preset muted them");
-}
-
-#[tokio::test]
-async fn recall_that_changes_no_mute_puts_the_unmuted_outputs_back() {
-    let (hub, id, fake) = online_ipx(timing()).await;
-    set_and_wait(&hub, id, "out1.mute", FALSE).await;
-    set_and_wait(&hub, id, "out2.mute", FALSE).await;
-    hub.store_preset(id, 9, "Open").await.unwrap();
-    let before = fake.state().setprm.len();
-
-    hub.recall_preset(id, 9).await.unwrap();
-    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (FALSE, FALSE));
-    let st = fake.state();
-    assert_eq!(st.setprm[before..st.recall_marks[0]], [addr("out1.mute"), addr("out2.mute")]);
-    // the amp applied the preset, which unmuted them; nothing is written after the recall
-    assert_eq!(st.setprm.len(), st.recall_marks[0]);
+    let mark = st.recall_marks[0];
+    assert_eq!(st.setprm[before..mark], [addr("out1.mute"), addr("out2.mute")], "both muted first");
+    assert_eq!(st.setprm.len(), mark, "the preset itself muted them: nothing to put right afterwards");
 }
 
 // SEC-6, SEC-7 on the IPD
 #[tokio::test(flavor = "multi_thread")]
-async fn recall_keeps_a_muted_output_muted_and_mutes_first_on_the_ipd() {
+async fn recall_leaves_every_output_muted_and_mutes_first_on_the_ipd() {
     let (hub, id, sim) = online_ipd().await;
-    set_and_wait(&hub, id, "out1.mute", FALSE).await;
-    set_and_wait(&hub, id, "out2.mute", FALSE).await;
-    set_and_wait(&hub, id, "out1.gain", f(-7.5)).await;
-    hub.store_preset(id, 7, "Loud").await.unwrap();
-    set_and_wait(&hub, id, "out1.mute", TRUE).await;
-    set_and_wait(&hub, id, "out1.gain", f(0.0)).await;
+    // a preset another controller stored, with both outputs unmuted
+    ipd_elsewhere_set(&sim, "out1.mute", FALSE).await;
+    ipd_elsewhere_set(&sim, "out2.mute", FALSE).await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(-7.5)).await;
+    ipd_elsewhere_store(&sim, 7, "Loud").await;
+    ipd_elsewhere_set(&sim, "out1.mute", TRUE).await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(0.0)).await;
     let before = sim.writes().len();
 
     hub.recall_preset(id, 7).await.unwrap();
 
-    assert_eq!(ipd_value(&sim, "out1.mute").await, TRUE);
-    assert_eq!(ipd_value(&sim, "out2.mute").await, FALSE);
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, TRUE));
     assert_eq!(ipd_value(&sim, "out1.gain").await, f(-7.5), "the preset was applied");
     let writes = sim.writes()[before..].to_vec();
     let key = |name: &str| ipd_slot(&param(name)).unwrap().key;
     let load = Key::new(S_COMMAND, M_COMMAND, 0, CMD_LOAD_PRESET);
     let at = writes.iter().position(|k| *k == load).expect("the recall command");
-    assert_eq!(writes[0], key("out2.mute"), "the unmuted output is muted before anything else");
+    assert_eq!(writes[0], key("out2.mute"), "the output that sounded is muted before anything else");
     assert!(writes[..at].iter().all(|k| *k != key("out1.mute")), "the muted output is not touched before");
-    assert_eq!(writes.last(), Some(&key("out1.mute")), "and muted again at the end");
-    assert_eq!(hub.value(id, &param("out1.mute")), Some(TRUE));
+    assert_eq!(writes[at + 1..], [key("out1.mute"), key("out2.mute")], "and both muted again at the end");
+    assert_eq!(
+        (hub.value(id, &param("out1.mute")), hub.value(id, &param("out2.mute"))),
+        (Some(TRUE), Some(TRUE))
+    );
+}
+
+// SEC-6: storing a preset mutes the outputs first, so the preset carries muted outputs, and leaves them
+#[tokio::test]
+async fn store_mutes_the_outputs_first_stores_them_muted_and_leaves_them_muted_on_the_ipx() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+    let before = fake.state().setprm.len();
+
+    hub.store_preset(id, 12, "Church").await.unwrap();
+
+    let st = fake.state();
+    assert_eq!(st.setprm[before..st.store_marks[0]], [addr("out1.mute"), addr("out2.mute")], "muted first");
+    assert_eq!(st.setprm.len(), st.store_marks[0], "and not put back");
+    let (name, audio) = &st.stored[&11];
+    assert_eq!(name, "Church");
+    for output in ["out1.mute", "out2.mute"] {
+        let at = audio_dword(addr(output)).unwrap() * 4;
+        assert_eq!(audio[at..at + 4], 1i32.to_le_bytes(), "{output} is muted in the stored preset");
+    }
+    drop(st);
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, TRUE));
+    assert!(hub.amp_muted(id));
+    assert_eq!(hub.amps()[0].preset, Some(Preset { number: 12, name: "Church".into() }));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn store_mutes_the_outputs_first_and_leaves_them_muted_on_the_ipd() {
+    let (hub, id, sim) = online_ipd().await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+    let before = sim.writes().len();
+
+    hub.store_preset(id, 12, "Church").await.unwrap();
+
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, TRUE));
+    let key = |name: &str| ipd_slot(&param(name)).unwrap().key;
+    let writes = sim.writes()[before..].to_vec();
+    assert_eq!(writes[..2], [key("out1.mute"), key("out2.mute")], "muted before the save");
+    assert!(
+        !writes[2..].iter().any(|k| *k == key("out1.mute") || *k == key("out2.mute")),
+        "and not put back"
+    );
+}
+
+// a store the amp refuses (bad name, protected slot) changes nothing, so the app takes back the mute it
+// added for it and nothing stays muted
+#[tokio::test]
+async fn a_refused_store_does_not_leave_the_outputs_muted() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+
+    for (slot, name) in [(5, ""), (5, "Empty"), (5, "this name is far too long")] {
+        let got = hub.store_preset(id, slot, name).await;
+        assert!(matches!(got, Err(Error::Amp(labgruppen::Error::InvalidValue(_)))), "{name:?}: {got:?}");
+    }
+    let got = hub.store_preset(id, 1, "Protected").await;
+    assert!(matches!(got, Err(Error::Amp(labgruppen::Error::Denied(_)))), "{got:?}");
+
+    assert!(fake.state().store_payloads.is_empty());
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (FALSE, FALSE));
+    assert_eq!(
+        (hub.value(id, &param("out1.mute")), hub.value(id, &param("out2.mute"))),
+        (Some(FALSE), Some(FALSE))
+    );
+}
+
+// SEC-6: if the outputs cannot be muted, nothing is stored
+#[tokio::test]
+async fn nothing_is_stored_when_the_outputs_cannot_be_muted() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+    fake.state().reject_writes.insert(addr("out2.mute"));
+
+    let got = hub.store_preset(id, 12, "Church").await;
+    assert!(matches!(got, Err(Error::LeftMuted(_))), "{got:?}");
+    assert!(fake.state().store_payloads.is_empty());
+    assert_eq!(hub.amps()[0].preset.as_ref().map(|p| p.number), Some(2), "the loaded preset is as it was");
 }
 
 // BEH-11, BEH-38: the loaded preset, MODIFIED and the state after a recall
@@ -404,10 +498,10 @@ async fn save_file_writes_the_snapshot() {
     assert!(matches!(hub.save_file(id, missing).await, Err(Error::Io(_))));
 }
 
-// BEH-37, SEC-6, SEC-7: a file brings back the settings, never an output mute, and the outputs it
-// muted for the load are put back
+// BEH-37, SEC-6, SEC-7: a file brings back the settings, never an output mute, and every output ends
+// muted: the user unmutes
 #[tokio::test]
-async fn load_file_restores_settings_and_leaves_the_output_mutes_alone() {
+async fn load_file_restores_settings_and_leaves_every_output_muted() {
     let (hub, id, fake) = online_ipx(timing()).await;
     set_and_wait(&hub, id, "out1.mute", TRUE).await;
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
@@ -428,11 +522,11 @@ async fn load_file_restores_settings_and_leaves_the_output_mutes_alone() {
 
     assert_eq!(ipx_value(&fake, "out1.gain"), f(-2.5));
     assert_eq!(ipx_value(&fake, "in1.eq.2.freq"), eq_freq);
-    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, FALSE));
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, TRUE));
     let writes = fake.state().setprm[before..].to_vec();
-    assert_eq!(writes.first(), Some(&addr("out2.mute")), "muted first");
-    assert_eq!(writes.last(), Some(&addr("out2.mute")), "put back last");
-    assert!(!writes.contains(&addr("out1.mute")), "the muted output is not touched");
+    assert_eq!(writes.first(), Some(&addr("out2.mute")), "the output that sounded is muted first");
+    assert_eq!(writes.iter().filter(|a| **a == addr("out2.mute")).count(), 1, "and not put back");
+    assert!(!writes.contains(&addr("out1.mute")), "the muted output is not touched, whatever the file says");
     assert!(report.applied > 100, "{}", report.applied);
     assert!(report.skipped.iter().any(|s| s.starts_with("out1.mute")), "{:?}", report.skipped);
     assert!(report.skipped.iter().any(|s| s.starts_with("out2.mute")));

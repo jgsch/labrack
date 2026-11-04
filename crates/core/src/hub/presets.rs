@@ -1,10 +1,13 @@
 //! Presets and settings files (BEH-36, BEH-37), and the runner for bulk changes that all of them
 //! share (SEC-6, SEC-7).
 //!
-//! A bulk change replaces many settings at once. The runner reads the mute of both outputs, mutes
-//! those that are not, lets the change happen, then puts the mutes right, and no output ends up
-//! unmuted that was muted before. If anything fails along the way, the outputs stay muted and the
-//! error says so: a muted output is never the dangerous state.
+//! A bulk change replaces many settings at once. Recalling a preset, loading a file and storing a
+//! preset mute both outputs first and leave them muted: unmuting is the user's decision, never the
+//! app's, so no preset or file can make sound by itself. A preset the app stored carries muted
+//! outputs, so recalling it has no unmuted moment at all; one stored by another tool may unmute an
+//! output for the round trip the app needs to mute it again. Linking puts the mutes back as they were,
+//! since it changes no scene. If anything fails along the way, the outputs stay muted and the error
+//! says so: a muted output is never the dangerous state.
 
 use std::future::Future;
 use std::path::Path;
@@ -30,15 +33,13 @@ pub struct LoadReport {
     pub skipped: Vec<String>,
 }
 
-/// What the change does to the mutes the amp holds afterwards.
+/// Where the outputs are left after a bulk change.
 #[derive(Clone, Copy)]
-pub(super) enum Effect {
-    /// The amp swaps its whole configuration, mutes included (a recall): what it holds afterwards is
-    /// the preset's. An output ends muted if it was or the preset mutes it.
-    Replaces,
-    /// The mutes are left as the runner set them (a file that carries no output mute): every output
-    /// goes back to what it was.
-    Keeps,
+pub(super) enum End {
+    /// Muted, whatever they were and whatever the change did (SEC-6).
+    Muted,
+    /// As they were before the change.
+    AsBefore,
 }
 
 const OUTPUTS: [Param; 2] = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
@@ -71,7 +72,7 @@ impl Hub {
     pub async fn recall_preset(&self, id: AmpId, slot: u32) -> Result<()> {
         let session = self.session(id)?;
         self.check_slot(&session, slot)?;
-        self.bulk(id, &session, Effect::Replaces, |amp| async move { amp.recall_preset(slot).await }).await?;
+        self.bulk(id, &session, End::Muted, true, |amp| async move { amp.recall_preset(slot).await }).await?;
 
         // what the amp says it holds now, not what was asked for
         let loaded = session.amp.status().await.ok().and_then(|s| s.preset);
@@ -86,8 +87,17 @@ impl Hub {
     pub async fn store_preset(&self, id: AmpId, slot: u32, name: &str) -> Result<()> {
         let session = self.session(id)?;
         self.check_slot(&session, slot)?;
-        let _gate = session.gate.lock().await;
-        session.amp.store_preset(slot, name).await?;
+        // the preset is stored with the outputs muted, and they stay muted. What waits to be written
+        // stays too: it is not replaced by anything.
+        let stored = name.to_string();
+        self.bulk(
+            id,
+            &session,
+            End::Muted,
+            false,
+            |amp| async move { amp.store_preset(slot, &stored).await },
+        )
+        .await?;
         let shared = &self.0.shared;
         shared.set_loaded_preset(id, Some(Preset { number: slot, name: name.trim().to_string() }));
         shared.set_modified(id, false);
@@ -118,7 +128,7 @@ impl Hub {
         let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings, linked)?;
 
         let report = self
-            .bulk(id, &session, Effect::Keeps, |amp| async move {
+            .bulk(id, &session, End::Muted, true, |amp| async move {
                 let report = amp.restore(&accepted, false).await?;
                 match report.failed.first() {
                     Some((name, why)) => Err(labgruppen::Error::NotConfirmed(format!(
@@ -151,18 +161,19 @@ impl Hub {
 
     /// Run `change` on an amp with its outputs muted (SEC-6).
     ///
-    /// 1. wait for the amp's writes to finish and drop the values still waiting: they were meant for
-    ///    settings that are about to be replaced;
+    /// 1. wait for the amp's writes to finish and, if `drop_waiting`, drop the values still waiting:
+    ///    they were meant for settings that are about to be replaced;
     /// 2. read the mutes, and mute the outputs that are not muted;
     /// 3. `change`;
-    /// 4. read the mutes again and put them right: see [`Effect`].
+    /// 4. read the mutes again and put them right: see [`End`].
     ///
     /// Any failure stops there and leaves the outputs as they are, muted.
     pub(super) async fn bulk<T, F, Fut>(
         &self,
         id: AmpId,
         session: &Session,
-        effect: Effect,
+        end: End,
+        drop_waiting: bool,
         change: F,
     ) -> Result<T>
     where
@@ -170,7 +181,9 @@ impl Hub {
         Fut: Future<Output = labgruppen::Result<T>>,
     {
         let _gate = session.gate.lock().await;
-        session.writer.clear();
+        if drop_waiting {
+            session.writer.clear();
+        }
         let amp = &session.amp;
         let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());
 
@@ -182,12 +195,29 @@ impl Hub {
             result.map_err(left_muted)?;
         }
 
-        let done = change(amp.clone()).await.map_err(left_muted)?;
+        let done = match change(amp.clone()).await {
+            Ok(done) => done,
+            // refused before anything was sent: the amp is as it was, so take back only the mute added here
+            Err(refused @ (labgruppen::Error::Denied(_) | labgruppen::Error::InvalidValue(_))) => {
+                let undo: Vec<(Param, Value)> = (0..2)
+                    .filter(|&i| !before[i])
+                    .map(|i| (OUTPUTS[i].clone(), Value::Bool(false)))
+                    .collect();
+                for result in amp.set_many(&undo).await {
+                    result.map_err(left_muted)?;
+                }
+                for (param, muted) in OUTPUTS.iter().zip(before) {
+                    self.0.shared.observed(id, param, &Value::Bool(muted), false);
+                }
+                return Err(refused.into());
+            }
+            Err(e) => return Err(left_muted(e)),
+        };
 
         let after = read_mutes(amp).await.map_err(left_muted)?;
-        let want: [bool; 2] = match effect {
-            Effect::Keeps => before,
-            Effect::Replaces => [before[0] || after[0], before[1] || after[1]],
+        let want: [bool; 2] = match end {
+            End::AsBefore => before,
+            End::Muted => [true, true],
         };
         // mutes before unmutes
         let fix = |muted: bool| -> Vec<(Param, Value)> {

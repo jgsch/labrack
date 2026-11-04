@@ -76,3 +76,11 @@ implements:
 - `observed()` replaced `record()`: one place for cache, `Update::Changed` and MODIFIED. Amp events
   that repeat a known value no longer produce `Changed`; confirmed own writes always do.
 - Not tested: a real IPX applying a preset with different mutes (ARCH-8, manual, outputs muted).
+
+## Revised after the first review (see `SEC-6`)
+
+The bulk runner no longer puts the outputs back after a recall or a file load: they end **muted**
+(`End::Muted`), and storing a preset is a bulk change too, so the preset carries muted outputs and
+recalling it has no unmuted moment. Only link copy still restores (`End::AsBefore`). A change the amp
+refuses before sending anything takes back only the mute the runner added. The sections above that
+speak of restoring the mutes after a recall or a load describe the first version.

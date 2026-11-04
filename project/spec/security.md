@@ -21,20 +21,24 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   latest value is sent, at most every 50 ms per parameter.
 - **SEC-5** **Confirm dangerous actions:** UNMUTE ALL, preset recall, loading a file (see
   `UX-24`).
-- **SEC-6** **Bulk changes mute first.** Preset recall, file load and link copy mute the affected
-  outputs first, write, then put the mutes right (the library's restore order), and no output ends
-  unmuted that was muted before:
-  - recall: the amp swaps its whole configuration, so an output ends muted if it was muted before
-    or the preset mutes it, even if the stored preset says unmuted;
-  - file load: output mutes in the file are never applied, and each output goes back to what it
-    was;
-  - what still waits to be written when a bulk change starts is dropped, not written over the new
-    settings;
-  - if anything fails after the outputs were muted, they stay muted and the user is told. A muted
-    output is never the dangerous state.
-  The window between the amp applying a preset that unmutes an output and the app muting it again
-  is one round trip; the amps offer no way to avoid it.
-- **SEC-7** **Never unmute automatically:** not after a reconnect, a preset recall, a file load or
-  an app start.
+- **SEC-6** **Bulk changes mute first and leave the outputs muted.** Preset recall, file load and
+  storing a preset mute both outputs of the amp first, change the amp, and leave both outputs
+  muted, whatever they were and whatever the preset or file says. Unmuting is always the user's
+  decision (`SEC-7`).
+  - A preset the app stored carries muted outputs (storing mutes them first), so recalling it has no
+    unmuted moment at all.
+  - A preset stored by another tool may have unmuted outputs. The amp applies a recall at once,
+    mutes included, so an output it unmutes passes audio with the preset's settings until the app has
+    muted it again, one round trip (not measured). The app cannot prevent it.
+  - File load never applies output mutes from the file.
+  - What still waits to be written when a recall or a load starts is dropped, not written over the
+    new settings.
+  - If anything fails after the outputs were muted, they stay muted and the user is told. If the amp
+    refuses the change before sending anything (a bad name, a protected slot), the app takes back
+    only the mute it added.
+  - Link copy mutes first too, and puts the outputs back as they were: it changes no scene.
+  A muted output is never the dangerous state.
+- **SEC-7** **Never unmute automatically:** not after a reconnect, a preset recall, a file load, a
+  store or an app start. Only an action of the user on that output (or UNMUTE ALL) unmutes.
 - **SEC-8** **Network.** Neither firmware has real authentication, and both hand out passwords. The
   app assumes an isolated, trusted network, reads no passwords and stores none.

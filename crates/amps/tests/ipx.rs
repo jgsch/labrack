@@ -687,6 +687,7 @@ async fn fake_recall_applies_the_stored_settings() {
     amp.set(&param("out1.mute"), Value::Bool(false)).await.unwrap();
     amp.set(&param("out1.gain"), f(-7.5)).await.unwrap();
     amp.store_preset(7, "Loud").await.unwrap();
+    assert_eq!(fake.state().store_marks, [2], "two SETPRMs had arrived when the preset was stored");
 
     amp.set(&param("out1.mute"), Value::Bool(true)).await.unwrap();
     amp.set(&param("out1.gain"), f(0.0)).await.unwrap();
