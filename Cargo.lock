@@ -2360,6 +2360,7 @@ dependencies = [
 name = "labrack-app"
 version = "0.1.0"
 dependencies = [
+ "amps",
  "base64",
  "dioxus",
  "dioxus-ssr",

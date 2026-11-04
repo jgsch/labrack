@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::Page;
+use crate::control::{Click, SecondClick};
 
 /// The title of the app and its subtitle, spread letter by letter over the width of the title (UX-2).
 const SUBTITLE: [&str; 14] = ["D", "S", "P", "", "C", "O", "N", "T", "R", "O", "L", "L", "E", "R"];
@@ -18,6 +19,19 @@ pub fn Header(
     #[props(default)] on_page: EventHandler<Page>,
     #[props(default)] on_mute_all: EventHandler<()>,
 ) -> Element {
+    // UNMUTE ALL takes a second click within three seconds (UX-24, SEC-5); MUTE ALL does not wait
+    let mut armed = use_signal(SecondClick::default);
+    let clock = use_hook(|| {
+        let started = std::time::Instant::now();
+        move || started.elapsed()
+    });
+    let asking = all_muted && armed().armed(clock());
+    let label = match (all_muted, asking) {
+        (false, _) => "MUTE ALL",
+        (true, false) => "UNMUTE ALL",
+        (true, true) => "CONFIRM UNMUTE ALL",
+    };
+
     rsx! {
         header { class: "header",
             div { class: "brand",
@@ -49,9 +63,21 @@ pub fn Header(
             button {
                 class: "mute-all",
                 "aria-pressed": "{all_muted}",
-                disabled: all_muted,
-                onclick: move |_| on_mute_all.call(()),
-                if all_muted { "UNMUTE ALL" } else { "MUTE ALL" }
+                onclick: move |_| {
+                    if !all_muted {
+                        on_mute_all.call(());
+                        return;
+                    }
+                    let mut s = armed();
+                    match s.click(clock()) {
+                        Click::Confirmed => {
+                            armed.set(s);
+                            on_mute_all.call(());
+                        }
+                        Click::Armed | Click::Expired => armed.set(s),
+                    }
+                },
+                "{label}"
             }
         }
     }

@@ -3,7 +3,9 @@
 
 use dioxus::prelude::*;
 use labrack_app::control::Bounds;
-use labrack_app::{ConfirmButton, Fader, Header, Meter, Page, Style, ValueField};
+use labrack_app::{
+    AmpView, AmplifiersPage, ConfirmButton, Fader, Header, Level, Meter, Page, Status, Style, ValueField,
+};
 
 thread_local! {
     static PAGE: std::cell::Cell<Page> = const { std::cell::Cell::new(Page::Amplifiers) };
@@ -40,6 +42,14 @@ fn main() {
         dioxus_ssr::render(&dom)
     );
     std::fs::write(dir.join("controls.html"), html).expect("write the controls");
+
+    let mut dom = VirtualDom::new(amplifiers_demo);
+    dom.rebuild_in_place();
+    let html = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>{}</body></html>",
+        dioxus_ssr::render(&dom)
+    );
+    std::fs::write(dir.join("amplifiers-demo.html"), html).expect("write the amplifiers");
 }
 
 /// A row of the controls, for the visual check of `mise run app-shot` (not a page of the app).
@@ -58,5 +68,23 @@ fn controls() -> Element {
                 }
             }
         }
+    }
+}
+
+/// Three amplifiers of the mockup's Amplifiers board, for the visual check of the panels.
+fn amplifiers_demo() -> Element {
+    let mut a = AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", Status::Online);
+    a.levels[0] = Level { label: "OUT 1".into(), db: -18.0, gr: 0.0 };
+    a.levels[1] = Level { label: "OUT 2".into(), db: -24.5, gr: 3.0 };
+    a.preset = Some("02 · Show".into());
+    a.modified = true;
+    let b = AmpView::new(1, "Subs", "IPX", "192.168.1.31", Status::Busy);
+    let mut c = AmpView::new(2, "Delays", "IPD", "192.168.1.24", Status::Disconnected);
+    c.preset = Some("05 · Subs cardioid end-fire".into());
+    c.amp_muted = true;
+    c.muted = [true, true];
+    rsx! {
+        Style {}
+        div { class: "frame", AmplifiersPage { amps: vec![a, b, c] } }
     }
 }

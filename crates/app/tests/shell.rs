@@ -77,8 +77,7 @@ fn mute_all_is_on_every_page() {
     }
 }
 
-// UX-3, SEC-5: the button offers what it does. UNMUTE ALL needs the confirmation of `app-controls`,
-// so until that exists it cannot be clicked.
+// UX-3, SEC-5: the button offers what it does; UNMUTE ALL arms before it acts.
 #[test]
 fn mute_all_becomes_unmute_all() {
     let html = header(Page::Amplifiers, false);
@@ -91,7 +90,7 @@ fn mute_all_becomes_unmute_all() {
     let (attrs, text) = &elements(&html, "button")[0];
     assert_eq!(text, "UNMUTE ALL");
     assert!(has(attrs, "aria-pressed", "true"));
-    assert!(attrs.contains("disabled"), "UNMUTE ALL waits for its confirmation: {attrs}");
+    assert!(!attrs.contains("disabled"), "the first click arms it: {attrs}");
 }
 
 // UX-2: the title, and the subtitle spread over the width of the title letter by letter

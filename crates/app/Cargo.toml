@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 base64 = "0.22"
 dioxus = { version = "0.7", features = ["desktop"] }
+labgruppen = { package = "amps", path = "../amps" }
 labrack-core = { path = "../core" }
 tokio = { version = "1", features = ["rt", "time"] }
 

@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use labgruppen::{Channel, Param, Value};
 use labrack_core::{Hub, Lan, Network, Store, Timing, Update};
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::{Header, Page, Style};
+use crate::amplifiers::{AmpView, Level};
+use crate::{AmplifiersPage, Header, Page, Style};
 
 /// The amp list from the config file, or an empty one that is never written when the file cannot be
 /// read: a file the app does not understand must not be replaced by an empty list.
@@ -67,6 +69,9 @@ pub fn App() -> Element {
     });
     changes();
 
+    let amps = views(&hub);
+    let ids = std::sync::Arc::new(hub.amps().iter().map(|amp| amp.id).collect::<Vec<_>>());
+
     rsx! {
         Style {}
         div { class: "frame",
@@ -77,13 +82,103 @@ pub fn App() -> Element {
                 on_mute_all: {
                     let hub = hub.clone();
                     move |_| {
-                        hub.mute_all();
+                        if hub.all_muted() {
+                            hub.unmute_all();
+                        } else {
+                            hub.mute_all();
+                        }
                     }
                 },
             }
-            main {}
+            main {
+                match page() {
+                    Page::Amplifiers => rsx! {
+                        AmplifiersPage {
+                            amps,
+                            on_search: move |_| page.set(Page::Search),
+                            on_connect: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, connected)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = if connected { hub.connect(id) } else { hub.disconnect(id) };
+                                    }
+                                }
+                            },
+                            on_ip: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, ip): (usize, String)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = hub.set_ip(id, &ip);
+                                    }
+                                }
+                            },
+                            on_mute: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, output, muted)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = hub.set_mute(id, output, muted);
+                                    }
+                                }
+                            },
+                            on_amp_mute: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, muted): (usize, bool)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let _ = hub.mute_amp(id, muted);
+                                    }
+                                }
+                            },
+                            on_preset: move |_| page.set(Page::MixEq),
+                        }
+                    },
+                    Page::MixEq => rsx! { p { class: "todo", "Mix & EQ is the next page." } },
+                    Page::Search => rsx! { p { class: "todo", "Search is the next page." } },
+                }
+            }
         }
     }
+}
+
+/// What the Amplifiers page draws, from the state of the hub.
+pub fn views(hub: &Hub) -> Vec<AmpView> {
+    let amps = hub.amps();
+    amps.iter()
+        .enumerate()
+        .map(|(index, amp)| {
+            let status = hub.status(amp.id).unwrap_or(labrack_core::Status::Disconnected);
+            let mut view = AmpView::new(
+                index,
+                &amp.name,
+                if amp.protocol == labrack_core::Protocol::Ipd { "IPD" } else { "IPX" },
+                &amp.ip,
+                status,
+            );
+            view.online = status == labrack_core::Status::Online;
+            if let Some(meters) = hub.meters(amp.id) {
+                let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
+                for output in 0..2 {
+                    let db = meters.output.get(output).copied().unwrap_or(-60.0);
+                    view.levels[output] = Level {
+                        label: format!("OUT {}", output + 1),
+                        db,
+                        gr: gr.get(output).copied().unwrap_or(0.0),
+                    };
+                }
+            }
+            for output in 0..2 {
+                let param = Param::Mute(Channel::Output(output as u8));
+                view.muted[output] = hub.value(amp.id, &param) == Some(Value::Bool(true));
+            }
+            view.amp_muted = hub.amp_muted(amp.id);
+            view.preset = amp.preset.as_ref().map(|p| format!("{:02} · {}", p.number, p.name));
+            view.modified = hub.modified(amp.id);
+            view
+        })
+        .collect()
 }
 
 /// The zoom that makes the page report `scale`, or `None` when it already does (within 1 %) or when

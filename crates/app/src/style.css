@@ -40,3 +40,30 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .meter-cover{position:absolute;top:0;bottom:0;right:0;background:var(--button);transition:width 0.09s linear}
 .meter-gr{position:relative;height:7px;background:var(--button)}
 .meter-gr-fill{position:absolute;top:0;bottom:0;right:0;background:var(--peach);transition:width 0.09s linear}
+/* Amplifiers page (UX-11 to UX-13). */
+.amp-list{display:flex;flex-direction:column;gap:12px}
+.amp-panel{display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 18px}
+.amp-ident{flex:0 0 320px;width:320px;min-width:0;display:flex;align-items:center;gap:14px}
+.amp-index{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:46px;line-height:1;color:var(--lavender);width:54px}
+.amp-main{flex:1 1 0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.amp-name-row{display:flex;align-items:center;gap:8px;min-width:0}
+.amp-name{flex:1 1 0;min-width:0;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.small-button{flex:0 0 auto;min-height:26px;padding:0 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em}
+.status .dot{display:block;width:8px;height:8px;border-radius:50%}
+.ip-row,.preset-row{display:flex;align-items:center;gap:8px;min-height:28px}
+.label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
+.ip-input{flex:1 1 0;min-width:0;height:28px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
+.preset-link{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;font-size:12px;color:var(--text);background:none;border:0;padding:0}
+.preset-name{min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modified{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:0.08em;color:var(--base);background:var(--lavender);border-radius:3px;padding:1px 5px}
+.amp-meter{flex:1 1 360px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.channel{display:flex;align-items:center;gap:8px}
+.channel .meter{flex:1}
+.channel-text{display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted)}
+.m-button{flex:0 0 44px;width:44px;height:44px;border-radius:4px;font-size:13px;font-weight:600;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.m-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
+.amp-mute{flex:0 0 116px;min-height:48px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.1em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.amp-mute.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
+.empty-state{padding:28px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--panel);border:1px dashed var(--border-strong);border-radius:6px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.todo{color:var(--muted)}
