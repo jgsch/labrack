@@ -41,6 +41,8 @@ No spec change; implements:
   on is never refused by the app (`SEC-6`), so MUTE and MUTE ALL work even when locked; unmuting needs
   the output right. A file load needs both channel rights, because it sets both. A wrong password is
   not an error: the amp does not say, so `login` returns the access it reads afterwards.
+- **UI rule (confirmed by the user):** the app never disables turning a mute on; the controls that
+  rights disable are the ones `Hub` refuses with `AccessDenied`, unmuting included.
 - **Passwords** (`SEC-8`, `BEH-16`): `Hub::login` takes `&str` and hands it to the driver; nothing
   stores it. The IPD echo of the password is masked by the amp, so the client's cache holds no
   password either (the simulator masks it too). The library's `IpdAmp::login` now returns `Access`.

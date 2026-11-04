@@ -10,11 +10,13 @@ Use Phases until v1 ships, then Now / Next / Later.
 - Goal: control IPD and IPX amplifiers from LAB.RACK safely, as specified.
 - Spec: BEH-1 to BEH-41, UX-1 to UX-27, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
 - Changes (`project/changes/active/`), in dependency order:
-  1. `core-amp-list`, then `core-connections` and `core-discovery`
-  2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link`
-  3. `app-shell`, then `app-controls`
-  4. `app-amplifiers-page`, `app-search-page`, `app-mix-eq`, `ipd-access`
-  5. `v1-verification`
+  1. `core-amp-list`, then `core-connections` and `core-discovery` (done, archived)
+  2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link` (done, archived)
+  3. `ipd-access`, core part: user level, rights, login (done; the change stays active for its UI task)
+  4. `app-shell`, then `app-controls`
+  5. `app-amplifiers-page`, `app-search-page`, `app-mix-eq`, then the UI of `ipd-access` (level on the
+     amp panel, disabled controls, login dialog), which needs the amp panel
+  6. `v1-verification`
 - Already in place: ARCH-9, ARCH-10, ARCH-11 (formatting in the mise tasks), ARCH-12
   (`re/flake.nix`).
 - Exit criteria:
@@ -34,7 +36,8 @@ Use Phases until v1 ships, then Now / Next / Later.
   - Meters refresh at about 10 Hz; mute state matches on the Amplifiers page and in Levels.
     (BEH-12, BEH-26, PERF-2)
   - An IPD in a locked level shows its level, disables what its rights forbid, and offers a
-    login. (BEH-13 to BEH-15)
+    login. MUTE and MUTE ALL stay available at every level; only unmuting needs the right.
+    (BEH-13 to BEH-15, SEC-6)
   - The app's pages match the mockup boards. (UX-*, ARCH-7)
   - `mise run lint` and `mise run test` pass.
 

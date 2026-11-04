@@ -34,3 +34,5 @@ No spec change; implements:
 ## Notes
 
 - Depends on `app-controls`, `core-connections` and `core-mute-presets`.
+- The MUTE buttons (output, amp, MUTE ALL) are never disabled by an IPD's access rights, whatever the
+  level: the user must always be able to mute (BEH-14). Unmuting is disabled without the output right.
