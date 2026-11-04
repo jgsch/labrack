@@ -24,7 +24,8 @@ statement with a `BEH-<n>` ID.
 
 - **BEH-7** Every amplifier has an index, a name, a protocol, an IP address, a source (AUTO or
   MANUAL) and a loaded preset. The index is the amp's position in the list, starting at 1; removing
-  an amp renumbers the ones after it. The loaded preset is not saved (`BEH-40`).
+  an amp renumbers the ones after it. The loaded preset is read when the amp goes ONLINE, forgotten
+  when it is not, and never saved (`BEH-40`).
 - **BEH-8** Each amplifier has one status at a time:
 
   | Status | When | Colour |
@@ -44,6 +45,11 @@ statement with a `BEH-<n>` ID.
   controls stay visible but are disabled (nothing can be written to it, see `SEC-1`).
 - **BEH-11** The preset line shows number and name, plus a MODIFIED flag (see `BEH-38`).
 - **BEH-12** Level, gain reduction and mute state of both outputs refresh about every 100 ms.
+- **BEH-42** The app connects to every amp that is not DISCONNECTED when it starts. A failed attempt
+  (BUSY, UNREACHABLE) and a lost connection are retried after 1 s, then after twice as long each
+  time, up to 15 s; the status shows the outcome of the latest attempt, and a lost connection shows
+  RECONNECTING… until its first retry fails. CONNECT and editing the IP try again at once.
+  Connecting only reads (`SEC-1`).
 
 ## IPD access levels
 

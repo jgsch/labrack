@@ -2,15 +2,19 @@
 name = "labrack-core"
 version = "0.1.0"
 edition = "2024"
-description = "LAB.RACK logic without a UI: amplifier list, config, safety rules"
+description = "LAB.RACK logic without a UI: amplifier list, connections, config, safety rules"
 license = "MIT"
 publish = false
 
 [dependencies]
+amps = { path = "../amps" }
+async-trait = "0.1"
 dirs = "7"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 toml = "1"
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "net"] }
