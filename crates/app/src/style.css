@@ -84,7 +84,6 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .amp-mute{flex:0 0 116px;min-height:48px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.1em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .amp-mute.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 .empty-state{padding:28px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--panel);border:1px dashed var(--border-strong);border-radius:6px;display:flex;flex-direction:column;align-items:center;gap:14px}
-.todo{color:var(--muted)}
 /* Search page (UX-14, UX-15, UX-25). */
 .search-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
@@ -211,3 +210,13 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-row .value-unit{right:7px;font-size:10px}
 .eq-none{opacity:0.3}
 .eq-row > :last-child .value-box input{padding:0 6px}
+/* Mixer (UX-18): a row per input, its four sources, and where they go. */
+.mixer-row{display:flex;align-items:stretch;gap:8px;min-width:0}
+.mixer-row+.mixer-row{padding-top:16px;border-top:2px dashed var(--border-strong)}
+.mixer-cards{flex:1 1 0;min-width:0;display:flex;gap:10px}
+.level-card.mix{padding:22px 10px 12px}
+.level-card.mix .card-body{gap:12px}
+.card-fader.dim{opacity:0.6}
+.mixer-go{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;padding:0 12px;background:transparent;color:var(--sapphire);border:0}
+.mixer-go .arrow{font-size:24px;line-height:1}
+.mixer-go .target{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;letter-spacing:0.06em;line-height:1.1}

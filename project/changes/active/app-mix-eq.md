@@ -20,7 +20,7 @@ No spec change; implements:
 ## Tasks
 
 - [ ] Amp selector and tab row with link buttons
-- [ ] Mixer tab
+- [x] Mixer tab
 - [x] Levels tab (IN / OUT / LIMITER rows, same-size dB box and MUTE)
 - [x] EQ tab component (10 bands; outputs add HPF, LPF, delay)
 - [ ] Linked layouts
@@ -52,8 +52,15 @@ No spec change; implements:
   `XOVER_TYPES`, the amps' own, not the mockup's list. Decided with the user and written in UX-20: RESET
   is all off, 0 dB, Q 1.4, keeping type and frequency; DELAY has no checkbox (the amps store a time
   only). `mise run app-shot` renders `eq-in-demo` and `eq-out-demo` beside boards 04 and 05.
-- **Still to do**: the Mixer tab (UX-18: two rows of four source cards with fader, meter, gain and
-  mute, and where they go, against board 02); the linked Levels layout (BEH-34: one row, stereo meters;
+- **Mixer** (2026-11-04): `MixerPage` in `mixeq.rs`, the source cards are the Levels' `LevelCard`
+  (a muted source dims its fader). `→ IN n` opens that input's EQ. The faders take the model's mixer
+  range (-48 to 0 dB on the IPD), not the board's +12. The card meters are the IPD's `raw_input` plus
+  the level; the IPX has no source meter, so its cards show none. The IPD driver marks the polarity of
+  the mixer mute as unverified (`ipd/params.rs`): check it on an amp. `mise run app-shot` renders
+  `mixer-demo` beside board 02.
+- **Seen in the window**: a checkbox the amp refused (amp not ONLINE) stays ticked, as nothing in the
+  view changed to redraw it; the same can happen to a type list.
+- **Still to do**: the linked Levels layout (BEH-34: one row, stereo meters;
   what the IN fader does while only the outputs are linked is open); the preset bar; the boxes show
   `0` where the boards show `0.0` (`control::number`).
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use labgruppen::{Channel, EqField, Param, Value, XoverField};
+use labgruppen::{Channel, EqField, MixerField, Param, Value, XoverField};
 use labrack_core::{AmpId, Hub, Lan, Network, Scan, Side, Store, Timing, Unit, Update};
 use tokio::sync::broadcast::error::RecvError;
 
@@ -9,7 +9,8 @@ use crate::amplifiers::{AmpView, Level};
 use crate::control::Bounds;
 use crate::eq::{self, Band, Filter};
 use crate::mixeq::{
-    AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixTab, MixeqView, Strip,
+    AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixRow, MixTab, MixeqView,
+    SOURCE_NAMES, Strip,
 };
 use crate::search::{KnownAmp, SearchView};
 use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
@@ -401,11 +402,38 @@ pub fn mixeq_view(hub: &Hub, selected: usize, tab: MixTab) -> MixeqView {
             }
         })
         .collect();
+    // the IPD's source meters, before the mixer; the IPX has none, and its cards show no level
+    let sources = meters.extra.get("raw_input").cloned().unwrap_or_default();
+    let mixer = (0..2u8)
+        .map(|i| MixRow {
+            label: format!("IN {}", i + 1),
+            sources: SOURCE_NAMES
+                .iter()
+                .enumerate()
+                .map(|(src, name)| {
+                    let param = |field| Param::Mixer { ch: Channel::Input(i), src: src as u8, field };
+                    let db = hub.value(id, &param(MixerField::Level)).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let muted =
+                        hub.value(id, &param(MixerField::Mute)).and_then(|v| v.as_bool()).unwrap_or(false);
+                    let level_db = match sources.get(src) {
+                        Some(level) if !muted => level + db,
+                        _ => -120.0,
+                    };
+                    Strip { label: (*name).into(), db, level_db, muted }
+                })
+                .collect(),
+        })
+        .collect();
+    let level = Param::Mixer { ch: Channel::Input(0), src: 0, field: MixerField::Level };
+    let range = hub.range(id, &level);
+    let (min, max) = labgruppen::shared_range(&level).unwrap_or((-48.0, 0.0));
+    let mixer_bounds =
+        Bounds::new(range.and_then(|r| r.min).unwrap_or(min), range.and_then(|r| r.max).unwrap_or(max));
     let linked_inputs = hub.linked(id, Side::Inputs);
     let linked_outputs = hub.linked(id, Side::Outputs);
     let eq =
         tab.visible(linked_inputs, linked_outputs).and_then(MixTab::channel).map(|ch| eq_view(hub, id, ch));
-    MixeqView { amps: cards, selected, tab, linked_inputs, linked_outputs, rows, eq }
+    MixeqView { amps: cards, selected, tab, linked_inputs, linked_outputs, rows, mixer, mixer_bounds, eq }
 }
 
 /// What an EQ tab draws for one channel (UX-20); what is not read yet shows the default band.

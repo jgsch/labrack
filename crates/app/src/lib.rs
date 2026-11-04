@@ -18,8 +18,8 @@ pub use components::{ConfirmButton, ErrorText, Fader, Meter, ValueField};
 pub use header::Header;
 pub use labrack_core::Status;
 pub use mixeq::{
-    AmpCard, EqBounds, EqPage, EqView, LevelRow, LevelsPage, LimiterStrip, MixTab, MixeqPage, MixeqView,
-    Strip,
+    AmpCard, EqBounds, EqPage, EqView, LevelRow, LevelsPage, LimiterStrip, MixRow, MixTab, MixeqPage,
+    MixeqView, MixerPage, Strip,
 };
 pub use page::Page;
 pub use search::{SearchPage, SearchView, Switch};

@@ -68,7 +68,11 @@ fn main() {
     );
     std::fs::write(dir.join("levels-demo.html"), html).expect("write the levels page");
 
-    for (name, page) in [("eq-in-demo", eq_in_demo as fn() -> Element), ("eq-out-demo", eq_out_demo)] {
+    for (name, page) in [
+        ("eq-in-demo", eq_in_demo as fn() -> Element),
+        ("eq-out-demo", eq_out_demo),
+        ("mixer-demo", mixer_demo),
+    ] {
         let mut dom = VirtualDom::new(page);
         dom.rebuild_in_place();
         let html = format!(
@@ -243,4 +247,35 @@ fn eq_in_demo() -> Element {
 
 fn eq_out_demo() -> Element {
     eq_demo(labrack_app::MixTab::Out1, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
+}
+
+/// The Mixer with the sources of the mockup's board 02: ANALOG 1 into IN 1, ANALOG 2 into IN 2.
+fn mixer_demo() -> Element {
+    let row = |n: usize, open: usize, level_db: f64| labrack_app::MixRow {
+        label: format!("IN {n}"),
+        sources: labrack_app::mixeq::SOURCE_NAMES
+            .iter()
+            .enumerate()
+            .map(|(src, name)| labrack_app::Strip {
+                label: (*name).into(),
+                db: if src == open { 0.0 } else { -48.0 },
+                level_db: if src == open { level_db } else { -120.0 },
+                muted: src != open,
+            })
+            .collect(),
+    };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let view = labrack_app::MixeqView {
+        amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
+        tab: labrack_app::MixTab::Mixer,
+        mixer: vec![row(1, 0, -27.0), row(2, 1, -3.0)],
+        ..labrack_app::MixeqView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame",
+            Header { page: Page::MixEq, all_muted: false }
+            main { labrack_app::MixeqPage { view } }
+        }
+    }
 }

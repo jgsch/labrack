@@ -1,8 +1,8 @@
 //! Mix & EQ (UX-16 to UX-20): which tabs exist and what they are called (UX-16, UX-17), the Levels
-//! tab (UX-19) and the EQ tabs (UX-20). The Mixer tab follows in the same change.
+//! tab (UX-19), the EQ tabs (UX-20) and the Mixer (UX-18).
 
 use dioxus::prelude::*;
-use labgruppen::{Channel, EQ_TYPES, EqField, Param, Value, XOVER_TYPES, XoverField};
+use labgruppen::{Channel, EQ_TYPES, EqField, MixerField, Param, Value, XOVER_TYPES, XoverField};
 use labrack_core::{Limiter, Side, Unit};
 
 use crate::control::{self, Bounds};
@@ -125,6 +125,17 @@ pub struct LevelRow {
     pub limiter: LimiterStrip,
 }
 
+/// A row of the Mixer (UX-18): the input it feeds and its four sources, each a [`Strip`] named after
+/// the source.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MixRow {
+    pub label: String,
+    pub sources: Vec<Strip>,
+}
+
+/// The names of the four sources, in the order of [`labgruppen::MIXER_SOURCES`] (BEH-3).
+pub const SOURCE_NAMES: [&str; 4] = ["ANALOG 1", "ANALOG 2", "AES 1", "AES 2"];
+
 /// What each box of an EQ tab takes: the model's ranges (SEC-2).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EqBounds {
@@ -156,6 +167,9 @@ pub struct MixeqView {
     pub linked_inputs: bool,
     pub linked_outputs: bool,
     pub rows: Vec<LevelRow>,
+    /// The Mixer's two rows, and the range of its levels (the model's: the IPD tops out at 0 dB).
+    pub mixer: Vec<MixRow>,
+    pub mixer_bounds: Bounds,
     /// The open EQ tab's, when one is open.
     pub eq: Option<EqView>,
 }
@@ -169,6 +183,8 @@ impl Default for MixeqView {
             linked_inputs: false,
             linked_outputs: false,
             rows: Vec::new(),
+            mixer: Vec::new(),
+            mixer_bounds: Bounds { min: -48.0, max: 0.0 },
             eq: None,
         }
     }
@@ -188,31 +204,41 @@ pub const LIMITER_BOXES: [(Unit, &str, &str); 4] = [
 /// The gain reduction scale of a limiter, in dB of reduction (UX-19: as long as the faders).
 const GR_MARKS: [f64; 5] = [0.0, 3.0, 6.0, 9.0, 12.0];
 
-/// An IN or OUT card: the fader with its meter, and the dB box and MUTE of the same size beside it
-/// (UX-19). `out` draws it in the outputs' colour.
+/// An IN or OUT card, or a source of the Mixer: the fader with its meter, and the dB box and MUTE of
+/// the same size beside it (UX-18, UX-19). `out` draws it in the outputs' colour; a muted OUT is dimmed
+/// whole, a muted source only its fader (`mixer`).
 #[component]
 pub fn LevelCard(
     strip: Strip,
     #[props(default)] out: bool,
+    #[props(default)] mixer: bool,
+    #[props(default = MIX_GAIN)] bounds: Bounds,
     #[props(default)] on_gain: EventHandler<f64>,
     #[props(default)] on_mute: EventHandler<bool>,
 ) -> Element {
     let muted = strip.muted;
+    let class = match (out, mixer) {
+        (true, _) => "level-card out",
+        (_, true) => "level-card mix",
+        _ => "level-card",
+    };
     rsx! {
-        section { class: if out { "level-card out" } else { "level-card" }, "aria-label": "{strip.label}",
+        section { class, "aria-label": "{strip.label}",
             span { class: "legend", "{strip.label}" }
             div { class: if out && muted { "card-body dim" } else { "card-body" },
-                Fader {
-                    label: "{strip.label}",
-                    value: strip.db,
-                    bounds: MIX_GAIN,
-                    show_label: false,
-                    show_box: false,
-                    levels: vec![strip.level_db],
-                    on_change: move |db| on_gain.call(db),
+                div { class: if mixer && muted { "card-fader dim" } else { "card-fader" },
+                    Fader {
+                        label: "{strip.label}",
+                        value: strip.db,
+                        bounds,
+                        show_label: false,
+                        show_box: false,
+                        levels: vec![strip.level_db],
+                        on_change: move |db| on_gain.call(db),
+                    }
                 }
                 div { class: "card-side",
-                    ValueField { label: "{strip.label}", value: strip.db, bounds: MIX_GAIN, on_change: move |db| on_gain.call(db) }
+                    ValueField { label: "{strip.label}", value: strip.db, bounds, on_change: move |db| on_gain.call(db) }
                     button {
                         class: if muted { "card-button muted" } else { "card-button" },
                         "aria-pressed": "{muted}",
@@ -224,6 +250,49 @@ pub fn LevelCard(
             }
         }
     }
+}
+
+/// The Mixer tab (UX-18, BEH-27): a row per input, its four sources with their level and mute into
+/// it, and where they go (→ IN n, which opens the EQ of that input).
+#[component]
+pub fn MixerPage(
+    rows: Vec<MixRow>,
+    bounds: Bounds,
+    #[props(default)] on_set: EventHandler<Vec<(Param, Value)>>,
+    #[props(default)] on_tab: EventHandler<MixTab>,
+) -> Element {
+    rsx! {
+        section { class: "tab-panel in",
+            for (input, row) in rows.into_iter().enumerate() {
+                div { class: "mixer-row", key: "{input}",
+                    div { class: "mixer-cards",
+                        for (src, source) in row.sources.into_iter().enumerate() {
+                            LevelCard {
+                                key: "{src}",
+                                strip: source,
+                                mixer: true,
+                                bounds,
+                                on_gain: move |db| on_set.call(vec![(mixer_param(input, src, MixerField::Level), Value::Float(db))]),
+                                on_mute: move |muted| on_set.call(vec![(mixer_param(input, src, MixerField::Mute), Value::Bool(muted))]),
+                            }
+                        }
+                    }
+                    button {
+                        class: "mixer-go",
+                        "aria-label": "Open the EQ of {row.label}",
+                        onclick: move |_| on_tab.call(if input == 0 { MixTab::In1 } else { MixTab::In2 }),
+                        span { class: "arrow", "aria-hidden": "true", "→" }
+                        span { class: "target", "{row.label}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The level or mute of source `src` into input `input`.
+fn mixer_param(input: usize, src: usize, field: MixerField) -> Param {
+    Param::Mixer { ch: Channel::Input(input as u8), src: src as u8, field }
 }
 
 /// The LIMITER card: the gain reduction bar with its scale, and the four linked boxes (BEH-5, UX-19).
@@ -596,7 +665,7 @@ pub fn MixeqPage(
             }
             match tab {
                 MixTab::Levels => rsx! { LevelsPage { view: view.clone(), on_gain, on_mute, on_limiter } },
-                MixTab::Mixer => rsx! { section { class: "tab-panel in", p { class: "todo", "The Mixer tab is next." } } },
+                MixTab::Mixer => rsx! { MixerPage { rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
                 _ => match view.eq.clone() {
                     Some(eq) => rsx! { EqPage { eq, on_set } },
                     None => rsx! { section { class: "tab-panel {side_class}" } },
@@ -773,6 +842,37 @@ mod tests {
         let out = page_html(v);
         assert!(out.contains("10-band EQ") && out.contains(">HPF"), "{out}");
         assert!(!out.contains("LIMITER 1"), "not the Levels tab");
+    }
+
+    // UX-18, BEH-27: the Mixer has a row per input with its four sources, their level and mute, and
+    // where they go; the range is the model's (the IPD mixer tops out at 0 dB)
+    #[test]
+    fn the_mixer_has_the_four_sources_of_each_input() {
+        let rows = (1..=2)
+            .map(|n| MixRow {
+                label: format!("IN {n}"),
+                sources: SOURCE_NAMES
+                    .iter()
+                    .map(|name| Strip {
+                        label: (*name).into(),
+                        db: -6.0,
+                        level_db: -30.0,
+                        muted: *name != "ANALOG 1",
+                    })
+                    .collect(),
+            })
+            .collect();
+        let v = MixeqView { tab: MixTab::Mixer, mixer: rows, ..view(false) };
+        let out = page_html(v);
+        for name in SOURCE_NAMES {
+            assert_eq!(out.matches(&format!("class=\"legend\">{name}<")).count(), 2, "{name}: {out}");
+        }
+        assert_eq!(out.matches("role=\"slider\"").count(), 8);
+        assert!(out.contains("aria-valuemax=\"0\""), "the mixer's range: {out}");
+        assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
+        assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
+        assert!(!out.contains("LINK 1 + 2"), "no link button on the Mixer");
+        assert!(out.contains("tab-panel in"));
     }
 
     // UX-19: the three cards of a row, each named once, with a meter in the fader, the box and MUTE
