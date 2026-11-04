@@ -10,7 +10,7 @@ button:disabled{cursor:not-allowed;filter:none;opacity:0.4}
 button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2px}
 .frame{min-width:900px;min-height:900px;box-sizing:border-box;background:var(--base);color:var(--text);font-family:'IBM Plex Mono',ui-monospace,monospace;padding:28px 40px 40px;display:flex;flex-direction:column;gap:20px}
 .header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:18px 32px;min-height:60px}
-.brand{display:flex;flex-direction:column;gap:6px;width:max-content}
+.brand{display:flex;flex-direction:column;gap:2px;width:max-content}
 .brand h1{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:40px;letter-spacing:0.06em;text-transform:uppercase;line-height:1}
 .subtitle{width:0;min-width:100%;display:flex;justify-content:space-between;font-family:'Barlow Condensed',sans-serif;font-weight:500;font-size:21px;line-height:1;color:var(--muted)}
 .subtitle .gap{flex:0 0 0.5em}
