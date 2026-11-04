@@ -47,13 +47,12 @@ impl SearchView {
     /// The line under a protocol's switch (UX-25): searching, off, or scanning now.
     pub fn status_of(&self, ipd: bool) -> String {
         let (on, count) = if ipd { (self.ipd, self.ipd_count) } else { (self.ipx, self.ipx_count) };
-        let name = if ipd { "IPD" } else { "IPX" };
         if !on {
             format!("Off · not searching · {count} listed")
         } else if self.scanning {
             "Scanning the network…".into()
         } else {
-            format!("Searching · {count} found of {name}")
+            format!("Searching · {count} found")
         }
     }
 
@@ -63,7 +62,7 @@ impl SearchView {
     }
 }
 
-/// A toggle with its status line (UX-25).
+/// A toggle with its status line (UX-25): the whole row is the switch, as on the mockup.
 #[component]
 pub fn Switch(
     name: String,
@@ -72,16 +71,16 @@ pub fn Switch(
     #[props(default)] on_toggle: EventHandler<bool>,
 ) -> Element {
     rsx! {
-        div { class: "switch-row",
-            button {
-                class: if on { "switch on" } else { "switch" },
-                role: "switch",
-                "aria-checked": "{on}",
-                "aria-label": "Search for {name} amplifiers",
-                onclick: move |_| on_toggle.call(!on),
+        button {
+            class: if on { "switch-row on" } else { "switch-row" },
+            role: "switch",
+            "aria-checked": "{on}",
+            "aria-label": "Search for {name} amplifiers",
+            onclick: move |_| on_toggle.call(!on),
+            span { class: "switch", "aria-hidden": "true",
                 span { class: "knob" }
             }
-            div { class: "switch-text",
+            span { class: "switch-text",
                 span { class: "switch-name", "{name} amplifiers" }
                 span { class: "switch-status", "{status}" }
             }
@@ -108,97 +107,106 @@ pub fn SearchPage(
     let ipd_status = view.status_of(true);
     let ipx_status = view.status_of(false);
     rsx! {
-        div { class: "search-grid",
-            section { class: "panel",
-                h2 { "Search" }
-                Switch { name: "IPD", on: view.ipd, status: ipd_status, on_toggle: move |on| on_ipd.call(on) }
-                Switch { name: "IPX", on: view.ipx, status: ipx_status, on_toggle: move |on| on_ipx.call(on) }
-                button {
-                    class: "button scan",
-                    disabled: !scan,
-                    onclick: move |_| on_scan.call(()),
-                    if view.scanning { "SCANNING…" } else { "SCAN NOW" }
-                }
-                if !view.message.is_empty() {
-                    span { class: "scan-message", "{view.message}" }
-                }
-            }
-            section { class: "panel",
-                h2 { "Add an amplifier" }
-                div { class: "add-form",
-                    input {
-                        r#type: "text",
-                        autocomplete: "off",
-                        placeholder: "Name (optional)",
-                        "aria-label": "Name of the amplifier to add",
-                        value: "{name}",
-                        oninput: move |event| name.set(event.value()),
+        div { class: "search-page",
+            div { class: "search-grid",
+                section { class: "panel", "aria-label": "Search the network",
+                    span { class: "caption", "SEARCH THE NETWORK FOR" }
+                    Switch { name: "IPD", on: view.ipd, status: ipd_status, on_toggle: move |on| on_ipd.call(on) }
+                    Switch { name: "IPX", on: view.ipx, status: ipx_status, on_toggle: move |on| on_ipx.call(on) }
+                    button {
+                        class: "button scan",
+                        disabled: !scan,
+                        onclick: move |_| on_scan.call(()),
+                        if view.scanning { "SCANNING…" } else { "SCAN NOW" }
                     }
-                    div { class: "protocol-pick",
-                        button {
-                            class: if ipd_form() { "small-button picked" } else { "small-button" },
-                            "aria-pressed": "{ipd_form()}",
-                            onclick: move |_| ipd_form.set(true),
-                            "IPD"
-                        }
-                        button {
-                            class: if ipd_form() { "small-button" } else { "small-button picked" },
-                            "aria-pressed": "{!ipd_form()}",
-                            onclick: move |_| ipd_form.set(false),
-                            "IPX"
+                    if !view.message.is_empty() {
+                        span { class: "scan-message", role: "status", "{view.message}" }
+                    }
+                }
+                section { class: "panel", "aria-label": "Add an amplifier manually",
+                    span { class: "caption", "ADD AN AMPLIFIER MANUALLY" }
+                    label { class: "field",
+                        "NAME"
+                        input {
+                            r#type: "text",
+                            autocomplete: "off",
+                            "aria-label": "Name of the amplifier to add",
+                            value: "{name}",
+                            oninput: move |event| name.set(event.value()),
                         }
                     }
-                    input {
-                        r#type: "text",
-                        inputmode: "decimal",
-                        autocomplete: "off",
-                        placeholder: "IP address",
-                        "aria-label": "IP address of the amplifier to add",
-                        value: "{ip}",
-                        oninput: move |event| ip.set(event.value()),
+                    div { class: "add-line",
+                        div { class: "field",
+                            "PROTOCOL"
+                            div { class: "protocol-pick",
+                                button {
+                                    class: if ipd_form() { "protocol picked" } else { "protocol" },
+                                    "aria-pressed": "{ipd_form()}",
+                                    onclick: move |_| ipd_form.set(true),
+                                    "IPD"
+                                }
+                                button {
+                                    class: if ipd_form() { "protocol" } else { "protocol picked" },
+                                    "aria-pressed": "{!ipd_form()}",
+                                    onclick: move |_| ipd_form.set(false),
+                                    "IPX"
+                                }
+                            }
+                        }
+                        label { class: "field grow",
+                            "IP ADDRESS"
+                            input {
+                                r#type: "text",
+                                inputmode: "decimal",
+                                autocomplete: "off",
+                                placeholder: "192.168.1.50",
+                                "aria-label": "IP address of the amplifier to add",
+                                value: "{ip}",
+                                oninput: move |event| ip.set(event.value()),
+                            }
+                        }
                     }
-                    button {
-                        class: "button",
-                        onclick: move |_| {
-                            on_add.call((name(), ipd_form(), ip()));
-                            name.set(String::new());
-                            ip.set(String::new());
-                        },
-                        "ADD AMP"
+                    div { class: "add-action",
+                        button {
+                            class: "button add",
+                            onclick: move |_| {
+                                on_add.call((name(), ipd_form(), ip()));
+                                name.set(String::new());
+                                ip.set(String::new());
+                            },
+                            "ADD AMP"
+                        }
+                        if !add_error.is_empty() {
+                            crate::ErrorText { text: add_error }
+                        }
                     }
                 }
-                if !add_error.is_empty() {
-                    crate::ErrorText { text: add_error }
+            }
+            section { class: "panel known", "aria-label": "Known amplifiers",
+                span { class: "caption", "KNOWN AMPLIFIERS" }
+                if view.amps.is_empty() {
+                    div { class: "empty-state known-empty", "No amplifier yet. Turn on a search, or add one manually." }
                 }
-            }
-        }
-        section { class: "panel known",
-            h2 { "Known amplifiers" }
-            if view.amps.is_empty() {
-                div { class: "empty-state", "No amplifier yet. Scan the network or add one above." }
-            }
-            for amp in view.amps {
-                div { class: "known-row", key: "{amp.index}",
-                    span { class: "known-index", "{amp.index + 1:02}" }
-                    input {
-                        class: "known-name",
-                        r#type: "text",
-                        autocomplete: "off",
-                        "aria-label": "Name of amplifier {amp.index + 1}",
-                        value: "{amp.name}",
-                        onchange: move |event| on_rename.call((amp.index, event.value())),
-                    }
-                    span {
-                        class: if amp.protocol == "IPD" { "badge ipd" } else { "badge ipx" },
-                        "{amp.protocol}"
-                    }
-                    span { class: "known-ip", "{amp.ip}" }
-                    span { class: "known-source", "{amp.source}" }
-                    button {
-                        class: "small-button",
-                        "aria-label": "Remove amplifier {amp.index + 1}",
-                        onclick: move |_| on_remove.call(amp.index),
-                        "REMOVE"
+                for amp in view.amps {
+                    div { class: "known-row", key: "{amp.index}",
+                        span { class: "known-index", "{amp.index + 1:02}" }
+                        input {
+                            class: "known-name",
+                            r#type: "text",
+                            autocomplete: "off",
+                            "aria-label": "Name of amplifier {amp.index + 1}",
+                            value: "{amp.name}",
+                            onchange: move |event| on_rename.call((amp.index, event.value())),
+                        }
+                        span { class: if amp.protocol == "IPD" { "badge ipd" } else { "badge ipx" }, "{amp.protocol}" }
+                        span { class: "known-ip", "{amp.ip}" }
+                        span { class: "known-source", "{amp.source}" }
+                        button {
+                            class: "known-remove",
+                            "aria-label": "Remove amplifier {amp.index + 1}",
+                            onclick: move |_| on_remove.call(amp.index),
+                            "REMOVE"
+                        }
                     }
                 }
             }
@@ -252,7 +260,7 @@ mod tests {
         assert_eq!(out.matches("role=\"switch\"").count(), 2);
         assert!(out.contains("aria-checked=\"true\""));
         assert!(out.contains("IPD amplifiers"));
-        assert!(out.contains("Searching · 2 found of IPD"));
+        assert!(out.contains("Searching · 2 found<"), "the mockup's line: {out}");
 
         view.ipx = false;
         let out = page_html(view, "");
@@ -296,8 +304,11 @@ mod tests {
     #[test]
     fn the_add_form_and_its_error() {
         let out = page_html(SearchView::default(), "Enter a valid IPv4 address");
-        assert!(out.contains("Name (optional)"));
-        assert!(out.contains("IP address"));
+        assert!(
+            out.contains(">NAME<") && out.contains(">PROTOCOL<") && out.contains(">IP ADDRESS<"),
+            "{out}"
+        );
+        assert!(out.contains("placeholder=\"192.168.1.50\""));
         assert!(out.contains("ADD AMP"));
         assert!(out.contains("Enter a valid IPv4 address"));
         assert!(out.contains("error-text"));
