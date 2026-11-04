@@ -409,7 +409,7 @@ async fn ipd_command(amp: &dyn Amp, cmd: &IpdCmd) -> Res<()> {
     };
     let ipd = amp.as_any().downcast_ref::<IpdAmp>().ok_or("this is not an IPD amp")?;
     match cmd {
-        IpdCmd::Login { password } => println!("user: {}", ipd.login(password).await?),
+        IpdCmd::Login { password } => println!("user: {}", ipd.login(password).await?.user),
         IpdCmd::Standby { state } => ipd.standby(state == "on").await?,
         IpdCmd::Locate => ipd.locate().await?,
         IpdCmd::Raw { key, set } => {

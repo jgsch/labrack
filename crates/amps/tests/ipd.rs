@@ -366,6 +366,60 @@ async fn access_rights_are_decoded() {
     amp.close().await;
 }
 
+/// BEH-13, BEH-15: the user level and the rights come together; a locked amp, or one with a right
+/// missing, is where the app offers a login.
+#[tokio::test(flavor = "multi_thread")]
+async fn access_is_the_level_and_the_rights() {
+    let (srv, amp) = connect(true).await;
+    let a = amp.access().await.unwrap().expect("an IPD has user levels");
+    assert_eq!((a.user.as_str(), a.locked, a.needs_login()), ("User", false, false));
+    assert!(
+        a.rights.input_channel && a.rights.output_channel && a.rights.load_preset && a.rights.save_preset
+    );
+
+    srv.set_access(5, 0);
+    let a = amp.access().await.unwrap().unwrap();
+    assert_eq!((a.user.as_str(), a.locked, a.needs_login()), ("Locked", true, true));
+
+    // not locked, but a right is missing
+    srv.set_access(4, 0x1 | 0x2 | 0x4 | 0x40000);
+    let a = amp.access().await.unwrap().unwrap();
+    assert_eq!((a.user.as_str(), a.locked, a.needs_login()), ("User", false, true));
+
+    // a level this app does not know is shown as it is
+    srv.set_access(9, 0xFFFF_FFFF);
+    assert_eq!(amp.access().await.unwrap().unwrap().user, "unknown(9)");
+    amp.close().await;
+}
+
+/// BEH-15, BEH-16: a login takes the level the password belongs to and returns what that level may do;
+/// a wrong password changes nothing. The password is never read from the amp, and the amp's masked
+/// echo is all that is kept of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn login_gives_the_level_and_keeps_no_password() {
+    let (srv, amp) = connect(true).await;
+    srv.set_access(5, 0);
+
+    let wrong = amp.login("Wrong123").await.unwrap();
+    assert_eq!((wrong.user.as_str(), wrong.locked), ("Locked", true));
+
+    let now = amp.login("Password").await.unwrap();
+    assert_eq!((now.user.as_str(), now.locked, now.needs_login()), ("User", false, false));
+    assert_eq!(amp.access().await.unwrap().unwrap(), now);
+
+    let key = Key::new(S_GLOBAL, M_CHECK_PASSWORD, 0, 0);
+    let kept = format!("{:?}", amp.client().cached(key));
+    assert!(!kept.contains("Password") && !kept.contains("Wrong123"), "{kept}");
+
+    // everything the app did so far, connecting and reading the state included
+    amp.snapshot().await.unwrap();
+    amp.status().await.unwrap();
+    let secret = |k: &Key| matches!(k.member_id, M_SET_PASSWORD | M_CHECK_PASSWORD | M_PIN | M_CHECK_PIN);
+    let read: Vec<Key> = srv.reads().into_iter().filter(secret).collect();
+    assert_eq!(read, [], "passwords and PINs are never read");
+    amp.close().await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn snapshot_and_restore() {
     let (_srv, amp) = connect(true).await;

@@ -107,6 +107,10 @@ pub struct SimAmp {
     presets: HashMap<i64, HashMap<Key, Raw>>,
     /// Writes to channel 2 of a linked pair.
     link_violations: Vec<Key>,
+    /// Key of every GET item the amp answered, oldest first.
+    reads: Vec<Key>,
+    /// The access rights a successful login gives.
+    login_rights: u32,
 }
 
 /// The settings a linked pair shares (docs/ipd-protocol.md: gain and EQ seen on a real IPD). Mutes and
@@ -183,6 +187,8 @@ impl SimAmp {
             writes: Vec::new(),
             presets: HashMap::new(),
             link_violations: Vec::new(),
+            reads: Vec::new(),
+            login_rights: 0xFFFF_FFFF,
         }
     }
 
@@ -310,7 +316,8 @@ impl SimAmp {
                 if key.struct_id == S_COMMAND {
                     self.command(key.num);
                 } else if key.member_id == M_CHECK_PASSWORD {
-                    self.values.insert(*key, v.clone());
+                    // the echo is masked, as on the real amp: the password is not kept
+                    self.values.insert(*key, Raw::Text("********".into()));
                     for level in 1..=5u8 {
                         let stored = self.values.get(&GLOBAL(M_SET_PASSWORD, level));
                         if stored
@@ -318,6 +325,8 @@ impl SimAmp {
                             .is_some_and(|(s, t)| s.text().is_some_and(|s| s.trim_end() == t.trim_end()))
                         {
                             self.values.insert(GLOBAL(M_CURRENT_USER, 0), Raw::Int(level as i64));
+                            self.values
+                                .insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(self.login_rights as i64));
                         }
                     }
                 } else if is_shared(key.struct_id) && key.channel & 0x7F == 1 && self.linked(key.channel) {
@@ -331,6 +340,9 @@ impl SimAmp {
                     }
                     self.values.insert(*key, v);
                 }
+            }
+            if *op == OP_GET {
+                self.reads.push(*key);
             }
             match echo {
                 Some(value) => {
@@ -404,6 +416,24 @@ impl SimServer {
     /// Key of every SET the simulated amp processed so far, oldest first. Reads are not listed.
     pub fn writes(&self) -> Vec<Key> {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).writes.clone()
+    }
+
+    /// Key of every GET the simulated amp answered so far, oldest first.
+    pub fn reads(&self) -> Vec<Key> {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).reads.clone()
+    }
+
+    /// Put the amp at user level `level` (index in `USERS`) with these access rights, as if someone
+    /// had logged in or out at the front panel.
+    pub fn set_access(&self, level: i64, rights: u32) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        amp.values.insert(GLOBAL(M_CURRENT_USER, 0), Raw::Int(level));
+        amp.values.insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(rights as i64));
+    }
+
+    /// The access rights a successful login gives (all of them unless set).
+    pub fn set_login_rights(&self, rights: u32) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).login_rights = rights;
     }
 
     pub fn shutdown(&self) {

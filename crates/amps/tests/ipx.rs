@@ -420,6 +420,15 @@ async fn snapshot_matches_single_reads_and_restores() {
     assert_eq!(amp.snapshot().await.unwrap().params, snap.params);
 }
 
+/// BEH-13: user levels are an IPD feature; an IPX has none to show, and no login.
+#[tokio::test]
+async fn an_ipx_has_no_user_level_and_no_login() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    assert_eq!(amp.access().await.unwrap(), None);
+    assert!(matches!(amp.login("Password").await, Err(Error::Unsupported(_))));
+}
+
 #[tokio::test]
 async fn status_presets_and_recall() {
     let fake = FakeAmp::start().await;

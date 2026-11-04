@@ -470,6 +470,51 @@ pub struct RestoreReport {
     pub failed: Vec<(String, String)>,
 }
 
+/// What the current user level of an amp may do: the bit mask of the amp, only the rights the app uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AccessRights {
+    pub raw: u32,
+    pub input_channel: bool,
+    pub output_channel: bool,
+    pub load_preset: bool,
+    pub save_preset: bool,
+    pub unit_name: bool,
+}
+
+impl AccessRights {
+    pub fn from_raw(raw: u32) -> Self {
+        AccessRights {
+            raw,
+            input_channel: raw & 0x1 != 0,
+            output_channel: raw & 0x2 != 0,
+            load_preset: raw & 0x4 != 0,
+            save_preset: raw & 0x8 != 0,
+            unit_name: raw & 0x40000 != 0,
+        }
+    }
+
+    /// Every right the app uses.
+    pub fn complete(&self) -> bool {
+        self.input_channel && self.output_channel && self.load_preset && self.save_preset && self.unit_name
+    }
+}
+
+/// The user level of an amp and what it may do (IPD only, see [`crate::Amp::access`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Access {
+    /// The level by name: AllDSP, Factory, Developer, Admin, User, Locked, or `unknown(n)`.
+    pub user: String,
+    pub locked: bool,
+    pub rights: AccessRights,
+}
+
+impl Access {
+    /// Where an app offers a login: the amp is locked or a right is missing.
+    pub fn needs_login(&self) -> bool {
+        self.locked || !self.rights.complete()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum AmpEvent {
     Meters(Meters),

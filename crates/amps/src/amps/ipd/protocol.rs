@@ -94,29 +94,10 @@ pub const CMD_LOCATE: u8 = 6;
 
 pub const USERS: [&str; 6] = ["AllDSP", "Factory", "Developer", "Admin", "User", "Locked"];
 
-/// What the current user level may do (Global ACCESS_RIGHTS bit mask); only the rights the app uses.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AccessRights {
-    pub raw: u32,
-    pub input_channel: bool,
-    pub output_channel: bool,
-    pub load_preset: bool,
-    pub save_preset: bool,
-    pub unit_name: bool,
-}
+/// The user level that is locked: the last of [`USERS`].
+pub const USER_LOCKED: i64 = 5;
 
-impl AccessRights {
-    pub fn from_raw(raw: u32) -> Self {
-        AccessRights {
-            raw,
-            input_channel: raw & 0x1 != 0,
-            output_channel: raw & 0x2 != 0,
-            load_preset: raw & 0x4 != 0,
-            save_preset: raw & 0x8 != 0,
-            unit_name: raw & 0x40000 != 0,
-        }
-    }
-}
+pub use crate::model::AccessRights;
 
 /// Hardware status flags (Global HARDWARE_STATUS), bit 1 excluded (it means "init done").
 pub const STATUS_FLAGS: &[(u32, &str)] = &[

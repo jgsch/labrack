@@ -79,12 +79,6 @@ impl IpdAmp {
         &self.client
     }
 
-    /// Log in with a password (8 characters) and return the resulting user level.
-    pub async fn login(&self, password: &str) -> Result<String> {
-        self.client.login(password).await?;
-        self.user().await
-    }
-
     pub async fn user(&self) -> Result<String> {
         let raw = self.client.get_raw(global(M_CURRENT_USER), None).await?;
         Ok(user_name(raw.int().unwrap_or(-1)))
@@ -235,6 +229,29 @@ impl Amp for IpdAmp {
             out[*i] = Some(r);
         }
         out.into_iter().map(|r| r.unwrap_or(Ok(()))).collect()
+    }
+
+    async fn access(&self) -> Result<Option<Access>> {
+        let keys = [global(M_CURRENT_USER), global(M_ACCESS_RIGHTS)];
+        let vals = self.client.get_many(&keys, Duration::from_secs(15)).await?;
+        let get = |i: usize| {
+            vals[i]
+                .as_ref()
+                .and_then(Raw::int)
+                .ok_or_else(|| Error::Timeout(format!("no value for key {}", keys[i])))
+        };
+        let (level, rights) = (get(0)?, get(1)?);
+        Ok(Some(Access {
+            user: user_name(level),
+            locked: level == USER_LOCKED,
+            rights: AccessRights::from_raw(rights as u32),
+        }))
+    }
+
+    /// Send a password (8 characters; shorter ones are padded) and read the access afterwards.
+    async fn login(&self, password: &str) -> Result<Access> {
+        self.client.login(password).await?;
+        self.access().await?.ok_or_else(|| Error::Protocol("no access after the login".into()))
     }
 
     async fn status(&self) -> Result<Status> {

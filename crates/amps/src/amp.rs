@@ -57,6 +57,18 @@ pub trait Amp: Send + Sync {
 
     async fn status(&self) -> Result<Status>;
 
+    /// The current user level and what it may do; `None` for amps without user levels (the IPX).
+    async fn access(&self) -> Result<Option<Access>> {
+        Ok(None)
+    }
+
+    /// Log in with a password and return the access the amp gives afterwards. The amp does not say
+    /// whether the password was right: a wrong one leaves the level as it was. The password is used for
+    /// this call only. Errors: [`Error::Unsupported`] for amps without user levels.
+    async fn login(&self, _password: &str) -> Result<Access> {
+        Err(Error::Unsupported("user levels".into()))
+    }
+
     /// Usable preset slots, numbered as on the amp.
     fn preset_slots(&self) -> RangeInclusive<u32>;
 
