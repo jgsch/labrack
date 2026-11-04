@@ -184,10 +184,6 @@ impl Writer {
         Writer { coalescer: Mutex::new(Coalescer::new(interval)), wake: Notify::new() }
     }
 
-    pub fn push(&self, param: Param, value: Value) {
-        self.push_all([(param, value)]);
-    }
-
     /// Values that belong together are queued together, so they go out in one batch.
     pub fn push_all(&self, values: impl IntoIterator<Item = (Param, Value)>) {
         let mut coalescer = self.coalescer.lock().unwrap_or_else(|e| e.into_inner());

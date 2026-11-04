@@ -15,6 +15,9 @@ pub enum Error {
     NotControllable,
     #[error("The settings of the amplifier are still being read")]
     NotLoaded,
+    /// A setting of channel 2 of a linked pair: it follows channel 1.
+    #[error("This channel follows channel 1 while the pair is linked")]
+    Linked,
     /// A value outside the range of the control, of the wrong kind, NaN or infinite.
     #[error("{0}")]
     Invalid(String),

@@ -12,16 +12,13 @@ use labgruppen::{Channel, LimiterField, Param, Value};
 use super::{Hub, Session, lock};
 use crate::dsp::Range;
 use crate::limiter::{Limiter, Unit, snap};
+use crate::link::Side;
 use crate::{Error, Result};
 
 const OUTPUTS: u8 = 2;
 
 fn param(output: u8, field: LimiterField) -> Param {
     Param::Limiter { ch: Channel::Output(output), field }
-}
-
-fn is_ipx(session: &Session) -> bool {
-    session.amp.info().driver == "ipx"
 }
 
 fn round6(x: f64) -> f64 {
@@ -43,7 +40,7 @@ impl Hub {
         let number = |field: LimiterField| -> Option<f64> {
             lock(&self.0.shared.live).get(&id)?.values.get(&param(output, field))?.as_f64()
         };
-        if is_ipx(session) {
+        if session.is_ipx() {
             Some(Limiter::from_vpk(number(LimiterField::Threshold)?, number(LimiterField::Impedance)?))
         } else {
             let ohm = *self.0.shared.store().get(id)?.load_ohms.get(usize::from(output))?;
@@ -96,12 +93,16 @@ impl Hub {
             return Err(Error::NotControllable);
         }
         let session = self.session(id)?;
+        // the second output follows the first while the pair is linked
+        if output == 1 && self.linked(id, Side::Outputs) {
+            return Err(Error::Linked);
+        }
         let label = unit.label();
         if !value.is_finite() || (unit != Unit::Ohm && value <= 0.0) {
             return Err(Error::Invalid(format!("{label} must be a positive number")));
         }
 
-        let ipx = is_ipx(&session);
+        let ipx = session.is_ipx();
         let load =
             || self.0.shared.store().get(id).and_then(|a| a.load_ohms.get(usize::from(output)).copied());
         let current = match self.limiter_of(id, output, &session) {
@@ -142,25 +143,39 @@ impl Hub {
         }
 
         let threshold = unit != Unit::Ohm;
-        match (ipx, threshold) {
-            (true, true) => session.writer.push_all([
+        let writes = match (ipx, threshold) {
+            (true, true) => vec![
                 (param(output, LimiterField::Threshold), Value::Float(new.vpk)),
                 (param(output, LimiterField::Impedance), Value::Float(new.ohm)),
                 (param(output, LimiterField::Power), Value::Float(new.watt)),
                 (param(output, LimiterField::ThresholdDbu), Value::Float(new.dbu)),
-            ]),
-            (true, false) => session.writer.push_all([
+            ],
+            (true, false) => vec![
                 (param(output, LimiterField::Impedance), Value::Float(new.ohm)),
                 (param(output, LimiterField::Power), Value::Float(new.watt)),
-            ]),
-            (false, true) => {
-                session.writer.push(param(output, LimiterField::Threshold), Value::Float(new.dbu))
-            }
+            ],
+            (false, true) => vec![(param(output, LimiterField::Threshold), Value::Float(new.dbu))],
             (false, false) => {
-                self.0.shared.store().set_load(id, output, new.ohm)?;
+                // the load is the app's: a linked pair has one
+                let linked = self.linked(id, Side::Outputs);
+                let mut store = self.0.shared.store();
+                store.set_load(id, output, new.ohm)?;
+                if linked {
+                    store.set_load(id, 1, new.ohm)?;
+                }
+                drop(store);
                 self.0.shared.emit(crate::Update::Settings(id));
+                return Ok(());
+            }
+        };
+        // a linked IPX gets channel 2 written as well; a linked IPD mirrors by itself
+        let mut routed = Vec::new();
+        for (setting, value) in writes {
+            for target in self.route(id, &session, &setting)? {
+                routed.push((target, value.clone()));
             }
         }
+        session.writer.push_all(routed);
         Ok(())
     }
 }

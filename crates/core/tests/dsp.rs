@@ -63,6 +63,9 @@ async fn the_state_is_announced_and_forgotten_when_offline() {
 #[tokio::test]
 async fn controls_are_written_to_the_ipx_and_kept_in_the_state() {
     let (hub, id, fake) = online_ipx(timing()).await;
+    // the fixture is from an amp whose inputs were linked, and channel 2 of a linked pair is not editable
+    hub.set_link(id, labrack_core::Side::Inputs, false).await.unwrap();
+    let before = fake.writes();
     let table = [
         ("out1.gain", f(3.25)),
         ("in2.gain", f(-10.0)),
@@ -87,7 +90,7 @@ async fn controls_are_written_to_the_ipx_and_kept_in_the_state() {
         wait_value(&hub, id, name, value.clone()).await;
         assert_eq!(&ipx_value(&fake, name), value, "{name} on the amp");
     }
-    assert_eq!(fake.writes(), table.len());
+    assert_eq!(fake.writes() - before, table.len());
 }
 
 #[tokio::test]

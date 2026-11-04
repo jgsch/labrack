@@ -126,13 +126,18 @@ statement with a `BEH-<n>` ID.
 ## Link
 
 - **BEH-31** Inputs and outputs can each be linked. In a linked pair, channel 1 is the master:
-  every setting of channel 2 follows channel 1, faders and limiter included.
-- **BEH-32** Linking copies channel 1's settings to channel 2. The amps differ, and the app hides
-  it:
+  channel 2 follows channel 1 in the gain, delay, EQ, output filters and output limiter (faders and
+  limiter included). The mute stays per output (`SEC-7`: a link never unmutes) and the mixer per input
+  channel. A setting of channel 2 of a linked pair cannot be edited; the app refuses it.
+- **BEH-32** Linking makes channel 2 equal to channel 1. The amps differ, and the app hides it:
+  - Both: the app reads every shared setting of channel 1, checks it (ranges, ceilings: if one fails
+    nothing is written), mutes the outputs (`SEC-6`), writes it to channel 2 while the link is still
+    off, then switches the link on. It does not rely on what the amp copies by itself.
   - IPD: the amp mirrors channel 1 to channel 2 itself. The app writes only channel 1 and never
     writes channel 2 while linked (the amp ignores it and may stop answering).
-  - IPX: the amp copies once when the link is switched on, then keeps the channels independent.
-    The app writes every channel 1 change to channel 2 as well.
+  - IPX: the amp copies the gain and the limiter dBu once when the link is switched on, then keeps
+    the channels independent. The app writes every channel 1 change to channel 2 as well. A change
+    made on the front panel to a linked channel 1 is not copied.
 - **BEH-33** Linked inputs share one Inputs EQ; linked outputs share one Outputs EQ.
 - **BEH-34** In Levels, linked outputs show one fader and one limiter, with stereo meters (two
   meters and two gain reduction bars).

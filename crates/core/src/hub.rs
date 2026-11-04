@@ -17,12 +17,14 @@ use tokio::task::JoinSet;
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 mod limiter;
+mod link;
 mod mute;
 mod presets;
 
 pub use presets::LoadReport;
 
 use crate::dsp::{self, Range, Writer};
+use crate::link as pair;
 use crate::status::{Event, Status};
 use crate::store::{Amp, AmpId, Ceilings, Preset, Protocol, Store, Switches};
 use crate::{Connector, Error, Finder, Result};
@@ -134,6 +136,12 @@ struct Session {
     gate: Arc<tokio::sync::Mutex<()>>,
 }
 
+impl Session {
+    fn is_ipx(&self) -> bool {
+        self.amp.info().driver == "ipx"
+    }
+}
+
 struct Shared {
     store: Mutex<Store>,
     live: Mutex<HashMap<AmpId, Live>>,
@@ -199,7 +207,7 @@ impl Shared {
     /// change, and of every confirmed write of the app. A change of something the app already knew
     /// marks the preset MODIFIED (BEH-38); the first sight of a value, as the state is read, does not.
     fn observed(&self, id: AmpId, param: &Param, value: &Value, own: bool) {
-        let (changed, flipped) = {
+        let (changed, flipped, twin) = {
             let mut live = lock(&self.live);
             let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
             let old = amp.values.insert(param.clone(), value.clone());
@@ -207,10 +215,22 @@ impl Shared {
             let modifies = changed && (old.is_some() || own);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
-            (changed, flipped)
+            // an IPD mirrors a linked pair by itself and tells nothing of channel 2: the state follows
+            let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
+            let linked = |side: pair::Side| amp.values.get(&side.flag()) == Some(&Value::Bool(true));
+            let twin = pair::follows(param)
+                .filter(|side| ipd && !pair::is_second(param) && linked(*side))
+                .and_then(|_| pair::second(param));
+            if let Some(twin) = &twin {
+                amp.values.insert(twin.clone(), value.clone());
+            }
+            (changed, flipped, twin)
         };
         if changed || own {
             self.emit(Update::Changed(id, param.clone(), value.clone()));
+            if let Some(twin) = twin {
+                self.emit(Update::Changed(id, twin, value.clone()));
+            }
         }
         if flipped {
             self.emit(Update::Modified(id, true));
@@ -358,7 +378,8 @@ impl Hub {
         }
         let spec = session.amp.spec(&param).ok_or(Error::NotControllable)?;
         let checked = dsp::check(&param, &spec, &value, &ceilings)?;
-        session.writer.push(param, checked);
+        let targets = self.route(id, &session, &param)?;
+        session.writer.push_all(targets.into_iter().map(|target| (target, checked.clone())));
         Ok(())
     }
 

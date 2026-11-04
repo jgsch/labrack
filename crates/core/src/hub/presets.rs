@@ -16,6 +16,7 @@ use tokio::time::timeout;
 
 use super::{Hub, Session, load_state};
 use crate::dsp;
+use crate::link::{self, Side};
 use crate::store::{AmpId, Ceilings, Preset};
 use crate::{Error, Result};
 
@@ -31,7 +32,7 @@ pub struct LoadReport {
 
 /// What the change does to the mutes the amp holds afterwards.
 #[derive(Clone, Copy)]
-enum Effect {
+pub(super) enum Effect {
     /// The amp swaps its whole configuration, mutes included (a recall): what it holds afterwards is
     /// the preset's. An output ends muted if it was or the preset mutes it.
     Replaces,
@@ -113,7 +114,8 @@ impl Hub {
         let snapshot: Snapshot =
             serde_json::from_str(&text).map_err(|e| Error::Invalid(format!("Not a settings file: {e}")))?;
         let ceilings = self.0.shared.store().get(id).ok_or(Error::UnknownAmp)?.ceilings;
-        let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings)?;
+        let linked = [self.linked(id, Side::Inputs), self.linked(id, Side::Outputs)];
+        let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings, linked)?;
 
         let report = self
             .bulk(id, &session, Effect::Keeps, |amp| async move {
@@ -156,7 +158,13 @@ impl Hub {
     /// 4. read the mutes again and put them right: see [`Effect`].
     ///
     /// Any failure stops there and leaves the outputs as they are, muted.
-    async fn bulk<T, F, Fut>(&self, id: AmpId, session: &Session, effect: Effect, change: F) -> Result<T>
+    pub(super) async fn bulk<T, F, Fut>(
+        &self,
+        id: AmpId,
+        session: &Session,
+        effect: Effect,
+        change: F,
+    ) -> Result<T>
     where
         F: FnOnce(Arc<dyn labgruppen::Amp>) -> Fut,
         Fut: Future<Output = labgruppen::Result<T>>,
@@ -201,7 +209,12 @@ impl Hub {
 
 /// Check a settings file against the amp before anything is written: the part of it that can be
 /// written, and why the rest cannot.
-fn plan_load(session: &Session, snapshot: &Snapshot, ceilings: &Ceilings) -> Result<(Snapshot, Vec<String>)> {
+fn plan_load(
+    session: &Session,
+    snapshot: &Snapshot,
+    ceilings: &Ceilings,
+    linked: [bool; 2],
+) -> Result<(Snapshot, Vec<String>)> {
     if snapshot.format != Snapshot::FORMAT {
         return Err(Error::Invalid(format!(
             "Not a settings file this version reads (format {})",
@@ -227,12 +240,29 @@ fn plan_load(session: &Session, snapshot: &Snapshot, ceilings: &Ceilings) -> Res
             skipped.push(format!("{name}: this amplifier does not have it"));
             continue;
         };
-        match dsp::check(&param, &spec, value, ceilings) {
-            Ok(checked) => {
-                accepted.params.insert(name.clone(), checked);
+        let checked = match dsp::check(&param, &spec, value, ceilings) {
+            Ok(checked) => checked,
+            Err(e) => {
+                refused.push(format!("{name}: {e}"));
+                continue;
             }
-            Err(e) => refused.push(format!("{name}: {e}")),
+        };
+        // a linked pair is one channel: channel 2 is not written from the file; the IPX gets channel 1's
+        // value there, the IPD mirrors it itself
+        if let Some(side) = link::follows(&param)
+            && linked[side as usize]
+        {
+            if link::is_second(&param) {
+                skipped.push(format!("{name}: follows channel 1 while the pair is linked"));
+                continue;
+            }
+            if session.is_ipx()
+                && let Some(twin) = link::second(&param)
+            {
+                accepted.params.insert(twin.to_string(), checked.clone());
+            }
         }
+        accepted.params.insert(name.clone(), checked);
     }
     if !refused.is_empty() {
         let first: Vec<_> = refused.iter().take(3).cloned().collect();
