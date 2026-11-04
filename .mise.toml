@@ -29,6 +29,14 @@ python3 -m unittest discover -s scripts
 description = "Build the workspace"
 run = "nix develop -c cargo build --workspace"
 
+[tasks.run]
+description = "Run the app (LAB.RACK window)"
+run = "nix develop -c cargo run -p labrack-app"
+
+[tasks.app-shot]
+description = "Screenshot the app's pages into target/app/ and compare their headers with the mockup boards (extra arguments go to scripts/app_shot.py)"
+run = "nix develop -c python3 scripts/app_shot.py"
+
 [tasks.sim]
 description = "Run the IPD simulator (extra arguments go to `labgruppen sim`)"
 run = "nix develop -c cargo run -p amps --bin labgruppen -- sim"

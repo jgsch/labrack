@@ -1,0 +1,23 @@
+[package]
+name = "labrack-app"
+version = "0.1.0"
+edition = "2024"
+description = "LAB.RACK: the Dioxus desktop app"
+license = "MIT"
+publish = false
+
+[lib]
+name = "labrack_app"
+
+[[bin]]
+name = "labrack"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+dioxus = { version = "0.7", features = ["desktop"] }
+labrack-core = { path = "../core" }
+tokio = { version = "1", features = ["rt", "time"] }
+
+[dev-dependencies]
+dioxus-ssr = "0.7"

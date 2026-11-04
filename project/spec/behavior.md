@@ -118,7 +118,8 @@ statement with a `BEH-<n>` ID.
 
 - **BEH-24** Mute exists per output, per amplifier (both outputs) and globally (MUTE ALL, which
   becomes UNMUTE ALL when everything is muted).
-- **BEH-25** MUTE ALL and UNMUTE ALL act on the amps that are ONLINE.
+- **BEH-25** MUTE ALL and UNMUTE ALL act on the amps that are ONLINE, and on their two outputs only:
+  inputs and the mixer are never touched.
 - **BEH-26** A muted output shows MUTED and an empty meter. Mute state is the same on the
   Amplifiers page and in the Levels tab.
 
