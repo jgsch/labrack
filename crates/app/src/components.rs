@@ -8,7 +8,8 @@ use crate::control::{self, Bounds, Click, SecondClick};
 /// A vertical fader with its dB scale, its box and its label, as on the Mix & EQ pages: a click never
 /// moves the cap, dragging moves it from where the drag started, keys and the wheel step it (UX-22).
 /// The level meters (`levels`, in dB on the fader's own scale; two for a stereo pair) run inside the
-/// track, behind the cap.
+/// track, behind the cap. `scale` is what the ruler shows when it is wider than what may be set
+/// (the Mixer's ruler is the Levels' +12 to -48, its faders stop at the model's 0 dB).
 #[component]
 pub fn Fader(
     label: String,
@@ -22,20 +23,22 @@ pub fn Fader(
     #[props(default = true)]
     show_box: bool,
     #[props(default)] levels: Vec<f64>,
+    #[props(default)] scale: Option<Bounds>,
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
     let mut drag = use_signal(|| None::<control::Drag>);
-    let span = (bounds.max - bounds.min).max(f64::MIN_POSITIVE);
-    let at = move |db: f64| ((db - bounds.min) / span).clamp(0.0, 1.0) * 100.0;
+    let ruler = scale.unwrap_or(bounds);
+    let span = (ruler.max - ruler.min).max(f64::MIN_POSITIVE);
+    let at = move |db: f64| ((db - ruler.min) / span).clamp(0.0, 1.0) * 100.0;
     let start = at(value);
     let text = control::number(value);
     let aria = label.clone();
     let spoken = format!("{text} {unit}");
     let box_label = label.clone();
-    let marks = control::scale_marks(bounds);
+    let marks = control::scale_marks(ruler);
     // a tick every 6 dB, on a track as tall as --fader-h
     let tick = 6.0 / span;
-    let zero = bounds.contains(0.0).then(|| at(0.0));
+    let zero = ruler.contains(0.0).then(|| at(0.0));
     // green to -12 dB, yellow to 0 dB, red above, wherever those sit on this fader's scale
     let colours = format!(
         "linear-gradient(to top,var(--green) 0%,var(--green) {y}%,var(--yellow) {y}%,var(--yellow) {r}%,var(--red) {r}%,var(--red) 100%)",

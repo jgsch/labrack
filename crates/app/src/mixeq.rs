@@ -215,6 +215,9 @@ pub fn LevelCard(
     #[props(default)] out: bool,
     #[props(default)] mixer: bool,
     #[props(default = MIX_GAIN)] bounds: Bounds,
+    /// The ruler, when wider than `bounds`.
+    #[props(default)]
+    scale: Option<Bounds>,
     #[props(default)] on_gain: EventHandler<f64>,
     #[props(default)] on_mute: EventHandler<bool>,
 ) -> Element {
@@ -233,6 +236,7 @@ pub fn LevelCard(
                         label: "{strip.label}",
                         value: strip.db,
                         bounds,
+                        scale,
                         show_label: false,
                         show_box: false,
                         levels: vec![strip.level_db],
@@ -274,6 +278,8 @@ pub fn MixerPage(
                                 strip: source,
                                 mixer: true,
                                 bounds,
+                                // the same ruler as the Levels, so the two tabs read alike
+                                scale: Some(MIX_GAIN),
                                 on_gain: move |db| on_set.call(vec![(mixer_param(input, src, MixerField::Level), Value::Float(db))]),
                                 on_mute: move |muted| on_set.call(vec![(mixer_param(input, src, MixerField::Mute), Value::Bool(muted))]),
                             }
@@ -913,6 +919,8 @@ mod tests {
         }
         assert_eq!(out.matches("role=\"slider\"").count(), 8);
         assert!(out.contains("aria-valuemax=\"0\""), "the mixer's range: {out}");
+        assert_eq!(out.matches(">+12<").count(), 8, "the Levels' ruler, +12 to -48: {out}");
+        assert_eq!(out.matches(">\u{2212}48<").count(), 8);
         assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
         assert!(out.contains("Link IN 1 and IN 2"), "the Mixer links the inputs: {out}");
