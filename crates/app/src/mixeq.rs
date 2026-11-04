@@ -38,8 +38,8 @@ impl MixTab {
         }
     }
 
-    /// The pair a tab belongs to, which its LINK button links: the Mixer feeds the inputs (its own
-    /// settings stay per input, BEH-31), the Levels tab is the outputs' (as on the mockup).
+    /// The side a tab belongs to, which gives its colour: the Mixer feeds the inputs, the Levels tab
+    /// is the outputs'.
     pub fn side(self) -> Side {
         match self {
             MixTab::Mixer | MixTab::In1 | MixTab::In2 | MixTab::Inputs => Side::Inputs,
@@ -218,10 +218,18 @@ pub fn LevelCard(
     /// The ruler, when wider than `bounds`.
     #[props(default)]
     scale: Option<Bounds>,
+    /// Channel 2 of a linked pair (BEH-34): its meter beside channel 1's, and its own MUTE, as mutes
+    /// stay per channel (BEH-31). The fader and box are channel 1's, which channel 2 follows.
+    #[props(default)]
+    second: Option<Strip>,
     #[props(default)] on_gain: EventHandler<f64>,
     #[props(default)] on_mute: EventHandler<bool>,
+    #[props(default)] on_mute_second: EventHandler<bool>,
 ) -> Element {
+    let both_muted = strip.muted && second.as_ref().is_none_or(|s| s.muted);
     let muted = strip.muted;
+    let mut levels = vec![strip.level_db];
+    levels.extend(second.as_ref().map(|s| s.level_db));
     let class = match (out, mixer) {
         (true, _) => "level-card out",
         (_, true) => "level-card mix",
@@ -230,7 +238,7 @@ pub fn LevelCard(
     rsx! {
         section { class, "aria-label": "{strip.label}",
             span { class: "legend", "{strip.label}" }
-            div { class: if out && muted { "card-body dim" } else { "card-body" },
+            div { class: if out && both_muted { "card-body dim" } else { "card-body" },
                 div { class: if mixer && muted { "card-fader dim" } else { "card-fader" },
                     Fader {
                         label: "{strip.label}",
@@ -239,18 +247,34 @@ pub fn LevelCard(
                         scale,
                         show_label: false,
                         show_box: false,
-                        levels: vec![strip.level_db],
+                        levels,
                         on_change: move |db| on_gain.call(db),
                     }
                 }
                 div { class: "card-side",
                     ValueField { label: "{strip.label}", value: strip.db, bounds, on_change: move |db| on_gain.call(db) }
-                    button {
-                        class: if muted { "card-button muted" } else { "card-button" },
-                        "aria-pressed": "{muted}",
-                        "aria-label": if muted { "Unmute {strip.label}" } else { "Mute {strip.label}" },
-                        onclick: move |_| on_mute.call(!muted),
-                        "MUTE"
+                    if let Some(second) = second {
+                        div { class: "mute-pair",
+                            for (n, m, handler) in [(1, muted, on_mute), (2, second.muted, on_mute_second)] {
+                                button {
+                                    key: "{n}",
+                                    class: if m { "card-button muted" } else { "card-button" },
+                                    "aria-pressed": "{m}",
+                                    "aria-label": if m { "Unmute {strip.label} channel {n}" } else { "Mute {strip.label} channel {n}" },
+                                    onclick: move |_| handler.call(!m),
+                                    span { class: "mute-word", "MUTE" }
+                                    span { class: "mute-n", "{n}" }
+                                }
+                            }
+                        }
+                    } else {
+                        button {
+                            class: if muted { "card-button muted" } else { "card-button" },
+                            "aria-pressed": "{muted}",
+                            "aria-label": if muted { "Unmute {strip.label}" } else { "Mute {strip.label}" },
+                            onclick: move |_| on_mute.call(!muted),
+                            "MUTE"
+                        }
                     }
                 }
             }
@@ -305,16 +329,28 @@ fn mixer_param(input: usize, src: usize, field: MixerField) -> Param {
 
 /// The LIMITER card: the gain reduction bar with its scale, and the four linked boxes (BEH-5, UX-19).
 #[component]
-pub fn LimiterCard(limiter: LimiterStrip, #[props(default)] on_change: EventHandler<(Unit, f64)>) -> Element {
-    let gr = control::gr_fill(limiter.gr_db) * 100.0;
+pub fn LimiterCard(
+    limiter: LimiterStrip,
+    /// Output 2's gain reduction, beside output 1's, when the outputs are linked (BEH-34).
+    #[props(default)]
+    gr_second: Option<f64>,
+    #[props(default)] on_change: EventHandler<(Unit, f64)>,
+) -> Element {
+    let mut bars = vec![control::gr_fill(limiter.gr_db) * 100.0];
+    bars.extend(gr_second.map(|db| control::gr_fill(db) * 100.0));
+    let pair = bars.len() > 1;
     let label = limiter.label.clone();
     rsx! {
         section { class: "level-card limiter", "aria-label": "{limiter.label}",
             span { class: "legend", "{limiter.label}" }
             div { class: "card-body",
                 div { class: "gr-meter", "aria-hidden": "true",
-                    div { class: "gr-bar",
-                        div { class: "gr-fill", style: "height: {gr}%" }
+                    div { class: "gr-bars",
+                        for gr in bars {
+                            div { class: if pair { "gr-bar half" } else { "gr-bar" },
+                                div { class: "gr-fill", style: "height: {gr}%" }
+                            }
+                        }
                     }
                     div { class: "gr-scale",
                         for db in GR_MARKS {
@@ -600,6 +636,36 @@ pub fn LevelsPage(
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
 ) -> Element {
+    // linked (BEH-34): one row with channel 1's controls, channel 2's meters beside them
+    if let ([one, two], true) = (view.rows.as_slice(), view.linked_inputs && view.linked_outputs) {
+        let named = |s: &Strip, label: &str| Strip { label: label.into(), ..s.clone() };
+        return rsx! {
+            section { class: "tab-panel out",
+                div { class: "levels-row",
+                    LevelCard {
+                        strip: named(&one.input, "IN 1 + 2"),
+                        second: two.input.clone(),
+                        on_gain: move |db| on_gain.call((0, 0, db)),
+                        on_mute: move |m| on_mute.call((0, 0, m)),
+                        on_mute_second: move |m| on_mute.call((1, 0, m)),
+                    }
+                    LevelCard {
+                        strip: named(&one.output, "OUT 1 + 2"),
+                        second: two.output.clone(),
+                        out: true,
+                        on_gain: move |db| on_gain.call((0, 1, db)),
+                        on_mute: move |m| on_mute.call((0, 1, m)),
+                        on_mute_second: move |m| on_mute.call((1, 1, m)),
+                    }
+                    LimiterCard {
+                        limiter: LimiterStrip { label: "LIMITER 1 + 2".into(), ..one.limiter.clone() },
+                        gr_second: two.limiter.gr_db,
+                        on_change: move |(unit, value)| on_limiter.call((0, unit, value)),
+                    }
+                }
+            }
+        };
+    }
     rsx! {
         section { class: "tab-panel out",
             for (channel, row) in view.rows.iter().enumerate() {
@@ -631,7 +697,9 @@ pub fn MixeqPage(
     view: MixeqView,
     #[props(default)] on_pick: EventHandler<usize>,
     #[props(default)] on_tab: EventHandler<MixTab>,
-    #[props(default)] on_link: EventHandler<(Side, bool)>,
+    /// LINK 1 + 2: both pairs linked, or both split (UX-17).
+    #[props(default)]
+    on_link: EventHandler<bool>,
     #[props(default)] on_gain: EventHandler<(usize, u8, f64)>,
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
@@ -640,15 +708,9 @@ pub fn MixeqPage(
 ) -> Element {
     let tabs = MixTab::row(view.linked_inputs, view.linked_outputs);
     let tab = view.tab.visible(view.linked_inputs, view.linked_outputs).unwrap_or(MixTab::Levels);
-    let side = tab.side();
-    let linked = if side == Side::Inputs { view.linked_inputs } else { view.linked_outputs };
-    let side_class = if side == Side::Inputs { "in" } else { "out" };
-    let link_class = match (linked, side) {
-        (false, _) => "link-button",
-        (true, Side::Inputs) => "link-button on in",
-        (true, Side::Outputs) => "link-button on out",
-    };
-    let pair = if side == Side::Inputs { "IN" } else { "OUT" };
+    let side_class = if tab.side() == Side::Inputs { "in" } else { "out" };
+    // one link for everything: inputs and outputs (UX-17)
+    let linked = view.linked_inputs && view.linked_outputs;
     rsx! {
         div { class: "mixeq",
             div { class: "amp-picker",
@@ -682,10 +744,10 @@ pub fn MixeqPage(
                     }
                 }
                 button {
-                    class: link_class,
+                    class: if linked { "link-button on out" } else { "link-button" },
                     "aria-pressed": "{linked}",
-                    "aria-label": if linked { "Unlink {pair} 1 and {pair} 2" } else { "Link {pair} 1 and {pair} 2" },
-                    onclick: move |_| on_link.call((side, !linked)),
+                    "aria-label": if linked { "Split channels 1 and 2" } else { "Link channels 1 and 2, inputs and outputs" },
+                    onclick: move |_| on_link.call(!linked),
                     if linked { "⛓ LINKED · click to split" } else { "⛓ LINK 1 + 2" }
                 }
             }
@@ -787,7 +849,7 @@ mod tests {
         assert_eq!(out.matches("INPUT 1 · EQ").count(), 1, "{out}");
         assert!(out.contains("INPUT 2 · EQ"));
         assert!(out.contains("LINK 1 + 2"));
-        assert!(out.contains("Link OUT 1 and OUT 2"), "the Levels tab links the outputs: {out}");
+        assert!(out.contains("Link channels 1 and 2, inputs and outputs"), "one link for both: {out}");
 
         let out = page_html(view(true));
         assert!(out.contains("INPUTS 1 + 2 · EQ"), "one tab when linked: {out}");
@@ -923,8 +985,67 @@ mod tests {
         assert_eq!(out.matches(">\u{2212}48<").count(), 8);
         assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
-        assert!(out.contains("Link IN 1 and IN 2"), "the Mixer links the inputs: {out}");
+        assert!(out.contains("Link channels 1 and 2"), "the LINK button on the Mixer too: {out}");
         assert!(out.contains("tab-panel in"));
+    }
+
+    fn two_rows() -> Vec<LevelRow> {
+        let strip = |label: &str, level_db: f64, muted: bool| Strip {
+            label: label.into(),
+            db: -6.0,
+            level_db,
+            muted,
+        };
+        let limiter = |n: u8, gr_db: f64| LimiterStrip {
+            label: format!("LIMITER {n}"),
+            gr_db,
+            figures: Some(Limiter::from_dbu(31.26, 4.0)),
+            bounds: [Bounds::new(1.0, 32.0); 4],
+        };
+        vec![
+            LevelRow {
+                input: strip("IN 1", -20.0, false),
+                output: strip("OUT 1", -20.0, false),
+                limiter: limiter(1, 3.0),
+            },
+            LevelRow {
+                input: strip("IN 2", -30.0, false),
+                output: strip("OUT 2", -30.0, true),
+                limiter: limiter(2, 6.0),
+            },
+        ]
+    }
+
+    // BEH-34, UX-17: linked, Levels is one row: one fader per card with two meters, one limiter with two
+    // gain reduction bars, and a MUTE per channel (BEH-31); the button says it is linked
+    #[test]
+    fn linked_levels_are_one_row() {
+        let v = MixeqView { linked_inputs: true, linked_outputs: true, rows: two_rows(), ..view(true) };
+        let out = page_html(v);
+        for name in ["IN 1 + 2", "OUT 1 + 2", "LIMITER 1 + 2"] {
+            assert_eq!(out.matches(&format!("class=\"legend\">{name}<")).count(), 1, "{name}: {out}");
+        }
+        assert!(!out.contains(">IN 2<") && !out.contains(">OUT 2<"), "one row: {out}");
+        assert_eq!(out.matches("role=\"slider\"").count(), 2, "one fader for IN, one for OUT");
+        assert_eq!(out.matches("fader-meter left").count(), 2);
+        assert_eq!(out.matches("fader-meter right").count(), 2);
+        assert_eq!(out.matches("class=\"gr-bar half\"").count(), 2, "{out}");
+        assert!(out.contains("Mute OUT 1 + 2 channel 1") && out.contains("Unmute OUT 1 + 2 channel 2"));
+        assert!(out.contains("Mute IN 1 + 2 channel 2"));
+        assert!(out.contains("LINKED · click to split") && out.contains("Split channels 1 and 2"));
+        assert!(out.contains("INPUTS 1 + 2 · EQ") && out.contains("OUTPUTS 1 + 2 · EQ"));
+    }
+
+    // UX-17: split, Levels has its two rows again, each with one meter per fader
+    #[test]
+    fn split_levels_are_two_rows() {
+        let v = MixeqView { rows: two_rows(), ..view(false) };
+        let out = page_html(v);
+        assert!(out.contains(">IN 2<") && out.contains(">LIMITER 2<"), "{out}");
+        assert_eq!(out.matches("role=\"slider\"").count(), 4);
+        assert_eq!(out.matches("fader-meter mono").count(), 4);
+        assert!(!out.contains("gr-bar half") && !out.contains("mute-pair"));
+        assert!(out.contains("⛓ LINK 1 + 2"));
     }
 
     // UX-19: the three cards of a row, each named once, with a meter in the fader, the box and MUTE

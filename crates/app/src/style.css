@@ -31,8 +31,8 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .fader-track:focus-visible{outline:2px solid var(--lavender);outline-offset:2px}
 .fader-groove,.fader-meter{position:absolute;top:0;bottom:0;left:calc(50% - 9px);width:18px}
 .fader-groove{background:var(--button)}
-.fader-meter.left{left:calc(50% - 15px);width:14px}
-.fader-meter.right{left:calc(50% + 1px);width:14px}
+.fader-meter.left,.fader-groove.left{left:calc(50% - 15px);width:14px}
+.fader-meter.right,.fader-groove.right{left:calc(50% + 1px);width:14px}
 .fader-meter{transition:clip-path 0.09s linear}
 .fader-groove::after,.fader-meter::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 5px,var(--inset) 5px 7px)}
 .fader-ticks{position:absolute;inset:0;pointer-events:none}
@@ -162,7 +162,14 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .card-side{display:flex;flex-direction:column;align-items:center;gap:6px}
 .card-button{width:100px;min-height:44px;border-radius:4px;font-size:13px;font-weight:700;letter-spacing:0.04em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .card-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
+/* a linked pair keeps a MUTE per channel, side by side in the space of one (BEH-31) */
+.mute-pair{display:flex;gap:6px;width:100px}
+.mute-pair .card-button{flex:1 1 0;width:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;letter-spacing:0.04em}
+.mute-word{font-size:9px}
+.mute-n{font-size:13px;line-height:1}
 .gr-meter{display:flex;height:var(--fader-h)}
+.gr-bars{display:flex;gap:2px}
+.gr-bar.half{width:11px}
 .gr-bar{position:relative;width:24px;background:var(--button)}
 .gr-fill{position:absolute;left:0;right:0;top:0;background:var(--peach);transition:height 0.09s linear}
 .gr-bar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 5px,var(--base) 5px 7px)}

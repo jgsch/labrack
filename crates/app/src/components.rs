@@ -46,6 +46,8 @@ pub fn Fader(
         r = at(0.0)
     );
     let lanes = control::meter_lanes(levels.len());
+    // the dark track of each meter, and one in the middle without any
+    let grooves: &[&str] = if lanes.is_empty() { control::meter_lanes(1) } else { lanes };
     let meters: Vec<(String, f64)> = levels
         .iter()
         .zip(lanes)
@@ -105,7 +107,9 @@ pub fn Fader(
                         set(next);
                     }
                 },
-                div { class: "fader-groove", "aria-hidden": "true" }
+                for lane in grooves.iter() {
+                    div { class: "fader-groove {lane}", "aria-hidden": "true" }
+                }
                 for (lane, cover) in meters {
                     div {
                         class: "fader-meter {lane}",

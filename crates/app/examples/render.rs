@@ -72,6 +72,7 @@ fn main() {
         ("eq-in-demo", eq_in_demo as fn() -> Element),
         ("eq-out-demo", eq_out_demo),
         ("mixer-demo", mixer_demo),
+        ("linked-demo", linked_demo),
     ] {
         let mut dom = VirtualDom::new(page);
         dom.rebuild_in_place();
@@ -159,15 +160,24 @@ fn search_demo() -> Element {
 
 /// The Levels tab with the figures of the mockup's board, for the visual check of the page.
 fn levels_demo() -> Element {
+    levels_page(false)
+}
+
+/// The Levels tab linked, as on the mockup's board 07: one row, two meters per fader.
+fn linked_demo() -> Element {
+    levels_page(true)
+}
+
+fn levels_page(linked: bool) -> Element {
     let strip = |label: &str, level_db: f64| labrack_app::Strip {
         label: label.into(),
         db: 0.0,
         level_db,
         muted: false,
     };
-    let limiter = |label: &str| labrack_app::LimiterStrip {
+    let limiter = |label: &str, gr_db: f64| labrack_app::LimiterStrip {
         label: label.into(),
-        gr_db: 0.0,
+        gr_db,
         figures: Some(labrack_core::Limiter::from_vpk(80.0, 4.0)),
         bounds: [Bounds::new(0.0, 100_000.0); 4],
     };
@@ -178,14 +188,16 @@ fn levels_demo() -> Element {
             labrack_app::LevelRow {
                 input: strip("IN 1", -24.0),
                 output: strip("OUT 1", -24.0),
-                limiter: limiter("LIMITER 1"),
+                limiter: limiter("LIMITER 1", 0.0),
             },
             labrack_app::LevelRow {
                 input: strip("IN 2", -18.0),
                 output: strip("OUT 2", -18.0),
-                limiter: limiter("LIMITER 2"),
+                limiter: limiter("LIMITER 2", if linked { 8.0 } else { 0.0 }),
             },
         ],
+        linked_inputs: linked,
+        linked_outputs: linked,
         ..labrack_app::MixeqView::default()
     };
     rsx! {

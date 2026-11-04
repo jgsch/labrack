@@ -52,8 +52,10 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 
 - **UX-16** Six tabs in one row: Mixer, Levels, Inputs 1 EQ, Inputs 2 EQ, Outputs 1 EQ, Outputs 2
   EQ. The tab itself is the page title; there is no separate heading.
-- **UX-17** The link buttons sit in the tab row. When linked, the two input tabs become one and the
-  two output tabs become one.
+- **UX-17** One link button sits in the tab row, on every tab: LINK 1 + 2 links the inputs and the
+  outputs together, LINKED · click to split splits both. When linked, the two input tabs become one
+  and the two output tabs become one. A pair the amp has linked alone (another tool) shows its
+  shared tab; the button then links the other pair too.
 - **UX-18** Mixer: two rows (IN 1, IN 2). Each row shows the four sources as bordered cards with
   their fader, meter, gain and mute, and a line showing where they go (→ IN 1, → IN 2).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each

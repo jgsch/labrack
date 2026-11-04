@@ -158,8 +158,9 @@ statement with a `BEH-<n>` ID.
     the pair is shown linked again. LINK on such a pair makes channel 2 equal to channel 1 (checked,
     outputs muted around it); UNLINK clears the flag in the amp. An IPD cannot differ.
 - **BEH-33** Linked inputs share one Inputs EQ; linked outputs share one Outputs EQ.
-- **BEH-34** In Levels, linked outputs show one fader and one limiter, with stereo meters (two
-  meters and two gain reduction bars).
+- **BEH-34** In Levels, linked channels show one row: IN 1 + 2 and OUT 1 + 2 with one fader each
+  (channel 1's) and stereo meters, and LIMITER 1 + 2 with channel 1's figures and two gain reduction
+  bars. Each card keeps a MUTE per channel (MUTE 1, MUTE 2), as mutes stay per channel.
 - **BEH-35** Unlinking restores separate channels and keeps the current values.
 
 ## Presets

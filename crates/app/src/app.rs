@@ -175,11 +175,16 @@ pub fn App() -> Element {
                             on_link: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
-                                move |(side, linked): (Side, bool)| {
+                                move |linked: bool| {
                                     if let Some(id) = ids.get(picked()).copied() {
                                         let hub = hub.clone();
+                                        // one link for everything (UX-17): each pair not yet as asked
                                         spawn(async move {
-                                            let _ = hub.set_link(id, side, linked).await;
+                                            for side in [Side::Inputs, Side::Outputs] {
+                                                if hub.linked(id, side) != linked {
+                                                    let _ = hub.set_link(id, side, linked).await;
+                                                }
+                                            }
                                         });
                                     }
                                 }

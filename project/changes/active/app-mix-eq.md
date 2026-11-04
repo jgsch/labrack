@@ -23,7 +23,7 @@ No spec change; implements:
 - [x] Mixer tab
 - [x] Levels tab (IN / OUT / LIMITER rows, same-size dB box and MUTE)
 - [x] EQ tab component (10 bands; outputs add HPF, LPF, delay)
-- [ ] Linked layouts
+- [x] Linked layouts
 - [ ] Preset actions
 - [ ] Screenshots compared with the Mix & EQ boards
 
@@ -61,8 +61,12 @@ No spec change; implements:
   `mixer-demo` beside board 02.
 - **Seen in the window**: a checkbox the amp refused (amp not ONLINE) stays ticked, as nothing in the
   view changed to redraw it; the same can happen to a type list.
-- **Still to do**: the linked Levels layout (BEH-34: one row, stereo meters;
-  what the IN fader does while only the outputs are linked is open); the preset bar; the boxes show
+- **Linked layouts** (2026-11-05): decided with the user, one link for everything (UX-17): LINK 1 + 2
+  links inputs and outputs (`App` calls `set_link` for each pair not yet as asked). Levels linked is
+  one row (BEH-34): channel 1's fader with both meters, LIMITER 1 + 2 with both gain reductions, and
+  MUTE 1 / MUTE 2 in each card. `linked-demo` is rendered beside board 07. The linked EQ tabs were
+  already one shared tab editing channel 1.
+- **Still to do**: the preset bar; the boxes show
   `0` where the boards show `0.0` (`control::number`).
 
 - Depends on `core-dsp-control`, `core-limiter`, `core-link`, `core-mute-presets` and
