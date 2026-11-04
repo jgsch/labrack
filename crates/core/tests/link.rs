@@ -525,27 +525,138 @@ async fn a_pair_that_is_not_linked_or_just_linked_has_no_drift() {
     assert!(hub.link_drift(id, Side::Inputs).is_empty());
 }
 
-// BEH-32: the IPX does not keep a linked pair equal; a change on the amp itself leaves channel 2 behind
+/// Read updates until one that `pick` takes.
+async fn saw<T>(
+    rx: &mut tokio::sync::broadcast::Receiver<labrack_core::Update>,
+    mut pick: impl FnMut(labrack_core::Update) -> Option<T>,
+) -> T {
+    let wait = async {
+        loop {
+            if let Some(t) = pick(rx.recv().await.unwrap()) {
+                return t;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), wait).await.expect("the update arrives")
+}
+
+// BEH-32: the IPX does not keep a linked pair equal, so when a change made on the amp itself reaches the
+// app, the app sets channel 2 to channel 1's value and says so
 #[tokio::test]
-async fn a_change_on_the_ipx_itself_makes_a_linked_pair_drift_and_syncing_fixes_it() {
+async fn a_change_on_the_ipx_itself_is_followed_by_channel_2_with_a_warning() {
     let (hub, id, fake) = ipx_ready().await;
     hub.set_link(id, Side::Outputs, true).await.unwrap();
+    hub.set_link(id, Side::Inputs, true).await.unwrap();
+    let mut rx = hub.subscribe();
 
     front_panel(&fake, "out1.gain", f(-3.0));
-    front_panel(&fake, "out1.eq.2.freq", Value::Int(3000));
-    wait_value(&hub, id, "out1.gain", f(-3.0)).await;
-    wait_value(&hub, id, "out1.eq.2.freq", Value::Int(3000)).await;
-
-    let drift = hub.link_drift(id, Side::Outputs);
-    assert_eq!(drift, [param("out1.eq.2.freq"), param("out1.gain")], "what differs, by name");
-    assert!(hub.link_drift(id, Side::Inputs).is_empty(), "the other pair is fine");
-    assert!(hub.linked(id, Side::Outputs), "still flagged linked");
-
-    // SYNC is linking again: channel 2 gets channel 1's values (checked, outputs muted around it)
-    hub.set_link(id, Side::Outputs, true).await.unwrap();
-    assert!(hub.link_drift(id, Side::Outputs).is_empty());
+    let corrected = saw(&mut rx, |u| match u {
+        labrack_core::Update::LinkCorrected(i, side, p) if i == id => Some((side, p)),
+        _ => None,
+    })
+    .await;
+    assert_eq!(corrected, (Side::Outputs, param("out1.gain")));
+    wait_value(&hub, id, "out2.gain", f(-3.0)).await;
     assert_eq!(ipx_value(&fake, "out2.gain"), f(-3.0));
-    assert_eq!(ipx_value(&fake, "out2.eq.2.freq"), Value::Int(3000));
+
+    // an EQ band, and the other pair
+    front_panel(&fake, "out1.eq.2.freq", Value::Int(3000));
+    front_panel(&fake, "in1.gain", f(-5.0));
+    wait_value(&hub, id, "out2.eq.2.freq", Value::Int(3000)).await;
+    wait_value(&hub, id, "in2.gain", f(-5.0)).await;
+    assert_eq!(
+        (ipx_value(&fake, "out2.eq.2.freq"), ipx_value(&fake, "in2.gain")),
+        (Value::Int(3000), f(-5.0))
+    );
+    assert!(hub.link_drift(id, Side::Outputs).is_empty() && hub.link_drift(id, Side::Inputs).is_empty());
+    assert!(hub.linked(id, Side::Outputs));
+}
+
+// a mute is not part of the link: a mute made on the amp is not carried to the other output
+#[tokio::test]
+async fn a_mute_made_on_the_amp_is_not_followed() {
+    let (hub, id, fake) = ipx_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    let writes = fake.writes();
+    let mute = ipx_params::slot(&param("out1.mute")).unwrap();
+    let frame = build_frame(Main::DEVPRMCHAGE, mute.addr.pack(), &0i32.to_le_bytes()).unwrap();
+    fake.cmd.send(Cmd::Push(frame)).unwrap(); // out1 unmuted on the front panel
+    wait_value(&hub, id, "out1.mute", FALSE).await;
+    sleep(Duration::from_millis(300)).await;
+    assert_eq!(fake.writes(), writes, "nothing was written");
+    assert_eq!(ipx_value(&fake, "out2.mute"), FALSE, "as it was");
+}
+
+// SEC-3: a correction is checked like any value; one past a ceiling is not made, and the pair is reported
+#[tokio::test]
+async fn a_correction_past_a_ceiling_is_not_made() {
+    let (hub, id, fake) = ipx_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    hub.set_ceilings(id, Ceilings { max_output_gain_db: Some(-12.0), max_limiter_dbu: None }).unwrap();
+    let mut rx = hub.subscribe();
+    let writes = fake.writes();
+
+    front_panel(&fake, "out1.gain", f(-5.0)); // above the ceiling, and channel 2 is at -10
+    let side = saw(&mut rx, |u| match u {
+        labrack_core::Update::LinkOutOfSync(i, side) if i == id => Some(side),
+        _ => None,
+    })
+    .await;
+    assert_eq!(side, Side::Outputs);
+    sleep(Duration::from_millis(200)).await;
+    assert_eq!(fake.writes(), writes);
+    assert_eq!(hub.link_drift(id, Side::Outputs), [param("out1.gain")]);
+}
+
+/// A fake IPX whose outputs are flagged linked while channel 2 differs, as an amp can be at connect.
+async fn drifted_ipx() -> (FakeAmp, std::sync::Arc<Local>) {
+    let fake = FakeAmp::start().await;
+    let from = DeviceState::AUDIO_OFFSET;
+    for (name, value) in [("out1.link", TRUE), ("out1.gain", f(-10.0)), ("out2.gain", f(-20.0))] {
+        let slot = ipx_params::slot(&param(name)).unwrap();
+        let bytes = slot.encode(&value).unwrap();
+        let at = from + audio_dword(slot.addr).unwrap() * 4;
+        fake.state().sync[at..at + bytes.len()].copy_from_slice(&bytes);
+    }
+    let local = Local::new();
+    local.route("10.0.0.1", fake.port);
+    (fake, local)
+}
+
+// SEC-1: a drift that is already there when the app connects is reported, not corrected: connecting
+// writes nothing
+#[tokio::test]
+async fn a_drift_found_at_connect_is_reported_and_nothing_is_written() {
+    let (fake, local) = drifted_ipx().await;
+    let hub = labrack_core::Hub::new(labrack_core::Store::in_memory(), local, Heard::nothing(), timing());
+    let mut rx = hub.subscribe();
+    let id = hub.add_manual("A", labrack_core::Protocol::Ipx, "10.0.0.1").unwrap();
+
+    let side = saw(&mut rx, |u| match u {
+        labrack_core::Update::LinkOutOfSync(i, side) if i == id => Some(side),
+        _ => None,
+    })
+    .await;
+    assert_eq!(side, Side::Outputs);
+    // the gain set up above, and the limiter that the fixture's two outputs really differ in
+    let drift = hub.link_drift(id, Side::Outputs);
+    assert!(
+        drift.contains(&param("out1.gain")) && drift.contains(&param("out1.limiter.threshold_dbu")),
+        "{drift:?}"
+    );
+    sleep(Duration::from_millis(300)).await;
+    assert_eq!(fake.writes(), 0);
+    assert_eq!(ipx_value(&fake, "out2.gain"), f(-20.0));
+}
+
+// there is no sync: linking a pair that is linked already is nothing to do, on both families
+#[tokio::test]
+async fn linking_a_linked_pair_again_writes_nothing_on_the_ipx() {
+    let (hub, id, fake) = ipx_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    let writes = fake.writes();
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    assert_eq!(fake.writes(), writes);
 }
 
 // an IPD cannot drift: the amp mirrors, and so does the state

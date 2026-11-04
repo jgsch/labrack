@@ -314,6 +314,13 @@ pub mod limiter {
     /// The square of 0.7746 V, the 0 dBu reference.
     const REFERENCE: f64 = 0.6;
 
+    /// The vendor app shows an IPD threshold 2.22 dB above what the amp stores, and gives Vpk and watts
+    /// for that. Read on an IPD 2400 (MK1, firmware 1.2.6) with the Windows app: stored 32.56 is shown as
+    /// 34.78 dBu (60 Vpk), stored 29.04 as 31.26 dBu (40 Vpk). It fits the ceilings of the library too:
+    /// IPD 1200 33.8 + 2.22 is 69 Vpk, the IPX 1200's maximum; the 2400 gives 98 Vpk, the 4800 138 Vpk.
+    /// The IPX shows what it stores. The amps' own front panels show and set dBu only.
+    pub const IPD_DISPLAY_OFFSET: f64 = 2.22;
+
     /// The load impedance, in ohm, that can be entered. It only scales the watts.
     pub const OHM_RANGE: (f64, f64) = (0.5, 100.0);
 

@@ -39,17 +39,20 @@ async fn the_limiter_is_read_in_all_units_on_both_families() {
     let (hub, id, _fake) = online_ipx(timing()).await;
     let l = hub.limiter(id, 0).unwrap();
     // 69 Vpk into 4 ohm: the figures of docs/ipx-protocol.md
-    close(l.vpk, 69.0, 1e-9);
+    // the figures follow the stored dBu, which has 4 decimals
+    close(l.vpk, 69.0, 0.01);
     close(l.ohm, 4.0, 1e-9);
-    close(l.watt, 595.125, 1e-6);
+    close(l.watt, 595.125, 0.2);
     close(l.dbu, 35.9851, 1e-3);
     assert!(hub.limiter(id, 2).is_none());
 
+    // the simulated IPD stores 36.78 dBu; the vendor app shows 2.22 dB more (verified on an IPD 2400:
+    // stored 29.04 is 40 Vpk, stored 32.56 is 60 Vpk)
     let (hub, id, _sim) = online_ipd().await;
     let l = hub.limiter(id, 0).unwrap();
-    close(l.dbu, 36.78, 1e-9);
+    close(l.dbu, 36.78 + 2.22, 1e-9);
     close(l.ohm, 4.0, 1e-9);
-    close(l.vpk, math::vpk_from_dbu(36.78), 1e-9);
+    close(l.vpk, math::vpk_from_dbu(39.0), 1e-9);
     close(l.watt, math::watt(l.vpk, 4.0), 1e-9);
 }
 
@@ -109,11 +112,14 @@ async fn a_load_edit_writes_only_ohm_and_watts_on_the_ipx() {
     hub.set_load(id, 1, 8.0).unwrap();
     let l = wait_limiter(&hub, id, 1, |l| l.ohm == 8.0).await;
 
-    close(l.vpk, 69.0, 1e-9);
-    close(l.watt, 69.0 * 69.0 / 16.0, 1e-6);
-    assert_eq!(ipx_value(&fake, &vpk), vpk_before);
-    assert_eq!(ipx_value(&fake, &dbu), dbu_before, "the dBu field is as it was");
-    close(ipx_value(&fake, &watt).as_f64().unwrap(), 69.0 * 69.0 / 16.0, 1e-2);
+    // out2 stores 34.7712 dBu (60 Vpk) next to a Vpk field of 69: the figures follow the dBu, which is
+    // what the amp's front panel shows and sets
+    close(l.dbu, 34.7712, 1e-4);
+    close(l.vpk, 60.0, 1e-3);
+    close(l.watt, 60.0 * 60.0 / 16.0, 1e-3);
+    assert_eq!(ipx_value(&fake, &vpk), vpk_before, "the Vpk field is not touched");
+    assert_eq!(ipx_value(&fake, &dbu), dbu_before, "nor the dBu field");
+    close(ipx_value(&fake, &watt).as_f64().unwrap(), 60.0 * 60.0 / 16.0, 1e-2);
     assert_eq!(ipx_value(&fake, &ohm), f(8.0));
     assert_eq!(fake.state().setprm.len(), 2, "ohm and watts");
 }
@@ -131,8 +137,9 @@ async fn a_threshold_edit_writes_the_dbu_only_on_the_ipd() {
     let writes = sim.writes()[before..].to_vec();
     assert_eq!(writes.first(), Some(&ipd_slot(&param("out2.limiter.threshold")).unwrap().key));
     assert!(writes.iter().all(|k| *k == writes[0]), "nothing but the threshold: {writes:?}");
+    // what the IPD stores is 2.22 dB below what the vendor app, and this one, show
     let truth = ipd_value(&sim, "out2.limiter.threshold").await;
-    close(truth.as_f64().unwrap(), l.dbu, 1e-2);
+    close(truth.as_f64().unwrap() + 2.22, l.dbu, 0.02);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -193,8 +200,9 @@ async fn values_outside_the_range_are_never_sent() {
             assert!(matches!(got, Err(Error::Invalid(_))), "{unit:?} {value}: {got:?}");
         }
     }
-    // the IPD 2400 tops out at 36.78 dBu (its library range), the IPX 1200 at 35.99 dBu (69 Vpk)
-    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 36.79), Err(Error::Invalid(_))));
+    // the IPD 2400 tops out at 39.0 dBu shown (36.78 stored), the IPX 1200 at 35.99 dBu (69 Vpk)
+    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 39.01), Err(Error::Invalid(_))));
+    assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 18.9), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 36.0), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 19.2), Err(Error::Invalid(_))));
     assert!(matches!(ipx.set_limiter(a, 0, Unit::Vpk, 70.0), Err(Error::Invalid(_))));
@@ -236,7 +244,7 @@ async fn the_range_of_a_limiter_control() {
 
     let (hub, id, _sim) = online_ipd().await;
     let r = hub.limiter_range(id, 0, Unit::Dbu).unwrap();
-    assert_eq!((r.min, r.max), (Some(16.78), Some(36.78)), "the IPD 2400");
+    assert_eq!((r.min, r.max), (Some(19.0), Some(39.0)), "the IPD 2400: 16.78 to 36.78 stored, plus 2.22");
     hub.disconnect(id).unwrap();
     wait_status(&hub, id, Status::Disconnected).await;
     assert!(hub.limiter_range(id, 0, Unit::Dbu).is_none());

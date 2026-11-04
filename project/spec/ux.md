@@ -70,9 +70,12 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   0.5 dB, Page Up / Page Down 3 dB.
 - **UX-23** Typed values apply on Enter or when the field loses focus, never while typing (typing
   −20 passes through −2).
-- **UX-24** Dangerous actions take a second click within 3 s on the same button (UNMUTE ALL →
-  CONFIRM UNMUTE ALL, LOAD → CONFIRM LOAD) or a confirmation dialog (loading a file, raising a
-  level by more than 6 dB by typing).
+- **UX-24** Dangerous actions are confirmed. An action that mutes the outputs of an amp (preset
+  recall, storing a preset, loading a file, linking channels) opens a validation popup that names
+  the amplifier, says that its outputs will be muted and, for recall, store and load, that they
+  stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
+  same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a
+  confirmation dialog.
 - **UX-25** Search switches use a toggle with a status line; a disabled SCAN NOW is dimmed.
 - **UX-26** Error text is red and appears beside the control that caused it.
 - **UX-27** Hover brightens buttons and tabs slightly.

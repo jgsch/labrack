@@ -41,10 +41,12 @@ impl Hub {
             lock(&self.0.shared.live).get(&id)?.values.get(&param(output, field))?.as_f64()
         };
         if session.is_ipx() {
-            Some(Limiter::from_vpk(number(LimiterField::Threshold)?, number(LimiterField::Impedance)?))
+            // the dBu is what the amp's front panel shows and sets: the figures follow it
+            Some(Limiter::from_dbu(number(LimiterField::ThresholdDbu)?, number(LimiterField::Impedance)?))
         } else {
+            // the vendor app shows an IPD threshold 2.22 dB above the one stored
             let ohm = *self.0.shared.store().get(id)?.load_ohms.get(usize::from(output))?;
-            Some(Limiter::from_dbu(number(LimiterField::Threshold)?, ohm))
+            Some(Limiter::from_dbu(number(LimiterField::Threshold)? + math::IPD_DISPLAY_OFFSET, ohm))
         }
     }
 
@@ -52,8 +54,14 @@ impl Hub {
     fn dbu_bounds(session: &Session, output: u8) -> Option<(f64, f64)> {
         let spec = session.amp.spec(&param(output, LimiterField::Threshold))?;
         let (min, max) = (spec.min?, spec.max?);
-        // the IPX range is in Vpk; round away the error of the way back
-        Some(if spec.unit == "Vpk" { (round6(math::dbu(min)), round6(math::dbu(max))) } else { (min, max) })
+        // the IPX range is in Vpk, the IPD's in the dBu it stores: both as the vendor app shows them,
+        // rounded to drop the error of the way
+        let shown = |dbu: f64| round6(dbu);
+        Some(if spec.unit == "Vpk" {
+            (shown(math::dbu(min)), shown(math::dbu(max)))
+        } else {
+            (shown(min + math::IPD_DISPLAY_OFFSET), shown(max + math::IPD_DISPLAY_OFFSET))
+        })
     }
 
     /// What the control of `unit` may be set to: the amp's range, ended by the user ceiling (SEC-3),
@@ -154,7 +162,11 @@ impl Hub {
                 (param(output, LimiterField::Impedance), Value::Float(new.ohm)),
                 (param(output, LimiterField::Power), Value::Float(new.watt)),
             ],
-            (false, true) => vec![(param(output, LimiterField::Threshold), Value::Float(new.dbu))],
+            // the IPD stores 2.22 dB less than is shown, in steps of 0.01
+            (false, true) => {
+                let stored = ((new.dbu - math::IPD_DISPLAY_OFFSET) * 100.0).round() / 100.0;
+                vec![(param(output, LimiterField::Threshold), Value::Float(stored))]
+            }
             (false, false) => {
                 // the load is the app's: a linked pair has one
                 let linked = self.linked(id, Side::Outputs);

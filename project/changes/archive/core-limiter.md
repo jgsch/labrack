@@ -67,3 +67,14 @@ ranges), edits `SEC-3` (the limiter ceiling is a dBu and holds in every unit and
   applies 280 values, were updated (284 now): that is the change.
 - Mutation-tested: no ceiling, no range, a load edit writing all four, a negative Vpk, a file past
   the ceiling.
+
+## Revised after reading a live IPD 2400 and IPX 1200 (see `BEH-5`)
+
+- **The IPD stores 2.22 dB less than the vendor app shows** (`labgruppen::limiter::IPD_DISPLAY_OFFSET`).
+  The app shows and takes the vendor's dBu, Vpk and Watt, and stores 2.22 dB less (rounded to the
+  IPD's 0.01 steps). The library's stored ranges become 19.0 to 36.02 / 39.0 / 42.05 dBu shown. The
+  user ceiling is the dBu as shown, in files too.
+- **The IPX figures follow the dBu field**, which is what both amps' front panels show and set, not
+  the Vpk. The notes above that say the display is derived from Vpk describe the first version.
+- The IPX range is the Windows app's for a 1200 (19.22 to 35.99 dBu); the 2400 and 4800 are in the
+  backlog.

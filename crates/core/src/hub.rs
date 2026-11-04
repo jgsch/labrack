@@ -24,7 +24,7 @@ mod presets;
 pub use presets::LoadReport;
 
 use crate::dsp::{self, Range, Writer};
-use crate::link as pair;
+use crate::link::{self as pair, Side};
 use crate::status::{Event, Status};
 use crate::store::{Amp, AmpId, Ceilings, Preset, Protocol, Store, Switches};
 use crate::{Connector, Error, Finder, Result};
@@ -75,6 +75,13 @@ pub enum Update {
     Preset(AmpId),
     /// A setting the app keeps for the amp changed: a ceiling or a limiter load (`Hub::amps`).
     Settings(AmpId),
+    /// The amp itself changed a setting of channel 1 of a linked IPX pair and channel 2 was out of step,
+    /// so the app set channel 2 to channel 1's value. For a warning to the user.
+    LinkCorrected(AmpId, Side, Param),
+    /// A linked pair whose channels differ and that the app did not correct: found when the state was
+    /// read (connecting writes nothing, `SEC-1`), or the correction was refused (range, ceiling).
+    /// [`Hub::link_drift`] says what differs.
+    LinkOutOfSync(AmpId, Side),
     Scan(Scan),
 }
 
@@ -207,7 +214,7 @@ impl Shared {
     /// change, and of every confirmed write of the app. A change of something the app already knew
     /// marks the preset MODIFIED (BEH-38); the first sight of a value, as the state is read, does not.
     fn observed(&self, id: AmpId, param: &Param, value: &Value, own: bool) {
-        let (changed, flipped, twin) = {
+        let (changed, flipped, twin, follow) = {
             let mut live = lock(&self.live);
             let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
             let old = amp.values.insert(param.clone(), value.clone());
@@ -215,6 +222,17 @@ impl Shared {
             let modifies = changed && (old.is_some() || own);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
+            // a change the amp reports on channel 1 of a linked IPX pair, which does not follow by itself
+            let follow = (!own && changed && old.is_some() && amp.loaded)
+                .then(|| {
+                    let session = amp.session.clone().filter(Session::is_ipx)?;
+                    let side = pair::follows(param).filter(|_| !pair::is_second(param))?;
+                    let linked = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
+                    let twin = pair::second(param).filter(|_| linked)?;
+                    let behind = amp.values.get(&twin).is_some_and(|other| !link::same(value, other));
+                    behind.then_some((side, twin, session))
+                })
+                .flatten();
             // an IPD mirrors a linked pair by itself and tells nothing of channel 2: the state follows
             let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
             let linked = |side: pair::Side| amp.values.get(&side.flag()) == Some(&Value::Bool(true));
@@ -224,7 +242,7 @@ impl Shared {
             if let Some(twin) = &twin {
                 amp.values.insert(twin.clone(), value.clone());
             }
-            (changed, flipped, twin)
+            (changed, flipped, twin, follow)
         };
         if changed || own {
             self.emit(Update::Changed(id, param.clone(), value.clone()));
@@ -234,6 +252,27 @@ impl Shared {
         }
         if flipped {
             self.emit(Update::Modified(id, true));
+        }
+        if let Some((side, twin, session)) = follow {
+            self.follow(id, side, param, twin, &session, value);
+        }
+    }
+
+    /// Channel 2 of a linked IPX pair is behind a change the amp made to channel 1: set it to the same
+    /// value, if that value is acceptable, and tell the views either way.
+    fn follow(&self, id: AmpId, side: Side, param: &Param, twin: Param, session: &Session, value: &Value) {
+        let ceilings = self.store().get(id).map(|amp| amp.ceilings).unwrap_or_default();
+        let checked = session
+            .amp
+            .spec(&twin)
+            .filter(|spec| spec.writable)
+            .and_then(|spec| dsp::check(&twin, &spec, value, &ceilings).ok());
+        match checked {
+            Some(checked) => {
+                session.writer.push_all([(twin, checked)]);
+                self.emit(Update::LinkCorrected(id, side, param.clone()));
+            }
+            None => self.emit(Update::LinkOutOfSync(id, side)),
         }
     }
 
@@ -277,6 +316,12 @@ impl Shared {
             amp.loaded = true;
         }
         self.emit(Update::Loaded(id));
+        // a pair found out of step is reported, not written: connecting only reads (SEC-1)
+        for side in [Side::Inputs, Side::Outputs] {
+            if !self.drift(id, side).is_empty() {
+                self.emit(Update::LinkOutOfSync(id, side));
+            }
+        }
     }
 
     fn set_meters(&self, id: AmpId, meters: Meters) {

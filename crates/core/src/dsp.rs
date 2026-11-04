@@ -48,14 +48,25 @@ pub(crate) fn restorable(param: &Param) -> bool {
         )
 }
 
-/// The limiter threshold in dBu that setting `param` to `value` means, if it is one.
+/// The limiter threshold in dBu, as the vendor app shows it, that setting `param` to `value` means, if
+/// it is one: an IPX holds it as Vpk and as dBu, an IPD as a dBu 2.22 dB below the one shown.
 fn threshold_dbu(param: &Param, unit: &str, value: f64) -> Option<f64> {
     match param {
-        Param::Limiter { ch: Channel::Output(_), field: LimiterField::Threshold } => {
-            Some(if unit == "Vpk" { limiter::dbu(value) } else { value })
-        }
+        Param::Limiter { ch: Channel::Output(_), field: LimiterField::Threshold } => Some(match unit {
+            "Vpk" => limiter::dbu(value),
+            _ => value + limiter::IPD_DISPLAY_OFFSET,
+        }),
         Param::Limiter { ch: Channel::Output(_), field: LimiterField::ThresholdDbu } => Some(value),
         _ => None,
+    }
+}
+
+/// A ceiling in dBu as shown, in the unit `param` is held in.
+fn ceiling_in_unit(param: &Param, unit: &str, dbu: f64) -> f64 {
+    match param {
+        Param::Limiter { field: LimiterField::Threshold, .. } if unit == "Vpk" => limiter::vpk_from_dbu(dbu),
+        Param::Limiter { field: LimiterField::Threshold, .. } => dbu - limiter::IPD_DISPLAY_OFFSET,
+        _ => dbu,
     }
 }
 
@@ -106,7 +117,7 @@ pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &C
         && let Some(dbu) = checked.as_f64().and_then(|v| threshold_dbu(param, spec.unit, v))
         && dbu > limit + 1e-9
     {
-        let ceiling = if spec.unit == "Vpk" { limiter::vpk_from_dbu(limit) } else { limit };
+        let ceiling = ceiling_in_unit(param, spec.unit, limit);
         return Err(Error::AboveCeiling { ceiling, unit: spec.unit });
     }
     Ok(checked)
@@ -348,16 +359,19 @@ mod tests {
         }
     }
 
-    // SEC-3: a limiter threshold is held to the dBu ceiling in the unit the amp stores it in
+    // SEC-3: a limiter threshold is held to the dBu ceiling, which is the dBu the vendor app shows. An IPD
+    // stores 2.22 dB less than that; an IPX stores it as it is, as Vpk and as dBu.
     #[test]
     fn the_limiter_ceiling_holds_for_vpk_and_dbu_entries() {
         let ceilings = Ceilings { max_limiter_dbu: Some(30.0), ..NONE };
-        let dbu = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBu");
+        let stored = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBu"); // an IPD
+        let dbu = ParamSpec::new(Kind::Float).range(19.22, 35.99).unit("dBu"); // an IPX
         let vpk = ParamSpec::new(Kind::Float).range(7.0, 110.0).unit("Vpk");
         let at_30 = limiter::vpk_from_dbu(30.0);
+        let ipd_30 = 30.0 - limiter::IPD_DISPLAY_OFFSET;
 
         for (name, spec, ok, over) in [
-            ("out1.limiter.threshold", &dbu, 30.0, 30.01),
+            ("out1.limiter.threshold", &stored, ipd_30, ipd_30 + 0.01),
             ("out1.limiter.threshold_dbu", &dbu, 30.0, 30.01),
             ("out2.limiter.threshold", &vpk, at_30, at_30 * 1.001),
         ] {
@@ -371,6 +385,10 @@ mod tests {
         let got = check(&param("out1.limiter.threshold"), &vpk, &f(at_30 * 1.1), &ceilings);
         assert!(
             matches!(got, Err(Error::AboveCeiling { ceiling, unit: "Vpk" }) if (ceiling - at_30).abs() < 1e-9)
+        );
+        let got = check(&param("out1.limiter.threshold"), &stored, &f(ipd_30 + 1.0), &ceilings);
+        assert!(
+            matches!(got, Err(Error::AboveCeiling { ceiling, unit: "dBu" }) if (ceiling - ipd_30).abs() < 1e-9)
         );
         // not the load, the watts, the release or an input
         let other = ParamSpec::new(Kind::Float).range(0.0, 1e6);

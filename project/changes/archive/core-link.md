@@ -70,3 +70,9 @@ copies, the same on both families); implements:
   On an IPX it syncs a drifted pair.
 - `Hub::link_drift(id, side)` lists the settings of channel 1 that channel 2 does not have (within
   0.2 %), for the UI to warn about. An IPD cannot drift.
+- **A drift is followed, not synced.** When the amp reports a change to channel 1 of a linked IPX
+  pair (front panel), the app writes the same value to channel 2 and emits `Update::LinkCorrected`.
+  A pair found out of step when the state is read, or a correction refused by a range or a ceiling, is
+  only reported (`Update::LinkOutOfSync`, `Hub::link_drift`): connecting writes nothing (SEC-1). There
+  is no sync action; linking a linked pair is a no-op on both families, and unlinking then linking
+  makes the channels equal.
