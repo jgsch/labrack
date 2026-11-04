@@ -1,0 +1,377 @@
+//! Safe writes to the DSP (SEC-2 to SEC-4): what may be set, what a value may be, and how fast.
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use labgruppen::{Channel, Kind, Param, ParamSpec, Value};
+use tokio::sync::Notify;
+use tokio::time::Instant;
+
+use crate::store::Ceilings;
+use crate::{Error, Result};
+
+/// What a control may be set to.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Range {
+    pub min: Option<f64>,
+    /// The model's maximum, or the user's ceiling if that is lower.
+    pub max: Option<f64>,
+    pub unit: &'static str,
+}
+
+/// The controls that can be set through [`crate::Hub::set`]: levels, mutes, the mixer, EQ, filters and
+/// delays (BEH-27 to BEH-30). The limiter, link, compressors, polarity and names have their own
+/// changes, or are not part of v1.
+pub(crate) fn controllable(param: &Param) -> bool {
+    match param {
+        Param::Gain(_) | Param::Mute(_) | Param::Delay(_) | Param::Eq { .. } => true,
+        Param::Xover { ch, .. } => !ch.is_input(),
+        Param::Mixer { ch, .. } => ch.is_input(),
+        _ => false,
+    }
+}
+
+/// The user ceiling that applies to `param` (SEC-3): the output gain.
+fn ceiling(param: &Param, ceilings: &Ceilings) -> Option<f64> {
+    match param {
+        Param::Gain(Channel::Output(_)) => ceilings.max_output_gain_db,
+        _ => None,
+    }
+}
+
+pub(crate) fn range(param: &Param, spec: &ParamSpec, ceilings: &Ceilings) -> Range {
+    let max = match (spec.max, ceiling(param, ceilings)) {
+        (Some(model), Some(user)) => Some(model.min(user)),
+        (model, user) => user.or(model),
+    };
+    Range { min: spec.min, max, unit: spec.unit }
+}
+
+/// Check `value` for `param` before anything is sent (SEC-2, SEC-3) and return it as the amp will
+/// hold it. `spec` is the amp's own.
+pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &Ceilings) -> Result<Value> {
+    if !controllable(param) || !spec.writable {
+        return Err(Error::NotControllable);
+    }
+    let (fits, wanted) = match (spec.kind, value) {
+        (Kind::Bool, Value::Bool(_)) => (true, ""),
+        (Kind::Int | Kind::Float, Value::Int(_) | Value::Float(_)) => (true, ""),
+        (Kind::Enum(_) | Kind::Text, Value::Text(_)) => (true, ""),
+        (Kind::Bool, _) => (false, "on or off"),
+        (Kind::Int | Kind::Float, _) => (false, "a number"),
+        (Kind::Enum(_) | Kind::Text, _) => (false, "a label"),
+    };
+    if !fits {
+        return Err(Error::Invalid(format!("{param}: expected {wanted}")));
+    }
+    let checked = spec.check(param, value).map_err(|e| match e {
+        labgruppen::Error::InvalidValue(why) => Error::Invalid(why),
+        other => Error::Invalid(other.to_string()),
+    })?;
+    if let Some(limit) = ceiling(param, ceilings)
+        && checked.as_f64().is_some_and(|v| v > limit)
+    {
+        return Err(Error::AboveCeiling { ceiling: limit, unit: spec.unit });
+    }
+    Ok(checked)
+}
+
+/// Keeps the latest value per parameter and says when it may go out: the first at once, then not
+/// before `interval` after the previous one (SEC-4). Times are passed in, so it is tested without a
+/// clock.
+pub(crate) struct Coalescer {
+    interval: Duration,
+    slots: HashMap<Param, Slot>,
+}
+
+#[derive(Default)]
+struct Slot {
+    waiting: Option<Value>,
+    last_sent: Option<Instant>,
+}
+
+impl Slot {
+    /// How long until the waiting value may go out; zero if it may now.
+    fn due_in(&self, interval: Duration, now: Instant) -> Option<Duration> {
+        self.waiting.as_ref()?;
+        Some(match self.last_sent {
+            Some(sent) => (sent + interval).saturating_duration_since(now),
+            None => Duration::ZERO,
+        })
+    }
+}
+
+impl Coalescer {
+    pub fn new(interval: Duration) -> Coalescer {
+        Coalescer { interval, slots: HashMap::new() }
+    }
+
+    /// A newer value replaces one that is still waiting.
+    pub fn push(&mut self, param: Param, value: Value) {
+        self.slots.entry(param).or_default().waiting = Some(value);
+    }
+
+    /// The values that may go out at `now` (they count as sent), and how long until the next one may.
+    pub fn take_due(&mut self, now: Instant) -> (Vec<(Param, Value)>, Option<Duration>) {
+        let mut due = Vec::new();
+        let mut next: Option<Duration> = None;
+        for (param, slot) in &mut self.slots {
+            match slot.due_in(self.interval, now) {
+                Some(Duration::ZERO) => {
+                    due.extend(slot.waiting.take().map(|v| (param.clone(), v)));
+                    slot.last_sent = Some(now);
+                }
+                Some(wait) => next = Some(next.map_or(wait, |n| n.min(wait))),
+                None => {}
+            }
+        }
+        (due, next)
+    }
+}
+
+/// The values of one connection waiting to be written. It lives as long as the connection: when that
+/// ends, what is still waiting is dropped, never sent to a later connection (SEC-1).
+pub(crate) struct Writer {
+    coalescer: Mutex<Coalescer>,
+    pub wake: Notify,
+}
+
+impl Writer {
+    pub fn new(interval: Duration) -> Writer {
+        Writer { coalescer: Mutex::new(Coalescer::new(interval)), wake: Notify::new() }
+    }
+
+    pub fn push(&self, param: Param, value: Value) {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).push(param, value);
+        self.wake.notify_one();
+    }
+
+    pub fn take_due(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_due(Instant::now())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn param(s: &str) -> Param {
+        s.parse().unwrap()
+    }
+
+    fn f(v: f64) -> Value {
+        Value::Float(v)
+    }
+
+    fn float(min: f64, max: f64) -> ParamSpec {
+        ParamSpec::new(Kind::Float).range(min, max).unit("dB")
+    }
+
+    const NONE: Ceilings = Ceilings { max_output_gain_db: None, max_limiter_dbu: None };
+
+    // SEC-2: the edges of the range are in, the next float beyond is out
+    #[test]
+    fn the_range_is_closed_and_tight() {
+        let spec = float(-48.0, 12.0);
+        let gain = param("in1.gain");
+        for ok in [-48.0, 0.0, 12.0] {
+            assert_eq!(check(&gain, &spec, &f(ok), &NONE).unwrap(), f(ok));
+        }
+        for bad in [(-48.0f64).next_down(), 12.0f64.next_up(), 1e300, -1e300] {
+            assert!(matches!(check(&gain, &spec, &f(bad), &NONE), Err(Error::Invalid(_))), "{bad}");
+        }
+    }
+
+    // SEC-2
+    #[test]
+    fn nan_and_infinity_never_pass() {
+        let gain = param("in1.gain");
+        for spec in [float(-48.0, 12.0), ParamSpec::new(Kind::Float), ParamSpec::new(Kind::Int)] {
+            for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                assert!(matches!(check(&gain, &spec, &f(bad), &NONE), Err(Error::Invalid(_))), "{bad}");
+            }
+        }
+    }
+
+    // SEC-2: a value of the wrong kind is not converted
+    #[test]
+    fn a_value_must_have_the_kind_of_the_control() {
+        let gain = param("in1.gain");
+        let number = float(-48.0, 12.0);
+        for bad in [Value::Bool(true), Value::Text("1".into())] {
+            assert!(matches!(check(&gain, &number, &bad, &NONE), Err(Error::Invalid(_))), "{bad:?}");
+        }
+        let mute = param("out1.mute");
+        let bool_spec = ParamSpec::new(Kind::Bool);
+        for bad in [Value::Int(1), f(1.0), Value::Text("on".into())] {
+            assert!(matches!(check(&mute, &bool_spec, &bad, &NONE), Err(Error::Invalid(_))), "{bad:?}");
+        }
+        assert_eq!(check(&mute, &bool_spec, &Value::Bool(true), &NONE).unwrap(), Value::Bool(true));
+        let kind = param("out1.eq.0.type");
+        let labels = ParamSpec::new(Kind::Enum(&["bell", "notch"]));
+        assert!(matches!(check(&kind, &labels, &Value::Int(1), &NONE), Err(Error::Invalid(_))));
+        assert!(matches!(check(&kind, &labels, &Value::Text("saw".into()), &NONE), Err(Error::Invalid(_))));
+        assert_eq!(
+            check(&kind, &labels, &Value::Text("Notch".into()), &NONE).unwrap(),
+            Value::Text("notch".into())
+        );
+    }
+
+    // integers are rounded, then range-checked
+    #[test]
+    fn integers_are_rounded_before_the_range_check() {
+        let freq = param("out1.eq.0.freq");
+        let spec = ParamSpec::new(Kind::Int).range(20.0, 20000.0).unit("Hz");
+        assert_eq!(check(&freq, &spec, &f(1000.4), &NONE).unwrap(), Value::Int(1000));
+        assert_eq!(check(&freq, &spec, &f(19.6), &NONE).unwrap(), Value::Int(20));
+        assert!(check(&freq, &spec, &f(19.4), &NONE).is_err());
+    }
+
+    // SEC-3: the ceiling is a closed bound on output gain, and only on that
+    #[test]
+    fn the_output_gain_ceiling() {
+        let spec = float(-48.0, 12.0);
+        let ceilings = Ceilings { max_output_gain_db: Some(-6.0), ..NONE };
+        let out = param("out2.gain");
+        assert_eq!(check(&out, &spec, &f(-6.0), &ceilings).unwrap(), f(-6.0));
+        assert_eq!(check(&out, &spec, &f(-48.0), &ceilings).unwrap(), f(-48.0));
+        let above = check(&out, &spec, &f((-6.0f64).next_up()), &ceilings);
+        assert!(
+            matches!(above, Err(Error::AboveCeiling { ceiling, unit: "dB" }) if ceiling == -6.0),
+            "{above:?}"
+        );
+        // above the model's own range it is a range error, ceiling or not
+        assert!(matches!(check(&out, &spec, &f(13.0), &ceilings), Err(Error::Invalid(_))));
+        // not for inputs, the mixer or other numbers
+        assert!(check(&param("in1.gain"), &spec, &f(12.0), &ceilings).is_ok());
+        assert!(check(&param("out1.delay"), &float(0.0, 2000.0), &f(100.0), &ceilings).is_ok());
+    }
+
+    #[test]
+    fn the_range_shown_ends_at_the_lower_of_model_and_ceiling() {
+        let spec = float(-48.0, 12.0);
+        let at =
+            |c: Option<f64>| range(&param("out1.gain"), &spec, &Ceilings { max_output_gain_db: c, ..NONE });
+        assert_eq!(at(None).max, Some(12.0));
+        assert_eq!(at(Some(-6.0)).max, Some(-6.0));
+        assert_eq!(at(Some(20.0)).max, Some(12.0), "a ceiling above the model changes nothing");
+        assert_eq!(at(Some(-6.0)).min, Some(-48.0));
+        let unbounded = ParamSpec::new(Kind::Float);
+        let r = range(&param("out1.gain"), &unbounded, &Ceilings { max_output_gain_db: Some(3.0), ..NONE });
+        assert_eq!((r.min, r.max), (None, Some(3.0)));
+    }
+
+    #[test]
+    fn only_the_basic_controls_are_controllable() {
+        for yes in [
+            "in1.gain",
+            "out2.gain",
+            "in1.mute",
+            "out1.mute",
+            "in2.delay",
+            "out1.delay",
+            "in1.eq.9.q",
+            "out2.eq.0.type",
+            "out1.xover.hp.freq",
+            "out2.xover.lp.enabled",
+            "in2.mixer.aes2.level",
+            "in1.mixer.analog1.mute",
+        ] {
+            assert!(controllable(&param(yes)), "{yes}");
+        }
+        for no in [
+            "out1.limiter.threshold",
+            "in1.limiter.threshold",
+            "in1.comp.ratio",
+            "out1.comp.gain",
+            "out1.polarity",
+            "in1.link",
+            "out1.link",
+            "in1.name",
+            "in1.xover.hp.freq",
+            "out1.mixer.aes1.level",
+        ] {
+            assert!(!controllable(&param(no)), "{no}");
+        }
+    }
+
+    #[test]
+    fn a_read_only_control_is_not_controllable() {
+        let spec = float(-48.0, 12.0).read_only();
+        assert!(matches!(check(&param("in1.gain"), &spec, &f(0.0), &NONE), Err(Error::NotControllable)));
+    }
+
+    // SEC-4 ---------------------------------------------------------------------------------------
+
+    const STEP: Duration = Duration::from_millis(50);
+
+    #[test]
+    fn the_first_value_goes_out_at_once() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        assert_eq!(c.take_due(t0), (vec![], None));
+        c.push(param("out1.gain"), f(1.0));
+        assert_eq!(c.take_due(t0).0, [(param("out1.gain"), f(1.0))]);
+        assert_eq!(c.take_due(t0), (vec![], None), "sent values do not go out twice");
+    }
+
+    #[test]
+    fn the_next_value_waits_for_the_interval_and_the_latest_wins() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        let gain = param("out1.gain");
+        c.push(gain.clone(), f(1.0));
+        c.take_due(t0);
+
+        c.push(gain.clone(), f(2.0));
+        c.push(gain.clone(), f(3.0));
+        let (due, wait) = c.take_due(t0 + Duration::from_millis(20));
+        assert_eq!((due, wait), (vec![], Some(Duration::from_millis(30))));
+        let (due, wait) = c.take_due(t0 + Duration::from_millis(49));
+        assert_eq!((due, wait), (vec![], Some(Duration::from_millis(1))));
+        let (due, wait) = c.take_due(t0 + STEP);
+        assert_eq!((due, wait), (vec![(gain.clone(), f(3.0))], None));
+
+        // the interval counts from the last send, not from the last push
+        c.push(gain.clone(), f(4.0));
+        let (due, wait) = c.take_due(t0 + Duration::from_millis(60));
+        assert_eq!((due, wait), (vec![], Some(Duration::from_millis(40))));
+    }
+
+    #[test]
+    fn a_value_after_a_pause_goes_out_at_once() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        c.push(param("out1.gain"), f(1.0));
+        c.take_due(t0);
+        c.push(param("out1.gain"), f(2.0));
+        assert_eq!(c.take_due(t0 + Duration::from_secs(5)).0, [(param("out1.gain"), f(2.0))]);
+    }
+
+    #[test]
+    fn parameters_do_not_hold_each_other_back() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        c.push(param("out1.gain"), f(1.0));
+        c.take_due(t0);
+        c.push(param("out1.gain"), f(2.0));
+        c.push(param("in1.gain"), f(5.0));
+        let (due, wait) = c.take_due(t0 + Duration::from_millis(10));
+        assert_eq!((due, wait), (vec![(param("in1.gain"), f(5.0))], Some(Duration::from_millis(40))));
+    }
+
+    #[test]
+    fn the_wait_is_the_shortest_one() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        c.push(param("out1.gain"), f(1.0));
+        c.take_due(t0);
+        c.push(param("in1.gain"), f(1.0));
+        c.take_due(t0 + Duration::from_millis(20));
+        c.push(param("out1.gain"), f(2.0));
+        c.push(param("in1.gain"), f(2.0));
+        let (due, wait) = c.take_due(t0 + Duration::from_millis(25));
+        assert_eq!((due, wait), (vec![], Some(Duration::from_millis(25))));
+    }
+}

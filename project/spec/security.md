@@ -9,9 +9,13 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   amp's state. It never pushes its cached or displayed state, and it has no write queue for amps
   that are not ONLINE.
 - **SEC-2** **Hard limits.** Every value is checked against the model's range from the library
-  before it is sent; values outside it, NaN and infinity are never sent.
+  before it is sent; values outside it, NaN and infinity are never sent. A value of the wrong kind
+  (a bool for a gain) is refused, not converted. The IPX reports no ranges, so for the basic
+  controls (gain, delay, EQ, crossover frequency, mixer level) it takes the IPD's.
 - **SEC-3** **User ceilings.** Each amp can have user ceilings (maximum output gain, maximum
-  limiter threshold) that the UI cannot exceed.
+  limiter threshold) that the UI cannot exceed. A value above a ceiling is refused, not clamped,
+  and the range a control shows ends at the ceiling. Lowering a ceiling writes nothing: a control
+  that is above it stays until the user moves it.
 - **SEC-4** **Small steps.** Faders follow `UX-22` and `UX-23`. While a fader moves, only the
   latest value is sent, at most every 50 ms per parameter.
 - **SEC-5** **Confirm dangerous actions:** UNMUTE ALL, preset recall, loading a file (see

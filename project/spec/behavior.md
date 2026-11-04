@@ -50,6 +50,12 @@ statement with a `BEH-<n>` ID.
   time, up to 15 s; the status shows the outcome of the latest attempt, and a lost connection shows
   RECONNECTING… until its first retry fails. CONNECT and editing the IP try again at once.
   Connecting only reads (`SEC-1`).
+- **BEH-43** Once an amp is ONLINE the app reads its whole DSP state (reads only). The state follows
+  what the app writes and what the amp reports (front panel, another controller), and is
+  forgotten when the amp is not ONLINE. Until the read is done the state is partial. An IPD takes
+  several seconds, so the amp is ONLINE before that. Intents (`BEH-27` to `BEH-30`) are accepted
+  only for an amp that is ONLINE; they are refused otherwise, never queued (`SEC-1`). The basic
+  controls are gain, mute, delay, mixer, EQ and the output filters.
 
 ## IPD access levels
 

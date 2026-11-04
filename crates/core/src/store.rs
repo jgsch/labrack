@@ -225,6 +225,17 @@ impl Store {
         self.save()
     }
 
+    /// The user ceilings of an amp (SEC-3); NaN and infinity are refused.
+    pub fn set_ceilings(&mut self, id: AmpId, ceilings: Ceilings) -> Result<()> {
+        for value in [ceilings.max_output_gain_db, ceilings.max_limiter_dbu].into_iter().flatten() {
+            if !value.is_finite() {
+                return Err(Error::Invalid(format!("A ceiling must be a number, not {value}")));
+            }
+        }
+        self.get_mut(id)?.ceilings = ceilings;
+        self.save()
+    }
+
     pub fn set_preset(&mut self, id: AmpId, preset: Option<Preset>) -> Result<()> {
         self.get_mut(id)?.preset = preset;
         Ok(())

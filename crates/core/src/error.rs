@@ -9,6 +9,15 @@ pub enum Error {
     EmptyName,
     #[error("Unknown amplifier")]
     UnknownAmp,
+    #[error("The amplifier is not online")]
+    NotOnline,
+    #[error("This control cannot be set")]
+    NotControllable,
+    /// A value outside the range of the control, of the wrong kind, NaN or infinite.
+    #[error("{0}")]
+    Invalid(String),
+    #[error("Above the ceiling of {ceiling} {unit}")]
+    AboveCeiling { ceiling: f64, unit: &'static str },
     #[error("Cannot read or write the config file: {0}")]
     Io(#[from] std::io::Error),
     #[error("The config file is not valid: {0}")]
