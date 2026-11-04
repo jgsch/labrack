@@ -1,5 +1,5 @@
 /* The look of the mockup (project/mockup/mockup/boards): Catppuccin Mocha with a lavender accent. */
-:root{--base:#11111b;--panel:#1e1e2e;--inset:#181825;--border:#45475a;--border-strong:#585b70;--button:#313244;--text:#cdd6f4;--muted:#a6adc8;--lavender:#b4befe;--sapphire:#74c7ec;--mauve:#cba6f7;--green:#a6e3a1;--yellow:#f9e2af;--red:#f38ba8;--peach:#fab387;--maroon:#eba0ac}
+:root{--fader-h:286px;--base:#11111b;--panel:#1e1e2e;--inset:#181825;--border:#45475a;--border-strong:#585b70;--button:#313244;--text:#cdd6f4;--muted:#a6adc8;--lavender:#b4befe;--sapphire:#74c7ec;--mauve:#cba6f7;--green:#a6e3a1;--yellow:#f9e2af;--red:#f38ba8;--peach:#fab387;--maroon:#eba0ac}
 html,body{margin:0;background:var(--base)}
 /* native controls in their dark form: WebKitGTK draws them with the GTK theme otherwise */
 :root{color-scheme:dark}
@@ -24,10 +24,10 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .fader-strip.framed{padding:22px 12px 12px;background:var(--inset);border:1px solid var(--border);border-radius:4px;box-sizing:border-box}
 .fader-label{position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--base);color:var(--muted);font-size:10px;font-weight:600;letter-spacing:0.12em}
 .fader-body{display:flex;gap:10px;align-items:stretch}
-.fader-scale{position:relative;flex:0 0 auto;width:30px;height:200px;background:linear-gradient(rgba(205,214,244,0.5),rgba(205,214,244,0.5)) right bottom/6px 1px no-repeat}
+.fader-scale{position:relative;flex:0 0 auto;width:30px;height:var(--fader-h);background:linear-gradient(rgba(205,214,244,0.5),rgba(205,214,244,0.5)) right bottom/6px 1px no-repeat}
 .fader-scale::after{content:"";position:absolute;right:0;top:0;bottom:0;width:6px;background:repeating-linear-gradient(to bottom,rgba(205,214,244,0.5) 0 1px,transparent 1px var(--tick))}
 .fader-scale span{position:absolute;right:9px;transform:translateY(-50%);font-size:9px;color:var(--muted)}
-.fader-track{position:relative;flex:0 0 auto;width:52px;height:200px;border-radius:4px;cursor:ns-resize;touch-action:none;outline:none}
+.fader-track{position:relative;flex:0 0 auto;width:52px;height:var(--fader-h);border-radius:4px;cursor:ns-resize;touch-action:none;outline:none}
 .fader-track:focus-visible{outline:2px solid var(--lavender);outline-offset:2px}
 .fader-groove,.fader-meter{position:absolute;top:0;bottom:0;left:calc(50% - 9px);width:18px}
 .fader-groove{background:var(--button)}
@@ -140,14 +140,15 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .picker-level span,.picker-gr span{position:absolute;top:0;bottom:0;background:var(--green);transition:width 0.09s linear}
 .picker-level span{left:0}
 .picker-gr span{right:0;background:var(--peach)}
-.tab-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;margin-bottom:-16px}
+/* as tall with or without the LINK button (52 px with it), so the panel does not move between tabs */
+.tab-row{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;margin-bottom:-16px;min-height:52px}
 .mix-tab{--c:var(--lavender);--bg:#262638;--bd:#7f849c;display:flex;align-items:center;min-height:48px;padding:6px 18px;box-sizing:border-box;border-radius:6px 6px 0 0;font-size:13px;font-weight:600;letter-spacing:0.08em;background:var(--bg);color:var(--c);border:1px solid var(--bd);border-bottom:0}
 .mix-tab.in{--c:var(--sapphire);--bg:#1c2a38;--bd:#3f6a85}
 .mix-tab.on{position:relative;z-index:2;background:var(--c);color:var(--base);border-color:var(--c);margin-bottom:-2px;padding-bottom:8px}
 .link-button{margin-left:auto;margin-bottom:8px;min-height:44px;padding:0 14px;border-radius:4px;font-size:12px;font-weight:600;letter-spacing:0.06em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .link-button.on.in{background:var(--sapphire);color:var(--base);border-color:var(--sapphire)}
 .link-button.on.out{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
-.tab-panel{display:flex;flex-direction:column;gap:16px;padding:16px 20px;border:2px solid var(--lavender);border-radius:6px;background:#222236}
+.tab-panel{display:flex;flex-direction:column;gap:16px;padding:16px 20px;box-sizing:border-box;min-height:718px;border:2px solid var(--lavender);border-radius:6px;background:#222236}
 .tab-panel.in{border-color:var(--sapphire);background:#1b2635}
 .levels-row{display:flex;align-items:stretch;gap:10px;min-width:0}
 .levels-row+.levels-row{padding-top:16px;border-top:2px dashed var(--border-strong)}
@@ -161,11 +162,11 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .card-side{display:flex;flex-direction:column;align-items:center;gap:6px}
 .card-button{width:100px;min-height:44px;border-radius:4px;font-size:13px;font-weight:700;letter-spacing:0.04em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .card-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
-.gr-meter{display:flex;height:200px}
+.gr-meter{display:flex;height:var(--fader-h)}
 .gr-bar{position:relative;width:24px;background:var(--button)}
 .gr-fill{position:absolute;left:0;right:0;top:0;background:var(--peach);transition:height 0.09s linear}
 .gr-bar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 5px,var(--base) 5px 7px)}
-.gr-scale{position:relative;width:30px;background:repeating-linear-gradient(to bottom,rgba(250,179,135,0.6) 0 1px,transparent 1px 50px) left top/6px 100% no-repeat}
+.gr-scale{position:relative;width:30px;background:repeating-linear-gradient(to bottom,rgba(250,179,135,0.6) 0 1px,transparent 1px calc(var(--fader-h) / 4)) left top/6px 100% no-repeat}
 .gr-scale::after{content:"";position:absolute;left:0;bottom:0;width:6px;height:1px;background:rgba(250,179,135,0.6)}
 .gr-scale span{position:absolute;left:9px;transform:translateY(-50%);font-size:9px;color:var(--peach)}
 .limiter-boxes{display:grid;grid-template-columns:100px 100px;gap:6px 12px}
@@ -225,7 +226,8 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .mixer-row{display:flex;align-items:stretch;gap:8px;min-width:0}
 .mixer-row+.mixer-row{padding-top:16px;border-top:2px dashed var(--border-strong)}
 .mixer-cards{flex:1 1 0;min-width:0;display:flex;gap:10px}
-.level-card.mix{padding:22px 10px 12px}
+/* 2 px more at the bottom than the OUT cards' thicker border: the Mixer as tall as the Levels */
+.level-card.mix{padding:22px 10px 14px}
 .level-card.mix .card-body{gap:12px}
 .card-fader.dim{opacity:0.6}
 .mixer-go{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;padding:0 12px;background:transparent;color:var(--sapphire);border:0}

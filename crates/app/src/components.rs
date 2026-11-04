@@ -33,8 +33,8 @@ pub fn Fader(
     let spoken = format!("{text} {unit}");
     let box_label = label.clone();
     let marks = control::scale_marks(bounds);
-    // a tick every 6 dB on the 200 px track
-    let tick = 200.0 * 6.0 / span;
+    // a tick every 6 dB, on a track as tall as --fader-h
+    let tick = 6.0 / span;
     let zero = bounds.contains(0.0).then(|| at(0.0));
     // green to -12 dB, yellow to 0 dB, red above, wherever those sit on this fader's scale
     let colours = format!(
@@ -59,7 +59,7 @@ pub fn Fader(
             if show_label {
                 span { class: "fader-label", "{label}" }
             }
-            div { class: "fader-body", style: "--tick: {tick}px",
+            div { class: "fader-body", style: "--tick: calc(var(--fader-h) * {tick})",
             div { class: "fader-scale", "aria-hidden": "true",
                 for (db, top) in marks.iter().map(|&db| (db, 100.0 - at(db))) {
                     span { style: "top: {top}%", "{control::signed(db)}" }
