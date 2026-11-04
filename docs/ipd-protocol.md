@@ -122,7 +122,7 @@ Key = (struct, member, channel, num). Channel: inputs A/B = 0/1, outputs 1/2 = 0
 | 1 | FREQ | u16 | 1 (Hz) |
 | 2 | Q | u16 | 10 |
 | 3 | TYPE | u8 | |
-| 4 | THRESHOLD | i16 | 100 (dB or dBu) |
+| 4 | THRESHOLD | i16 | 100 (dB for the input and compressor thresholds, dBV for the output limiter, see [Limiter threshold units](#limiter-threshold-units)) |
 | 5 / 6 / 7 | ATTACK / RELEASE / HOLD | i16 | 1 (ms) |
 | 8 | DELAY | u32 | 1000 (ms to microseconds) |
 | 9 | STATUS | u8 | |
@@ -163,8 +163,8 @@ Unlisted members default to i32.
 | PEQ type / freq / gain / Q / on | 5 / 3, 1, 0, 2, 24; num = band | freq 20..20000 Hz, gain -12..12 dB, Q 0.2..25 |
 | HPF freq / type / on | 4 / 1, 3, 24 | 19..20000 Hz (19 appears to mean off) |
 | LPF freq / type / on | 3 / 1, 3, 24 | 20..20001 Hz (20001 appears to mean off) |
-| limiter threshold / release | 6 / 4, 6 | release 10..1000 ms; outputs in dBu 16.78 up to ceiling 33.8 (1200), 36.78 (2400), 39.83 (4800); inputs from -24 dB |
-| compressor threshold / ratio / attack / hold / release / gain | 12 / 4, 27, 5, 7, 6, 0 | ratio 1.2..25, times 1..10000 ms, gain -12..12 dB; threshold: the app allows up to 36.78 but an IPD2400 reports 37.82 (inputs) and 39.78 dBu (outputs) |
+| limiter threshold / release | 6 / 4, 6 | release 10..1000 ms; outputs 16.78 dBV up to ceiling 33.8 (1200), 36.78 (2400), 39.83 (4800) dBV; inputs from -24 dB |
+| compressor threshold / ratio / attack / hold / release / gain | 12 / 4, 27, 5, 7, 6, 0 | ratio 1.2..25, times 1..10000 ms, gain -12..12 dB; threshold: the app allows up to 36.78 but an IPD2400 reports 37.82 (inputs) and 39.78 (outputs); the output figure is probably dBV like the limiter's, not verified |
 | link inputs / outputs | 10 / 25, channel 0 / 0x80, num 2 | 0/1 |
 | channel name | 14 / 16 | 16 chars |
 | unit name, connector names | 13 / 16, 13 / 46 (channel 0-3) | 16 chars |
@@ -188,6 +188,31 @@ Users (CURRENT_USER): 0 AllDSP, 1 Factory, 2 Developer, 3 Admin, 4 User, 5 Locke
 AMP_READINGS: bits 31-24, 23-16, 15-8 = load impedance of outputs 1-3 in 0.1 ohm (255 = open/unknown), bits 7-0 = temperature in degrees C.
 HARDWARE_STATUS bits: 0x1 init done, 0x2 memory test failed, 0x4 standby, 0x8 codec/bus failure, 0x10 DSP not synced, 0x20 protect, 0x40 dim display, 0x80 display off, 0x400 AES backup, 0x8000 telnet enabled, 0x80000 amplifier protection/standby.
 ACCESS_RIGHTS bits: 0x1 input channel, 0x2 output channel, 0x4 load preset, 0x8 save preset, 0x10 front panel, 0x4000 display lock, 0x8000 language, 0x10000 user rights, 0x20000 locked rights, 0x40000 unit name, 0x80000 auto lock, 0x100000 unit configuration, 0x200000 load empty preset, 0x400000 admin rights, 0x800000 developer rights, 0x1000000 upgrade firmware, 0x2000000 full skin, 0x4000000 master volume, 0x8000000 tone control.
+
+## Limiter threshold units
+
+The output limiter threshold is stored **in dBV** (0 dBV = 1 V rms), not in dBu, although the vendor
+apps and the device skins call it dBu. Convert with:
+
+    dBu = dBV + 20 * log10(1 / 0.7746) = dBV + 2.2185        (0 dBu = 0.7746 V rms)
+    Vpk = sqrt(2) * 10^(dBV / 20)          W = Vpk^2 / (2 * Ohm)
+
+Verified on an IPD 2400 MK1, firmware 1.2.6, with the settings read through the protocol and the same
+settings shown in IntelliDrive Controller under Windows (2026-11-04):
+
+| Stored (this protocol) | Shown by the Windows app | |
+|---|---|---|
+| 29.04 dBV | 31.26 dBu | 40 Vpk, 200 W into 4 ohm |
+| 32.56 dBV | 34.78 dBu | 60 Vpk, 450 W into 4 ohm |
+
+40 Vpk is 28.28 V rms, which is 29.03 dBV: the stored number is the untranslated dBV, and the 2.22 dB
+between the two columns is exactly the dBV-to-dBu distance. The ceilings of the app skins are dBV too:
+33.8 dBV is 69 Vpk (the maximum of the IPX 1200), 36.78 dBV is 98 Vpk (IPD 2400), 39.83 dBV is 138 Vpk
+(IPD 4800).
+
+The impedance is the app's (default 4 ohm), not the amp's, and so is the display. Both front panels
+(IPD 2400 and IPX 1200) offer dBu only; whether an IPD panel shows 29.04 or the converted 31.26 has not
+been checked (see `project/backlog.md`).
 
 ## Meters
 
@@ -215,7 +240,8 @@ A command is confirmed by any RSP echo (the firmware may reset the value to 0); 
 - Resend after 0.5 s without reply; the app reconnects at 1 s (3 times) and gives up at 2 s.
 - Some GETs are never sent as such; the firmware answers both keys: PIN / MODEL_NUMBER / MODEL_FIRMWARE via ACCESS_RIGHTS (13, 30), BUILD_NUMBER / MODEL_NAME via SW_VERSION (13, 33), AMP_READINGS(_2) via CURRENT_USER (13, 38).
 - Login: SET CHECK_PASSWORD (13, 29) to 8 characters, then read CURRENT_USER. Not tried on hardware. A separate PIN exists (13, 51 / 52).
-- The vendor app shows the output threshold as Vpk, W rms and dBu and asks for a load impedance (default 4 ohm). The amp stores only the threshold, **in dBV** (rms re 1 V), not dBu; the impedance and the conversions are app-side. dBu = dBV + 2.2185. Checked on an IPD 2400 MK1 fw 1.2.6 (2026-11-04): stored 32.56 is 42.43 V rms, which the Windows app shows as 34.78 dBu / 60 Vpk / 450 W; stored 29.04 as 31.26 dBu / 40 Vpk / 200 W. The ceilings above are dBV too: 33.8 dBV is 69 Vpk (the IPX 1200's maximum), 36.78 dBV 98 Vpk (2400), 39.83 dBV 138 Vpk (4800). The amp's front panel shows and sets dBu only.
+- The vendor app shows the output threshold as Vpk, W rms and dBu and asks for a load impedance
+  (default 4 ohm); the amp stores the threshold in dBV. See [Limiter threshold units](#limiter-threshold-units).
 - Before closing, send ASCII `DDRESETCONNECTIO`.
 - Firmware update uses ASCII commands `DDUPLOADFIRMWARE`, `DCRESARTFIRMWARE`, `DDReset_Interface`; do not send.
 
