@@ -1,23 +1,22 @@
 #![cfg(feature = "ipx")]
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use labgruppen::amps::ipx::client::ClientConfig;
+use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params::{self, Ty};
 use labgruppen::amps::ipx::protocol::{
     Address, Ctrl, Env, FrameParser, Main, build_frame, ctrl_sub, xor_password,
 };
 use labgruppen::amps::ipx::structs::{
-    AUDCFG_SIZE, DeviceState, Meters, StoredPreset, SystemAttributes, audio_bytes, audio_dword, cstr,
-    parse_preset_names, parse_valid_presets,
+    DeviceState, Meters, StoredPreset, SystemAttributes, audio_dword, parse_preset_names, parse_valid_presets,
 };
 use labgruppen::amps::ipx::{Discovered, IpxAmp};
 use labgruppen::{Amp, AmpEvent, Error, Param, Value};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc};
+use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 
 fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
@@ -300,174 +299,10 @@ fn system_attributes_and_discovery_payload() {
     assert!(Discovered::from_payload("x".into(), &p[..0x40]).is_none());
 }
 
-// ---- a tiny in-process IPX ----
-
-enum Cmd {
-    Push(Vec<u8>),
-    Drop,
-}
-
-#[derive(Default)]
-struct State {
-    sync: Vec<u8>,
-    heartbeats: usize,
-    recalled: Vec<u32>,
-    reject_writes: HashSet<Address>,
-    silent: bool,
-    /// Do not answer the next GETPRM of these addresses (once per entry).
-    drop_reads: Vec<Address>,
-    /// SETPRESET payloads as received.
-    store_payloads: Vec<Vec<u8>>,
-    /// Presets stored by SETPRESET: wire index -> name and audio config.
-    stored: std::collections::HashMap<u32, (String, Vec<u8>)>,
-    /// Receive SETPRESET but do not store anything.
-    ignore_store: bool,
-}
-
-struct FakeAmp {
-    port: u16,
-    state: Arc<Mutex<State>>,
-    cmd: mpsc::UnboundedSender<Cmd>,
-}
-
-impl FakeAmp {
-    async fn start() -> FakeAmp {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let state = Arc::new(Mutex::new(State { sync: fixture("dev_prm_sync.bin"), ..State::default() }));
-        let (cmd, rx) = mpsc::unbounded_channel();
-        tokio::spawn(run(listener, state.clone(), rx));
-        FakeAmp { port, state, cmd }
-    }
-
-    fn state(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap()
-    }
-
-    async fn connect(&self) -> IpxAmp {
-        IpxAmp::connect_with("127.0.0.1", self.port, Duration::from_secs(2)).await.unwrap()
-    }
-}
-
-async fn run(listener: TcpListener, state: Arc<Mutex<State>>, mut cmd: mpsc::UnboundedReceiver<Cmd>) {
-    while let Ok((sock, _)) = listener.accept().await {
-        serve(sock, &state, &mut cmd).await;
-    }
-}
-
-async fn serve(mut sock: TcpStream, state: &Mutex<State>, cmd: &mut mpsc::UnboundedReceiver<Cmd>) {
-    let meters = build_frame(Main::GETPRM, [Env::GAINSLEVEL, 0, 0, 0], &fixture("gainslevel.bin")).unwrap();
-    let mut parser = FrameParser::new();
-    let mut buf = [0u8; 4096];
-    let mut tick = tokio::time::interval(Duration::from_millis(40));
-    loop {
-        let out: Vec<Vec<u8>> = tokio::select! {
-            n = sock.read(&mut buf) => match n {
-                Ok(0) | Err(_) => return,
-                Ok(n) => parser.feed(&buf[..n]).into_iter().flat_map(|fr| answer(state, fr)).collect(),
-            },
-            c = cmd.recv() => match c {
-                Some(Cmd::Push(bytes)) => vec![bytes],
-                Some(Cmd::Drop) | None => return,
-            },
-            _ = tick.tick() => vec![meters.clone()],
-        };
-        for bytes in out {
-            if sock.write_all(&bytes).await.is_err() {
-                return;
-            }
-        }
-    }
-}
-
 fn padded(s: &str, n: usize) -> Vec<u8> {
     let mut v = s.as_bytes().to_vec();
     v.resize(n, 0);
     v
-}
-
-fn answer(state: &Mutex<State>, fr: labgruppen::amps::ipx::protocol::Frame) -> Vec<Vec<u8>> {
-    const AUDIO: usize = DeviceState::AUDIO_OFFSET;
-    let mut st = state.lock().unwrap();
-    let reply = |main, payload: &[u8]| vec![build_frame(main, fr.sub, payload).unwrap()];
-    match fr.main {
-        Main::GETPRM => {
-            let a = fr.address();
-            let payload = match a.env {
-                Env::SYSATTR => {
-                    let mut p = padded("IPX 1200", 16);
-                    p.extend(padded("SN-0042", 32));
-                    p
-                }
-                _ if st.silent => return vec![],
-                _ if st.drop_reads.contains(&a) => {
-                    st.drop_reads.retain(|x| *x != a);
-                    return vec![];
-                }
-                Env::DEV_PRM_SYNC => st.sync.clone(),
-                Env::DEVICE_NAME => padded("Stage Left", 32),
-                Env::ALL_TEMPERATURES => [35i32, 40, 38].iter().flat_map(|t| t.to_le_bytes()).collect(),
-                _ => {
-                    let len = params::param_for(a).and_then(params::slot).map_or(4, |s| s.wire_len());
-                    match audio_bytes(&st.sync, AUDIO, a, len) {
-                        // like the real amp: the derived limiter power is an integer in a single GETPRM
-                        Some(b) if a.env == Env::OUTPUT_LIMITER && a.field == 2 => {
-                            (f32::from_le_bytes(b.try_into().unwrap()).round() as i32).to_le_bytes().to_vec()
-                        }
-                        Some(b) => b.to_vec(),
-                        None => return vec![],
-                    }
-                }
-            };
-            reply(Main::GETPRM, &payload)
-        }
-        Main::SETPRM => {
-            let a = fr.address();
-            if let Some(d) = audio_dword(a).filter(|_| !st.reject_writes.contains(&a)) {
-                let o = AUDIO + d * 4;
-                st.sync[o..o + fr.payload.len()].copy_from_slice(&fr.payload);
-            }
-            vec![]
-        }
-        Main::SYSCTRL => match fr.ctrl() {
-            Ctrl::HEARTBEAT => {
-                st.heartbeats += 1;
-                vec![]
-            }
-            Ctrl::GETALLPRESETNAME => reply(Main::SYSCTRL, &fixture("preset_names.bin")),
-            Ctrl::GETVALIDPRESETS => {
-                let valid: Vec<u8> =
-                    (0..50u32).flat_map(|i| u32::from(matches!(i, 1 | 2 | 3 | 5)).to_le_bytes()).collect();
-                reply(Main::SYSCTRL, &valid)
-            }
-            Ctrl::GETPRESET => {
-                let mut p = fixture("getpreset_1.bin");
-                let index = u32::from_le_bytes(fr.payload[..4].try_into().unwrap());
-                if let Some((name, audio)) = st.stored.get(&index) {
-                    p[4..20].copy_from_slice(&padded(name, 16));
-                    p[20..24].copy_from_slice(&index.to_le_bytes());
-                    p[StoredPreset::AUDIO_OFFSET..StoredPreset::AUDIO_OFFSET + AUDCFG_SIZE]
-                        .copy_from_slice(audio);
-                }
-                reply(Main::SYSCTRL, &p)
-            }
-            Ctrl::SETPRESET => {
-                st.store_payloads.push(fr.payload.clone());
-                if !st.ignore_store && fr.payload.len() == 20 {
-                    let index = u32::from_le_bytes(fr.payload[16..20].try_into().unwrap());
-                    let audio = st.sync[AUDIO..AUDIO + AUDCFG_SIZE].to_vec();
-                    st.stored.insert(index, (cstr(&fr.payload[..16]), audio));
-                }
-                vec![]
-            }
-            Ctrl::RECALLPRESET => {
-                st.recalled.push(u32::from_le_bytes(fr.payload[..4].try_into().unwrap()));
-                vec![]
-            }
-            _ => vec![],
-        },
-        _ => vec![],
-    }
 }
 
 #[tokio::test]
@@ -773,6 +608,37 @@ async fn local_close_is_clean() {
     // The fake accepts a new controller once the first one is gone.
     let again = fake.connect().await;
     assert_eq!(again.get(&param("out1.gain")).await.unwrap(), f(-2.5));
+}
+
+/// ARCH-6: the fake counts what changes the amp (SETPRM, RECALLPRESET, SETPRESET), so tests can prove
+/// that a connection only reads (SEC-1).
+#[tokio::test]
+async fn fake_counts_writes_and_not_reads() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    amp.status().await.unwrap();
+    amp.presets().await.unwrap();
+    amp.snapshot().await.unwrap();
+    amp.get(&param("out1.gain")).await.unwrap();
+    assert_eq!(fake.writes(), 0);
+
+    amp.set(&param("out1.gain"), f(1.0)).await.unwrap();
+    assert_eq!(fake.state().setprm, [Address::new(Env::OUTPUT_LEVEL, 0, 0, 0)]);
+    amp.recall_preset(3).await.unwrap();
+    amp.store_preset(5, "Walk").await.unwrap();
+    assert_eq!(fake.writes(), 3);
+}
+
+/// ARCH-6: a busy fake accepts the connection and closes it at once, like an amp that has another
+/// controller; it serves again when the other controller is gone.
+#[tokio::test]
+async fn busy_fake_refuses_a_second_controller() {
+    let fake = FakeAmp::start().await;
+    fake.state().busy = true;
+    let err = IpxAmp::connect_with("127.0.0.1", fake.port, Duration::from_secs(1)).await.err().unwrap();
+    assert!(matches!(err, Error::Busy(_)), "{err}");
+    fake.state().busy = false;
+    assert_eq!(fake.connect().await.get(&param("out1.gain")).await.unwrap(), f(-2.5));
 }
 
 #[tokio::test]

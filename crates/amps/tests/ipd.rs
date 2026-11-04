@@ -208,6 +208,24 @@ async fn client_against_simulator_mk1() {
     exercise(false).await;
 }
 
+/// ARCH-6: the simulator records the writes it receives, so tests can prove that a connection only
+/// reads (SEC-1).
+#[tokio::test(flavor = "multi_thread")]
+async fn simulator_records_writes_and_not_reads() {
+    for mk2 in [true, false] {
+        let (srv, amp) = connect(mk2).await;
+        amp.status().await.unwrap();
+        amp.get(&param("out1.gain")).await.unwrap();
+        amp.presets().await.unwrap();
+        assert_eq!(srv.writes(), [], "reads are not writes (mk2: {mk2})");
+
+        amp.set(&param("out1.gain"), Value::Float(-2.5)).await.unwrap();
+        let key = labgruppen::amps::ipd::params::slot(&param("out1.gain")).unwrap().key;
+        assert!(srv.writes().contains(&key), "mk2: {mk2}");
+        amp.close().await;
+    }
+}
+
 /// BEH-37: store the current settings to a slot under a name.
 #[tokio::test(flavor = "multi_thread")]
 async fn store_preset_on_simulator() {

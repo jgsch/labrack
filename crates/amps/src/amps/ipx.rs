@@ -9,6 +9,7 @@
 //! [`Error::NotConfirmed`] when it differs; [`IpxAmp::set_unverified`] skips that round trip.
 
 pub mod client;
+pub mod fake;
 pub mod params;
 pub mod protocol;
 pub mod structs;

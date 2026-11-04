@@ -101,6 +101,8 @@ pub struct SimAmp {
     t0: Instant,
     hw_id: u8,
     noise: u32,
+    /// Key of every SET / FACTORY item the amp processed (commands included), oldest first.
+    writes: Vec<Key>,
 }
 
 #[allow(non_snake_case)]
@@ -168,6 +170,7 @@ impl SimAmp {
             t0: Instant::now(),
             hw_id: 1,
             noise: 12345,
+            writes: Vec::new(),
         }
     }
 
@@ -279,6 +282,7 @@ impl SimAmp {
             if matches!(*op, OP_SET | OP_FACTORY)
                 && let Some(v) = decode_raw(key.member_id, val)
             {
+                self.writes.push(*key);
                 if key.struct_id == S_COMMAND {
                     self.command(key.num);
                 } else if key.member_id == M_CHECK_PASSWORD {
@@ -328,6 +332,7 @@ impl SimAmp {
 pub struct SimServer {
     pub addr: SocketAddr,
     stop: watch::Sender<bool>,
+    amp: Arc<Mutex<SimAmp>>,
 }
 
 impl SimServer {
@@ -337,18 +342,24 @@ impl SimServer {
         let addr = listener.local_addr()?;
         let (stop, mut stopped) = watch::channel(false);
         let amp = Arc::new(Mutex::new(SimAmp::new(model, mk2)));
+        let shared = amp.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _ = stopped.changed() => break,
                     accepted = listener.accept() => {
                         let Ok((conn, _)) = accepted else { continue };
-                        tokio::spawn(serve(amp.clone(), conn, stopped.clone()));
+                        tokio::spawn(serve(shared.clone(), conn, stopped.clone()));
                     }
                 }
             }
         });
-        Ok(SimServer { addr, stop })
+        Ok(SimServer { addr, stop, amp })
+    }
+
+    /// Key of every SET the simulated amp processed so far, oldest first. Reads are not listed.
+    pub fn writes(&self) -> Vec<Key> {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).writes.clone()
     }
 
     pub fn shutdown(&self) {
