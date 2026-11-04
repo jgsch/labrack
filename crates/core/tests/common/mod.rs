@@ -101,6 +101,11 @@ impl Heard {
         self.heard.lock().unwrap().insert(protocol, Err(err));
     }
 
+    /// Forget what was searched so far.
+    pub fn forget(&self) {
+        self.searched.lock().unwrap().clear();
+    }
+
     /// Protocols searched so far, in order of the requests.
     pub fn searched(&self) -> Vec<Protocol> {
         self.searched.lock().unwrap().clone()

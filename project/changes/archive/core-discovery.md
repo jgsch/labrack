@@ -29,6 +29,8 @@ Edits `BEH-18` and `BEH-19` (scan duration, what is searched and how, default na
 ## Notes
 
 - Depends on `core-amp-list`.
+- Decided with the product owner: scan at app start; only the default-route /24 is probed for the
+  IPD (no interface listing); the scan window stays 5 s.
 - `Finder` (`crates/core/src/discovery.rs`) searches one protocol for a window; `Lan` is the real
   one, tests use a fake that records what was searched (as `Connector` does for connections). The
   `Hub` owns the switches, the scans and the merge: `set_switches`, `scan_now`, `scanning`,
@@ -36,14 +38,14 @@ Edits `BEH-18` and `BEH-19` (scan duration, what is searched and how, default na
 - SCAN NOW and the IPD switch use both IPD ways: listen for the UDP announcements and probe the
   /24 (the vendor app probes; the announcements were never seen on the test network). The subnet is
   that of the computer's default route, found by connecting a UDP socket, which sends nothing. An
-  amp on another interface is not found; manual add is the fallback (BEH-20). Listing all
-  interfaces would need a new dependency (`if-addrs` or `nix`); not done.
+  amp on another interface is not found; manual add is the fallback (BEH-20). Not
+  planned.
 - IPX: the address in the broadcast is used, the sender's address if that is not IPv4.
 - A scan lasts 5 s (`Timing::scan_window`): the library's CLI probes for 3 s, and the IPD can need
   a few seconds over Wi-Fi.
-- The app does not scan when it starts: BEH-18 starts scans on switching on and on SCAN NOW only.
-  Whether a first start with an empty list should scan is for the product owner; BEH-41 sends the
-  user to the Search tab instead.
+- The app scans the protocols that are on when it starts (`Hub::new`), so a first start finds amps
+  without a click. A subscriber created after `new` misses that scan's `Started` / `Finished`; it
+  reads `scanning()` and the list.
 - Two scans can run together when a switch goes on during one; the merge makes that safe. A scan
   does not keep the hub alive.
 - Not covered by tests: the real IPD side of `Lan` (probing a subnet needs port 50675 and a real or

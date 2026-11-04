@@ -10,18 +10,65 @@ use tokio::time::sleep;
 
 const OFF: Switches = Switches { ipd: false, ipx: false };
 
-/// A hub whose switches are `switches`, saved before it starts, so that starting scans nothing.
-fn hub_at(switches: Switches, heard: &std::sync::Arc<Heard>) -> labrack_core::Hub {
+/// A hub whose switches are `switches`, saved before it starts. Its startup scan, if any, has
+/// finished and is forgotten when this returns, so a test sets what is heard afterwards.
+async fn settled(switches: Switches, heard: &std::sync::Arc<Heard>) -> labrack_core::Hub {
     let mut store = Store::in_memory();
     store.set_switches(switches).unwrap();
-    hub_finding(store, heard.clone())
+    let hub = hub_finding(store, heard.clone());
+    while hub.scanning() {
+        sleep(Duration::from_millis(10)).await;
+    }
+    heard.forget();
+    hub
 }
 
-// BEH-17, BEH-18: the app does not search by itself when it starts
+async fn until_scanned(hub: &labrack_core::Hub) {
+    while hub.scanning() {
+        sleep(Duration::from_millis(10)).await;
+    }
+}
+
+// BEH-18: when the app starts it searches the protocols that are on
 #[tokio::test]
-async fn starting_the_app_searches_nothing() {
+async fn starting_the_app_scans_the_protocols_that_are_on() {
     let heard = Heard::nothing();
+    heard.hear(Protocol::Ipx, &["10.0.0.9"]);
+    heard.hear(Protocol::Ipd, &["10.0.0.5"]);
     let hub = hub_finding(Store::in_memory(), heard.clone());
+    assert!(hub.scanning(), "the scan has started when the hub is back");
+    until_scanned(&hub).await;
+
+    let mut searched = heard.searched();
+    searched.sort_by_key(|p| p.label());
+    assert_eq!(searched, [Protocol::Ipd, Protocol::Ipx]);
+    let found: Vec<_> = hub.amps().into_iter().map(|a| (a.ip, a.source)).collect();
+    assert_eq!(found, [("10.0.0.5".to_string(), Source::Auto), ("10.0.0.9".to_string(), Source::Auto)]);
+}
+
+// BEH-17, BEH-18: at start only the protocols that are on are searched
+#[tokio::test]
+async fn starting_the_app_scans_only_what_is_on() {
+    for (switches, want) in [
+        (Switches { ipd: true, ipx: false }, Protocol::Ipd),
+        (Switches { ipd: false, ipx: true }, Protocol::Ipx),
+    ] {
+        let heard = Heard::nothing();
+        let mut store = Store::in_memory();
+        store.set_switches(switches).unwrap();
+        let hub = hub_finding(store, heard.clone());
+        until_scanned(&hub).await;
+        assert_eq!(heard.searched(), [want]);
+    }
+}
+
+// BEH-17: with both off the app starts without any discovery traffic
+#[tokio::test]
+async fn starting_the_app_with_both_off_searches_nothing() {
+    let heard = Heard::nothing();
+    let mut store = Store::in_memory();
+    store.set_switches(OFF).unwrap();
+    let hub = hub_finding(store, heard.clone());
     sleep(Duration::from_millis(200)).await;
     assert_eq!((heard.searched(), hub.scanning()), (vec![], false));
 }
@@ -30,7 +77,7 @@ async fn starting_the_app_searches_nothing() {
 #[tokio::test]
 async fn switching_a_protocol_on_scans_that_protocol() {
     let heard = Heard::nothing();
-    let hub = hub_at(OFF, &heard);
+    let hub = settled(OFF, &heard).await;
     let mut rx = hub.subscribe();
 
     hub.set_switches(Switches { ipd: false, ipx: true }).unwrap();
@@ -46,7 +93,7 @@ async fn switching_a_protocol_on_scans_that_protocol() {
 #[tokio::test]
 async fn switching_off_or_not_changing_scans_nothing() {
     let heard = Heard::nothing();
-    let hub = hub_at(Switches { ipd: true, ipx: true }, &heard);
+    let hub = settled(Switches { ipd: true, ipx: true }, &heard).await;
     hub.set_switches(Switches { ipd: true, ipx: false }).unwrap();
     hub.set_switches(Switches { ipd: true, ipx: false }).unwrap();
     hub.set_switches(OFF).unwrap();
@@ -59,7 +106,7 @@ async fn switching_off_or_not_changing_scans_nothing() {
 #[tokio::test]
 async fn with_both_off_scan_now_is_disabled() {
     let heard = Heard::nothing();
-    let hub = hub_at(OFF, &heard);
+    let hub = settled(OFF, &heard).await;
     let mut rx = hub.subscribe();
     assert!(!hub.scan_now());
     sleep(Duration::from_millis(200)).await;
@@ -76,7 +123,7 @@ async fn scan_now_searches_every_protocol_that_is_on() {
         (Switches { ipd: false, ipx: true }, 1),
     ] {
         let heard = Heard::nothing();
-        let hub = hub_at(switches, &heard);
+        let hub = settled(switches, &heard).await;
         let mut rx = hub.subscribe();
         assert!(hub.scan_now());
         scan_finished(&mut rx).await;
@@ -91,8 +138,8 @@ async fn scan_now_searches_every_protocol_that_is_on() {
 #[tokio::test]
 async fn a_scan_has_a_state_and_scan_now_waits_for_it() {
     let heard = Heard::nothing();
+    let hub = settled(Switches { ipd: false, ipx: true }, &heard).await;
     *heard.delay.lock().unwrap() = Duration::from_millis(300);
-    let hub = hub_at(Switches { ipd: false, ipx: true }, &heard);
     let mut rx = hub.subscribe();
 
     assert!(hub.scan_now());
@@ -110,9 +157,9 @@ async fn a_scan_has_a_state_and_scan_now_waits_for_it() {
 #[tokio::test]
 async fn found_amps_are_added_as_auto() {
     let heard = Heard::nothing();
+    let hub = settled(Switches { ipd: true, ipx: true }, &heard).await;
     heard.hear(Protocol::Ipx, &["10.0.0.9", "10.0.0.2"]);
     heard.hear(Protocol::Ipd, &["10.0.0.5"]);
-    let hub = hub_at(Switches { ipd: true, ipx: true }, &heard);
     let mut rx = hub.subscribe();
 
     assert!(hub.scan_now());
@@ -141,9 +188,9 @@ async fn found_amps_are_added_as_auto() {
 #[tokio::test]
 async fn a_known_ip_is_not_added_again() {
     let heard = Heard::nothing();
+    let hub = settled(Switches { ipd: true, ipx: true }, &heard).await;
     heard.hear(Protocol::Ipx, &["10.0.0.1", "10.0.0.2"]);
     heard.hear(Protocol::Ipd, &["10.0.0.2", "10.0.0.3"]);
-    let hub = hub_at(Switches { ipd: true, ipx: true }, &heard);
     hub.add_manual("Mine", Protocol::Ipx, "10.0.0.1").unwrap();
     let mut rx = hub.subscribe();
 
@@ -162,10 +209,10 @@ async fn a_known_ip_is_not_added_again() {
 #[tokio::test]
 async fn results_of_a_protocol_switched_off_meanwhile_are_dropped() {
     let heard = Heard::nothing();
+    let hub = settled(Switches { ipd: true, ipx: true }, &heard).await;
     heard.hear(Protocol::Ipx, &["10.0.0.1"]);
     heard.hear(Protocol::Ipd, &["10.0.0.2"]);
     *heard.delay.lock().unwrap() = Duration::from_millis(300);
-    let hub = hub_at(Switches { ipd: true, ipx: true }, &heard);
     let mut rx = hub.subscribe();
 
     hub.scan_now();
@@ -180,9 +227,9 @@ async fn results_of_a_protocol_switched_off_meanwhile_are_dropped() {
 #[tokio::test]
 async fn a_failed_search_is_reported_and_the_other_still_counts() {
     let heard = Heard::nothing();
+    let hub = settled(Switches { ipd: true, ipx: true }, &heard).await;
     heard.fail(Protocol::Ipx, "port 52350 is taken");
     heard.hear(Protocol::Ipd, &["10.0.0.5"]);
-    let hub = hub_at(Switches { ipd: true, ipx: true }, &heard);
     let mut rx = hub.subscribe();
 
     hub.scan_now();

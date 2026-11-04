@@ -163,8 +163,8 @@ struct Inner {
 pub struct Hub(Arc<Inner>);
 
 impl Hub {
-    /// Connects to every amp of the store that is not disconnected (BEH-42). Starting searches
-    /// nothing (BEH-18).
+    /// Connects to every amp of the store that is not disconnected (BEH-42) and searches the
+    /// protocols that are on (BEH-18).
     pub fn new(store: Store, connector: Arc<dyn Connector>, finder: Arc<dyn Finder>, timing: Timing) -> Hub {
         let (events, _) = broadcast::channel(1024);
         let shared = Shared {
@@ -178,6 +178,7 @@ impl Hub {
         };
         let hub = Hub(Arc::new(Inner { shared: Arc::new(shared), targets: Mutex::default() }));
         hub.reconcile();
+        hub.scan(hub.enabled());
         hub
     }
 
@@ -261,9 +262,12 @@ impl Hub {
         if self.scanning() {
             return false;
         }
+        self.scan(self.enabled())
+    }
+
+    fn enabled(&self) -> Vec<Protocol> {
         let switches = self.switches();
-        let on = [Protocol::Ipd, Protocol::Ipx].into_iter().filter(|p| switches.allows(*p)).collect();
-        self.scan(on)
+        [Protocol::Ipd, Protocol::Ipx].into_iter().filter(|p| switches.allows(*p)).collect()
     }
 
     pub fn scanning(&self) -> bool {

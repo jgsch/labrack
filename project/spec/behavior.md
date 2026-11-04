@@ -68,7 +68,7 @@ statement with a `BEH-<n>` ID.
   is never searched; if both are off, scanning is disabled and no discovery traffic is sent.
 - **BEH-18** Switching a protocol on starts a scan of that protocol. A scan can also be started
   manually (SCAN NOW), which searches every protocol that is on. A scan runs for 5 s, and SCAN NOW
-  does nothing while one runs. The app does not scan by itself when it starts. The IPX is searched
+  does nothing while one runs. The app also scans when it starts (only the protocols that are on). The IPX is searched
   by listening for its UDP broadcasts; the IPD by listening for its announcements and by probing
   every address of the /24 subnet the computer uses towards the outside, as the vendor app does.
 - **BEH-19** Amplifiers found are added with source AUTO and a default name (`BEH-20`). An IP that
