@@ -636,6 +636,48 @@ async fn fake_counts_writes_and_not_reads() {
     assert_eq!(fake.writes(), 3);
 }
 
+/// docs/ipx-protocol.md: setting the link flag copies channel 1's gain and limiter dBu to channel 2
+/// once; after that the channels are independent. Nothing else is copied.
+#[tokio::test]
+async fn fake_link_copies_once_and_then_the_channels_are_independent() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let get = |name: &'static str| {
+        let amp = &amp;
+        async move { amp.get(&param(name)).await.unwrap() }
+    };
+    amp.set(&param("out1.gain"), f(-10.0)).await.unwrap();
+    amp.set(&param("out2.gain"), f(-20.0)).await.unwrap();
+    amp.set(&param("out1.limiter.threshold_dbu"), f(30.0)).await.unwrap();
+    amp.set(&param("out2.limiter.threshold_dbu"), f(25.0)).await.unwrap();
+    amp.set(&param("out1.eq.2.gain"), f(3.0)).await.unwrap();
+    amp.set(&param("out2.eq.2.gain"), f(0.0)).await.unwrap();
+    amp.set(&param("out2.mute"), Value::Bool(true)).await.unwrap();
+    amp.set(&param("out1.mute"), Value::Bool(false)).await.unwrap();
+
+    amp.set(&param("out1.link"), Value::Bool(true)).await.unwrap();
+    assert_eq!(get("out2.gain").await, f(-10.0));
+    assert_eq!(get("out2.limiter.threshold_dbu").await, f(30.0));
+    assert_eq!(get("out2.eq.2.gain").await, f(0.0), "the EQ is not copied");
+    assert_eq!(get("out2.mute").await, Value::Bool(true), "nor the mute");
+
+    // linked, and still independent
+    amp.set(&param("out1.gain"), f(-5.0)).await.unwrap();
+    assert_eq!(get("out2.gain").await, f(-10.0));
+    amp.set(&param("out2.gain"), f(-1.0)).await.unwrap();
+    assert_eq!(get("out1.gain").await, f(-5.0));
+
+    // inputs the same
+    amp.set(&param("in1.gain"), f(-8.0)).await.unwrap();
+    amp.set(&param("in2.gain"), f(-9.0)).await.unwrap();
+    amp.set(&param("in1.link"), Value::Bool(true)).await.unwrap();
+    assert_eq!(get("in2.gain").await, f(-8.0));
+    // unlinking copies nothing
+    amp.set(&param("in1.gain"), f(0.0)).await.unwrap();
+    amp.set(&param("in1.link"), Value::Bool(false)).await.unwrap();
+    assert_eq!(get("in2.gain").await, f(-8.0));
+}
+
 /// A recall applies the settings stored in the slot, mutes included, and makes it the current preset
 /// (what SEC-6 has to survive). `recall_marks` says how many SETPRMs came before each recall.
 #[tokio::test]

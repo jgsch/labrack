@@ -170,6 +170,25 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
             if let Some(d) = audio_dword(a).filter(|_| !st.reject_writes.contains(&a)) {
                 let o = AUDIO + d * 4;
                 st.sync[o..o + fr.payload.len()].copy_from_slice(&fr.payload);
+                // docs/ipx-protocol.md: switching a link on copies channel 1's gain and limiter dBu to
+                // channel 2, once; nothing else is copied and nothing follows afterwards
+                let on = fr.payload.get(..4) == Some(&1i32.to_le_bytes());
+                let link = (a.env == Env::OUTPUT_LEVEL && a.field == 3)
+                    || (a.env == Env::INPUT_LEVEL && a.field == 2);
+                if link && on && a.channel == 0 {
+                    let mut copy = |env: u8, field: u8| {
+                        let from = audio_dword(Address::new(env, 0, 0, field));
+                        let to = audio_dword(Address::new(env, 1, 0, field));
+                        if let (Some(from), Some(to)) = (from, to) {
+                            let (from, to) = (AUDIO + from * 4, AUDIO + to * 4);
+                            st.sync.copy_within(from..from + 4, to);
+                        }
+                    };
+                    copy(a.env, 0);
+                    if a.env == Env::OUTPUT_LEVEL {
+                        copy(Env::OUTPUT_LIMITER, 3);
+                    }
+                }
             }
             vec![]
         }

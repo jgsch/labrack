@@ -105,6 +105,14 @@ pub struct SimAmp {
     writes: Vec<Key>,
     /// Settings saved by CMD_SAVE_PRESET, by slot; CMD_LOAD_PRESET applies them.
     presets: HashMap<i64, HashMap<Key, Raw>>,
+    /// Writes to channel 2 of a linked pair.
+    link_violations: Vec<Key>,
+}
+
+/// The settings a linked pair shares (docs/ipd-protocol.md: gain and EQ seen on a real IPD). Mutes and
+/// the mixer stay per channel here; what the real firmware does with them is not known.
+fn is_shared(struct_id: u8) -> bool {
+    matches!(struct_id, S_GAIN | S_DELAY | S_LPF | S_HPF | S_PEQ | S_LIMITER | S_COMPRESSOR)
 }
 
 #[allow(non_snake_case)]
@@ -174,6 +182,7 @@ impl SimAmp {
             noise: 12345,
             writes: Vec::new(),
             presets: HashMap::new(),
+            link_violations: Vec::new(),
         }
     }
 
@@ -211,6 +220,11 @@ impl SimAmp {
         let mut data = key.bytes().to_vec();
         data.extend(encode_raw(key.member_id, raw).unwrap_or_default());
         (OP_RSP, data)
+    }
+
+    /// Whether the pair `channel` belongs to (inputs 0 / 1, outputs 0x80 / 0x81) is linked.
+    fn linked(&self, channel: u8) -> bool {
+        self.values.get(&Key::new(S_LINK, M_LINK, channel & 0x80, 2)) == Some(&Raw::Int(1))
     }
 
     fn command(&mut self, cmd: u8) {
@@ -288,6 +302,7 @@ impl SimAmp {
         }
         let mut rsps: Vec<(u8, Vec<u8>)> = Vec::new();
         for (op, key, val) in &cmd.items {
+            let mut echo = None;
             if matches!(*op, OP_SET | OP_FACTORY)
                 && let Some(v) = decode_raw(key.member_id, val)
             {
@@ -305,11 +320,26 @@ impl SimAmp {
                             self.values.insert(GLOBAL(M_CURRENT_USER, 0), Raw::Int(level as i64));
                         }
                     }
+                } else if is_shared(key.struct_id) && key.channel & 0x7F == 1 && self.linked(key.channel) {
+                    // like the real firmware: echoed, but channel 2 keeps channel 1's value
+                    self.link_violations.push(*key);
+                    echo = Some(v);
                 } else {
+                    if is_shared(key.struct_id) && key.channel & 0x7F == 0 && self.linked(key.channel) {
+                        let second = Key::new(key.struct_id, key.member_id, key.channel + 1, key.num);
+                        self.values.insert(second, v.clone());
+                    }
                     self.values.insert(*key, v);
                 }
             }
-            rsps.push(self.rsp(*key));
+            match echo {
+                Some(value) => {
+                    let mut data = key.bytes().to_vec();
+                    data.extend(encode_raw(key.member_id, &value).unwrap_or_default());
+                    rsps.push((OP_RSP, data));
+                }
+                None => rsps.push(self.rsp(*key)),
+            }
             // companions the real firmware sends along
             let companion = match (key.struct_id, key.member_id) {
                 (S_GLOBAL, M_CURRENT_USER) => Some(M_AMP_READINGS),
@@ -364,6 +394,11 @@ impl SimServer {
             }
         });
         Ok(SimServer { addr, stop, amp })
+    }
+
+    /// Writes to channel 2 of a linked pair so far: the real amp ignores them and may stop answering.
+    pub fn link_violations(&self) -> Vec<Key> {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).link_violations.clone()
     }
 
     /// Key of every SET the simulated amp processed so far, oldest first. Reads are not listed.

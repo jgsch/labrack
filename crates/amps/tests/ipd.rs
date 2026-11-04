@@ -226,6 +226,59 @@ async fn simulator_records_writes_and_not_reads() {
     }
 }
 
+/// Link is master/slave inside the amp (docs/ipd-protocol.md): writes to channel 1 land on channel 2,
+/// a write to channel 2 is echoed but ignored, and the simulator counts such writes (BEH-32).
+#[tokio::test(flavor = "multi_thread")]
+async fn linked_channels_follow_channel_1_on_simulator() {
+    let (srv, amp) = connect(true).await;
+    let key = |name: &str| labgruppen::amps::ipd::params::slot(&param(name)).unwrap().key;
+    let get = |name: &'static str| {
+        let amp = &amp;
+        async move { amp.get(&param(name)).await.unwrap() }
+    };
+
+    amp.set(&param("out1.gain"), Value::Float(-10.0)).await.unwrap();
+    amp.set(&param("out2.gain"), Value::Float(-20.0)).await.unwrap();
+    assert_eq!(get("out2.gain").await, Value::Float(-20.0), "independent while not linked");
+    assert_eq!(srv.link_violations(), []);
+
+    amp.set(&param("out1.link"), Value::Bool(true)).await.unwrap();
+    for (name, other, value) in [
+        ("out1.gain", "out2.gain", Value::Float(-5.0)),
+        ("out1.eq.2.freq", "out2.eq.2.freq", Value::Int(1000)),
+        ("out1.delay", "out2.delay", Value::Float(3.5)),
+        ("out1.xover.hp.freq", "out2.xover.hp.freq", Value::Int(80)),
+        ("out1.limiter.threshold", "out2.limiter.threshold", Value::Float(30.0)),
+    ] {
+        amp.set(&param(name), value.clone()).await.unwrap();
+        let other = other.to_string();
+        let got = amp.get(&param(&other)).await.unwrap();
+        assert_eq!(got, value, "{other} follows {name}");
+    }
+    // a mute stays per output
+    amp.set(&param("out1.mute"), Value::Bool(false)).await.unwrap();
+    assert_eq!(get("out2.mute").await, Value::Bool(true));
+    assert_eq!(srv.link_violations(), []);
+
+    // channel 2 keeps channel 1's value, and the write is counted
+    amp.set(&param("out2.gain"), Value::Float(3.0)).await.unwrap();
+    assert_eq!(get("out2.gain").await, Value::Float(-5.0));
+    assert_eq!(srv.link_violations(), [key("out2.gain")]);
+
+    // inputs are linked on their own
+    amp.set(&param("in2.gain"), Value::Float(-7.0)).await.unwrap();
+    assert_eq!(srv.link_violations(), [key("out2.gain")], "inputs are not linked");
+
+    // unlinked again: independent, and the values stay
+    amp.set(&param("out1.link"), Value::Bool(false)).await.unwrap();
+    assert_eq!(get("out2.gain").await, Value::Float(-5.0));
+    amp.set(&param("out2.gain"), Value::Float(3.0)).await.unwrap();
+    assert_eq!(get("out2.gain").await, Value::Float(3.0));
+    assert_eq!(get("out1.gain").await, Value::Float(-5.0));
+    assert_eq!(srv.link_violations(), [key("out2.gain")]);
+    amp.close().await;
+}
+
 /// A recall applies the settings saved in the slot, mutes included: what SEC-6 has to survive.
 #[tokio::test(flavor = "multi_thread")]
 async fn recall_applies_the_saved_settings_on_simulator() {
