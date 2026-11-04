@@ -24,6 +24,7 @@ PAGES = {
     "amplifiers": "01-a-rack-amplifiers",
     "mix-eq": "02-mix-eq-mixer-tab",
     "search": "06-search-add-amplifiers",
+    "levels-demo": "03-mix-eq-levels-tab",
 }
 HEADER = 100
 

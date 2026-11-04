@@ -2,12 +2,14 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use labgruppen::{Channel, Param, Value};
-use labrack_core::{Hub, Lan, Network, Scan, Store, Timing, Update};
+use labrack_core::{Hub, Lan, Network, Scan, Side, Store, Timing, Unit, Update};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::amplifiers::{AmpView, Level};
+use crate::control::Bounds;
+use crate::mixeq::{AmpCard, LIMITER_BOXES, LevelRow, LimiterStrip, MixTab, MixeqView, Strip};
 use crate::search::{KnownAmp, SearchView};
-use crate::{AmplifiersPage, Header, Page, SearchPage, Style};
+use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
 
 /// The amp list from the config file, or an empty one that is never written when the file cannot be
 /// read: a file the app does not understand must not be replaced by an empty list.
@@ -27,6 +29,8 @@ fn store() -> Store {
 pub fn App() -> Element {
     let hub = use_hook(|| Hub::new(store(), Arc::new(Network), Arc::new(Lan), Timing::default()));
     let mut page = use_signal(|| Page::Amplifiers);
+    let mut picked = use_signal(|| 0usize);
+    let mut tab = use_signal(|| MixTab::Levels);
 
     // WebKitGTK can be told a scale that is not the screen's, and everything shrinks to a fraction of
     // its size (seen on niri at a fractional scale: a device pixel ratio of -2/96). The page reports
@@ -156,7 +160,54 @@ pub fn App() -> Element {
                             on_preset: move |_| page.set(Page::MixEq),
                         }
                     },
-                    Page::MixEq => rsx! { p { class: "todo", "Mix & EQ is the next page." } },
+                    Page::MixEq => rsx! {
+                        MixeqPage {
+                            view: mixeq_view(&hub, picked(), tab()),
+                            on_pick: move |index| picked.set(index),
+                            on_tab: move |next| tab.set(next),
+                            on_link: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(side, linked): (Side, bool)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        let hub = hub.clone();
+                                        spawn(async move {
+                                            let _ = hub.set_link(id, side, linked).await;
+                                        });
+                                    }
+                                }
+                            },
+                            on_limiter: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(output, unit, value): (usize, Unit, f64)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        let _ = hub.set_limiter(id, output as u8, unit, value);
+                                    }
+                                }
+                            },
+                            on_gain: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(channel, kind, db): (usize, u8, f64)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        let ch = if kind == 0 { Channel::Input(channel as u8) } else { Channel::Output(channel as u8) };
+                                        let _ = hub.set(id, Param::Gain(ch), Value::Float(db));
+                                    }
+                                }
+                            },
+                            on_mute: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(channel, kind, muted): (usize, u8, bool)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        let ch = if kind == 0 { Channel::Input(channel as u8) } else { Channel::Output(channel as u8) };
+                                        let _ = hub.set(id, Param::Mute(ch), Value::Bool(muted));
+                                    }
+                                }
+                            },
+                        }
+                    },
                     Page::Search => rsx! {
                         SearchPage {
                             view: search_view(&hub, scanning(), scan_message()),
@@ -285,6 +336,64 @@ pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
                 .into(),
             })
             .collect(),
+    }
+}
+
+/// What the Mix & EQ page draws for one amplifier.
+pub fn mixeq_view(hub: &Hub, selected: usize, tab: MixTab) -> MixeqView {
+    let amps = hub.amps();
+    let Some(amp) = amps.get(selected) else {
+        return MixeqView { tab, ..MixeqView::default() };
+    };
+    let id = amp.id;
+    let gain = |ch: Channel| hub.value(id, &Param::Gain(ch)).and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let mute = |ch: Channel| hub.value(id, &Param::Mute(ch)) == Some(Value::Bool(true));
+    let meters = hub.meters(id).unwrap_or_default();
+    let at = |list: &[f64], i: usize, none: f64| list.get(i).copied().unwrap_or(none);
+    let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
+    let strip =
+        |label: String, ch: Channel, level_db: f64| Strip { label, db: gain(ch), level_db, muted: mute(ch) };
+    let rows = (0..2u8)
+        .map(|i| {
+            let n = usize::from(i);
+            let bounds = LIMITER_BOXES.map(|(unit, ..)| {
+                let range = hub.limiter_range(id, i, unit);
+                Bounds::new(
+                    range.and_then(|r| r.min).unwrap_or(0.0),
+                    range.and_then(|r| r.max).unwrap_or(100_000.0),
+                )
+            });
+            LevelRow {
+                input: strip(format!("IN {}", n + 1), Channel::Input(i), at(&meters.input, n, -120.0)),
+                output: strip(format!("OUT {}", n + 1), Channel::Output(i), at(&meters.output, n, -120.0)),
+                limiter: LimiterStrip {
+                    label: format!("LIMITER {}", n + 1),
+                    gr_db: at(&gr, n, 0.0),
+                    figures: hub.limiter(id, i),
+                    bounds,
+                },
+            }
+        })
+        .collect();
+    let cards = amps
+        .iter()
+        .map(|a| {
+            let meters = hub.meters(a.id).unwrap_or_default();
+            let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
+            AmpCard {
+                name: a.name.clone(),
+                level_db: meters.output.iter().copied().fold(-120.0, f64::max),
+                gr_db: gr.iter().copied().fold(0.0, f64::max),
+            }
+        })
+        .collect();
+    MixeqView {
+        amps: cards,
+        selected,
+        tab,
+        linked_inputs: hub.linked(id, Side::Inputs),
+        linked_outputs: hub.linked(id, Side::Outputs),
+        rows,
     }
 }
 

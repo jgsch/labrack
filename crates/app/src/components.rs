@@ -5,23 +5,49 @@ use dioxus::prelude::*;
 
 use crate::control::{self, Bounds, Click, SecondClick};
 
-/// A vertical fader with its dB box and its label, as on the Mix & EQ pages: a click never moves the
-/// cap, dragging moves it from where the drag started, keys and the wheel step it (UX-22).
+/// A vertical fader with its dB scale, its box and its label, as on the Mix & EQ pages: a click never
+/// moves the cap, dragging moves it from where the drag started, keys and the wheel step it (UX-22).
+/// The level meters (`levels`, in dB on the fader's own scale; two for a stereo pair) run inside the
+/// track, behind the cap.
 #[component]
 pub fn Fader(
     label: String,
     value: f64,
     bounds: Bounds,
     #[props(default = "dB".to_string())] unit: String,
+    /// The strip's own heading already names it on the Mix & EQ pages.
+    #[props(default = true)]
+    show_label: bool,
+    /// The Levels cards put the box beside the fader themselves.
+    #[props(default = true)]
+    show_box: bool,
+    #[props(default)] levels: Vec<f64>,
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
     let mut drag = use_signal(|| None::<control::Drag>);
     let span = (bounds.max - bounds.min).max(f64::MIN_POSITIVE);
-    let start = (value - bounds.min) / span * 100.0;
+    let at = move |db: f64| ((db - bounds.min) / span).clamp(0.0, 1.0) * 100.0;
+    let start = at(value);
     let text = control::number(value);
     let aria = label.clone();
     let spoken = format!("{text} {unit}");
     let box_label = label.clone();
+    let marks = control::scale_marks(bounds);
+    // a tick every 6 dB on the 200 px track
+    let tick = 200.0 * 6.0 / span;
+    let zero = bounds.contains(0.0).then(|| at(0.0));
+    // green to -12 dB, yellow to 0 dB, red above, wherever those sit on this fader's scale
+    let colours = format!(
+        "linear-gradient(to top,var(--green) 0%,var(--green) {y}%,var(--yellow) {y}%,var(--yellow) {r}%,var(--red) {r}%,var(--red) 100%)",
+        y = at(-12.0),
+        r = at(0.0)
+    );
+    let lanes = control::meter_lanes(levels.len());
+    let meters: Vec<(String, f64)> = levels
+        .iter()
+        .zip(lanes)
+        .map(|(&db, lane)| (lane.to_string(), if db.is_finite() { 100.0 - at(db) } else { 100.0 }))
+        .collect();
 
     let set = move |next: f64| {
         if next != value {
@@ -29,8 +55,16 @@ pub fn Fader(
         }
     };
     rsx! {
-        div { class: "fader-strip",
-            span { class: "fader-label", "{label}" }
+        div { class: if show_label { "fader-strip framed" } else { "fader-strip" },
+            if show_label {
+                span { class: "fader-label", "{label}" }
+            }
+            div { class: "fader-body", style: "--tick: {tick}px",
+            div { class: "fader-scale", "aria-hidden": "true",
+                for (db, top) in marks.iter().map(|&db| (db, 100.0 - at(db))) {
+                    span { style: "top: {top}%", "{control::signed(db)}" }
+                }
+            }
             div {
                 class: "fader-track",
                 role: "slider",
@@ -68,9 +102,24 @@ pub fn Fader(
                         set(next);
                     }
                 },
+                div { class: "fader-groove", "aria-hidden": "true" }
+                for (lane, cover) in meters {
+                    div {
+                        class: "fader-meter {lane}",
+                        "aria-hidden": "true",
+                        style: "background: {colours}; clip-path: inset({cover}% 0 0 0)",
+                    }
+                }
+                div { class: "fader-ticks", "aria-hidden": "true" }
+                if let Some(z) = zero {
+                    div { class: "fader-zero", "aria-hidden": "true", style: "bottom: {z}%" }
+                }
                 div { class: "fader-cap", style: "bottom: calc({start}% - 8px)" }
             }
-            ValueField { label: box_label, value, bounds, unit, on_change }
+            }
+            if show_box {
+                ValueField { label: box_label, value, bounds, unit, on_change }
+            }
         }
     }
 }
@@ -84,13 +133,16 @@ pub fn ValueField(
     value: f64,
     bounds: Bounds,
     #[props(default = "dB".to_string())] unit: String,
+    /// A raise of more than 6 dB asks first (UX-24); a load or a power is not a level.
+    #[props(default = true)]
+    ask_raise: bool,
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
     let mut draft = use_signal(|| None::<String>);
     let error = use_signal(String::new);
     let mut asked = use_signal(|| None::<f64>);
     let shown = draft().unwrap_or_else(|| control::number(value));
-    let field = Committed { draft, error, asked, value, bounds, on_change };
+    let field = Committed { draft, error, asked, value, bounds, ask_raise, on_change };
 
     rsx! {
         div { class: "value-field",
@@ -141,6 +193,7 @@ struct Committed {
     asked: Signal<Option<f64>>,
     value: f64,
     bounds: Bounds,
+    ask_raise: bool,
     on_change: EventHandler<f64>,
 }
 
@@ -155,7 +208,7 @@ impl Committed {
         match control::typed_db(&raw, self.bounds) {
             Err(why) => error.set(why.0),
             Ok(next) if next == self.value => error.set(String::new()),
-            Ok(next) if control::needs_confirmation(self.value, next) => {
+            Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next) => {
                 error.set(String::new());
                 asked.set(Some(next));
             }

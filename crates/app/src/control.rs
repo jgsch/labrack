@@ -190,6 +190,40 @@ pub fn meter_colour(fill: f64) -> &'static str {
     }
 }
 
+/// The labelled marks of a fader's scale: every 12 dB down from the top, the bottom included
+/// (+12, 0, -12 ... -48 on the mockup's -48..12).
+pub fn scale_marks(bounds: Bounds) -> Vec<f64> {
+    let mut marks = Vec::new();
+    let mut db = bounds.max;
+    while db >= bounds.min - 1e-9 && marks.len() < 20 {
+        marks.push(db);
+        db -= 12.0;
+    }
+    marks
+}
+
+/// A scale mark as the mockup writes it: a plus on a raise, a true minus sign on a cut.
+pub fn signed(db: f64) -> String {
+    let text = number(db.abs());
+    if db > 0.0 {
+        format!("+{text}")
+    } else if db < 0.0 {
+        format!("\u{2212}{text}")
+    } else {
+        text
+    }
+}
+
+/// Where the meters of a fader run inside its track: one in the middle, or two side by side for a
+/// linked pair (BEH-34).
+pub fn meter_lanes(count: usize) -> &'static [&'static str] {
+    match count {
+        0 => &[],
+        1 => &["mono"],
+        _ => &["left", "right"],
+    }
+}
+
 /// A number as the boxes show it: no trailing zeros, at most one decimal for tenths.
 pub fn number(value: f64) -> String {
     if !value.is_finite() {
@@ -345,6 +379,24 @@ mod tests {
         assert_eq!(gr_fill(-3.0), 0.0);
         assert_eq!(gr_fill(6.0), 0.5);
         assert_eq!(gr_fill(20.0), 1.0);
+    }
+
+    // UX-19: the fader's scale is labelled every 12 dB, as on the mockup, whatever the model's range
+    #[test]
+    fn the_fader_scale_is_labelled_every_12_db() {
+        assert_eq!(scale_marks(GAIN), [12.0, 0.0, -12.0, -24.0, -36.0, -48.0]);
+        assert_eq!(scale_marks(Bounds::new(-60.0, 0.0)), [0.0, -12.0, -24.0, -36.0, -48.0, -60.0]);
+        assert_eq!(signed(12.0), "+12");
+        assert_eq!(signed(0.0), "0");
+        assert_eq!(signed(-24.0), "\u{2212}24");
+    }
+
+    // BEH-34: one meter in the middle of a fader, two side by side for a linked pair
+    #[test]
+    fn a_fader_has_one_or_two_meters() {
+        assert!(meter_lanes(0).is_empty());
+        assert_eq!(meter_lanes(1), ["mono"]);
+        assert_eq!(meter_lanes(2), ["left", "right"]);
     }
 
     // the boxes show whole decibels without a needless decimal

@@ -59,6 +59,14 @@ fn main() {
         dioxus_ssr::render(&dom)
     );
     std::fs::write(dir.join("search-demo.html"), html).expect("write the search page");
+
+    let mut dom = VirtualDom::new(levels_demo);
+    dom.rebuild_in_place();
+    let html = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>{}</body></html>",
+        dioxus_ssr::render(&dom)
+    );
+    std::fs::write(dir.join("levels-demo.html"), html).expect("write the levels page");
 }
 
 /// A row of the controls, for the visual check of `mise run app-shot` (not a page of the app).
@@ -132,5 +140,45 @@ fn search_demo() -> Element {
     rsx! {
         Style {}
         div { class: "frame", labrack_app::SearchPage { view } }
+    }
+}
+
+/// The Levels tab with the figures of the mockup's board, for the visual check of the page.
+fn levels_demo() -> Element {
+    let strip = |label: &str, level_db: f64| labrack_app::Strip {
+        label: label.into(),
+        db: 0.0,
+        level_db,
+        muted: false,
+    };
+    let limiter = |label: &str| labrack_app::LimiterStrip {
+        label: label.into(),
+        gr_db: 0.0,
+        figures: Some(labrack_core::Limiter::from_vpk(80.0, 4.0)),
+        bounds: [Bounds::new(0.0, 100_000.0); 4],
+    };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let view = labrack_app::MixeqView {
+        amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
+        rows: vec![
+            labrack_app::LevelRow {
+                input: strip("IN 1", -24.0),
+                output: strip("OUT 1", -24.0),
+                limiter: limiter("LIMITER 1"),
+            },
+            labrack_app::LevelRow {
+                input: strip("IN 2", -18.0),
+                output: strip("OUT 2", -18.0),
+                limiter: limiter("LIMITER 2"),
+            },
+        ],
+        ..labrack_app::MixeqView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame",
+            Header { page: Page::MixEq, all_muted: false }
+            main { labrack_app::MixeqPage { view } }
+        }
     }
 }
