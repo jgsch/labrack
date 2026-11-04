@@ -236,6 +236,17 @@ impl Store {
         self.save()
     }
 
+    /// The load of an IPD output in ohm (BEH-5, BEH-40), which only scales the watts it shows.
+    pub fn set_load(&mut self, id: AmpId, output: u8, ohm: f64) -> Result<()> {
+        let (min, max) = labgruppen::limiter::OHM_RANGE;
+        if !(min..=max).contains(&ohm) {
+            return Err(Error::Invalid(format!("The load must be between {min} and {max} Ohm")));
+        }
+        let amp = self.get_mut(id)?;
+        *amp.load_ohms.get_mut(usize::from(output)).ok_or(Error::NotControllable)? = ohm;
+        self.save()
+    }
+
     pub fn set_preset(&mut self, id: AmpId, preset: Option<Preset>) -> Result<()> {
         self.get_mut(id)?.preset = preset;
         Ok(())

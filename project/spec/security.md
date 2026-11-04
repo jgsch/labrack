@@ -13,7 +13,8 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   (a bool for a gain) is refused, not converted. The IPX reports no ranges, so for the basic
   controls (gain, delay, EQ, crossover frequency, mixer level) it takes the IPD's.
 - **SEC-3** **User ceilings.** Each amp can have user ceilings (maximum output gain, maximum
-  limiter threshold) that the UI cannot exceed. A value above a ceiling is refused, not clamped,
+  limiter threshold, in dBu) that the UI cannot exceed. The limiter ceiling holds in every unit and
+  in settings files. A value above a ceiling is refused, not clamped,
   and the range a control shows ends at the ceiling. Lowering a ceiling writes nothing: a control
   that is above it stays until the user moves it.
 - **SEC-4** **Small steps.** Faders follow `UX-22` and `UX-23`. While a fader moves, only the

@@ -219,7 +219,7 @@ fn plan_load(session: &Session, snapshot: &Snapshot, ceilings: &Ceilings) -> Res
             skipped.push(format!("{name}: output mutes are left as they are"));
             continue;
         }
-        if !dsp::controllable(&param) {
+        if !dsp::restorable(&param) {
             skipped.push(format!("{name}: cannot be set from a file yet"));
             continue;
         }

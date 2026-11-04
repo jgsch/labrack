@@ -7,6 +7,7 @@ mod discovery;
 mod dsp;
 mod error;
 mod hub;
+mod limiter;
 mod status;
 mod store;
 
@@ -15,5 +16,6 @@ pub use discovery::{Finder, Lan};
 pub use dsp::Range;
 pub use error::{Error, Result};
 pub use hub::{Hub, LoadReport, Scan, Timing, Update};
+pub use limiter::{Limiter, Unit};
 pub use status::Status;
 pub use store::{Amp, AmpId, Ceilings, Preset, Protocol, Source, Store, Switches};

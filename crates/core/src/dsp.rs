@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use labgruppen::{Channel, Kind, Param, ParamSpec, Value};
+use labgruppen::{Channel, Kind, LimiterField, Param, ParamSpec, Value, limiter};
 use tokio::sync::Notify;
 use tokio::time::Instant;
 
@@ -32,6 +32,33 @@ pub(crate) fn controllable(param: &Param) -> bool {
     }
 }
 
+/// What a settings file may carry: the controls above, and the output limiter, which `Hub::set`
+/// does not take because its figures must be written together (see `Hub::set_limiter`).
+pub(crate) fn restorable(param: &Param) -> bool {
+    controllable(param)
+        || matches!(
+            param,
+            Param::Limiter {
+                ch: Channel::Output(_),
+                field: LimiterField::Threshold
+                    | LimiterField::Impedance
+                    | LimiterField::Power
+                    | LimiterField::ThresholdDbu
+            }
+        )
+}
+
+/// The limiter threshold in dBu that setting `param` to `value` means, if it is one.
+fn threshold_dbu(param: &Param, unit: &str, value: f64) -> Option<f64> {
+    match param {
+        Param::Limiter { ch: Channel::Output(_), field: LimiterField::Threshold } => {
+            Some(if unit == "Vpk" { limiter::dbu(value) } else { value })
+        }
+        Param::Limiter { ch: Channel::Output(_), field: LimiterField::ThresholdDbu } => Some(value),
+        _ => None,
+    }
+}
+
 /// The user ceiling that applies to `param` (SEC-3): the output gain.
 fn ceiling(param: &Param, ceilings: &Ceilings) -> Option<f64> {
     match param {
@@ -49,9 +76,9 @@ pub(crate) fn range(param: &Param, spec: &ParamSpec, ceilings: &Ceilings) -> Ran
 }
 
 /// Check `value` for `param` before anything is sent (SEC-2, SEC-3) and return it as the amp will
-/// hold it. `spec` is the amp's own.
+/// hold it. `spec` is the amp's own. Whether the control may be set at all is for the caller.
 pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &Ceilings) -> Result<Value> {
-    if !controllable(param) || !spec.writable {
+    if !spec.writable {
         return Err(Error::NotControllable);
     }
     let (fits, wanted) = match (spec.kind, value) {
@@ -73,6 +100,14 @@ pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &C
         && checked.as_f64().is_some_and(|v| v > limit)
     {
         return Err(Error::AboveCeiling { ceiling: limit, unit: spec.unit });
+    }
+    // the limiter ceiling is a dBu; a threshold in Vpk is held to it as well
+    if let Some(limit) = ceilings.max_limiter_dbu
+        && let Some(dbu) = checked.as_f64().and_then(|v| threshold_dbu(param, spec.unit, v))
+        && dbu > limit + 1e-9
+    {
+        let ceiling = if spec.unit == "Vpk" { limiter::vpk_from_dbu(limit) } else { limit };
+        return Err(Error::AboveCeiling { ceiling, unit: spec.unit });
     }
     Ok(checked)
 }
@@ -150,7 +185,16 @@ impl Writer {
     }
 
     pub fn push(&self, param: Param, value: Value) {
-        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).push(param, value);
+        self.push_all([(param, value)]);
+    }
+
+    /// Values that belong together are queued together, so they go out in one batch.
+    pub fn push_all(&self, values: impl IntoIterator<Item = (Param, Value)>) {
+        let mut coalescer = self.coalescer.lock().unwrap_or_else(|e| e.into_inner());
+        for (param, value) in values {
+            coalescer.push(param, value);
+        }
+        drop(coalescer);
         self.wake.notify_one();
     }
 
@@ -305,6 +349,58 @@ mod tests {
             "out1.mixer.aes1.level",
         ] {
             assert!(!controllable(&param(no)), "{no}");
+        }
+    }
+
+    // SEC-3: a limiter threshold is held to the dBu ceiling in the unit the amp stores it in
+    #[test]
+    fn the_limiter_ceiling_holds_for_vpk_and_dbu_entries() {
+        let ceilings = Ceilings { max_limiter_dbu: Some(30.0), ..NONE };
+        let dbu = ParamSpec::new(Kind::Float).range(16.78, 36.78).unit("dBu");
+        let vpk = ParamSpec::new(Kind::Float).range(7.0, 110.0).unit("Vpk");
+        let at_30 = limiter::vpk_from_dbu(30.0);
+
+        for (name, spec, ok, over) in [
+            ("out1.limiter.threshold", &dbu, 30.0, 30.01),
+            ("out1.limiter.threshold_dbu", &dbu, 30.0, 30.01),
+            ("out2.limiter.threshold", &vpk, at_30, at_30 * 1.001),
+        ] {
+            let p = param(name);
+            assert_eq!(check(&p, spec, &f(ok), &ceilings).unwrap(), f(ok), "{name}");
+            let got = check(&p, spec, &f(over), &ceilings);
+            assert!(matches!(got, Err(Error::AboveCeiling { .. })), "{name}: {got:?}");
+            assert!(check(&p, spec, &f(over), &NONE).is_ok(), "{name}: no ceiling");
+        }
+        // the ceiling in the unit of the entry
+        let got = check(&param("out1.limiter.threshold"), &vpk, &f(at_30 * 1.1), &ceilings);
+        assert!(
+            matches!(got, Err(Error::AboveCeiling { ceiling, unit: "Vpk" }) if (ceiling - at_30).abs() < 1e-9)
+        );
+        // not the load, the watts, the release or an input
+        let other = ParamSpec::new(Kind::Float).range(0.0, 1e6);
+        for name in ["out1.limiter.impedance", "out1.limiter.power", "in1.limiter.threshold"] {
+            assert!(check(&param(name), &other, &f(99_999.0), &ceilings).is_ok(), "{name}");
+        }
+    }
+
+    // a file may carry the output limiter, but `Hub::set` does not take it
+    #[test]
+    fn files_carry_the_output_limiter_and_set_does_not_take_it() {
+        for name in [
+            "out1.limiter.threshold",
+            "out2.limiter.impedance",
+            "out1.limiter.power",
+            "out2.limiter.threshold_dbu",
+        ] {
+            assert!(restorable(&param(name)) && !controllable(&param(name)), "{name}");
+        }
+        for name in
+            ["out1.limiter.release", "in1.limiter.threshold", "in1.comp.ratio", "out1.polarity", "out1.link"]
+        {
+            assert!(!restorable(&param(name)), "{name}");
+        }
+        for name in ["in1.gain", "out1.mute", "out1.eq.0.q", "out2.xover.hp.freq", "in2.mixer.aes1.level"] {
+            assert!(restorable(&param(name)), "{name}");
         }
     }
 

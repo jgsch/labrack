@@ -12,11 +12,17 @@ statement with a `BEH-<n>` ID.
   → fixed routing IN n → OUT n → limiter → output.
 - **BEH-4** 10-band EQ per channel (inputs and outputs). High-pass and low-pass filters on outputs
   only. Delay on inputs and on outputs.
-- **BEH-5** Limiter per output, with linked units: Vpk, Ohm, Watt, dBu, the same on both families
-  (as in the vendor apps):
-  - IPX: the amp stores Vpk and Ohm; Watt and dBu are calculated.
+- **BEH-5** Limiter per output, with linked units: Vpk, Ohm, Watt, dBu, converted the same way on
+  both families (as in the vendor apps). Vpk and dBu are one quantity, `dBu = 10 * log10(Vpk² / 1.2)`;
+  the watts need the load, `W = Vpk² / (2 * Ohm)`, so a change of the load moves the watts only.
+  - IPX: the amp stores all four figures as plain values and derives nothing. Editing the threshold
+    (in Vpk, Watt or dBu) writes all four together, as the vendor app does; editing the load writes
+    the load and the watts only, so it cannot move a threshold.
   - IPD: the amp stores only the threshold in dBu. The app keeps the load in Ohm per output
     (default 4 Ω) in its config and converts.
+  - Ranges: the IPD takes 16.78 dBu up to 33.8 (IPD 1200), 36.78 (2400) or 39.83 (4800). The IPX
+    reports none, and a real IPX 1200 holds 35.98 dBu, so the IPX takes 16.78 to 39.83 dBu. The load
+    takes 0.5 to 100 Ohm.
 - **BEH-6** 50 presets per amplifier, slots 1–50, numbered as in the vendor apps (IPD slots 51–100
   are not used; the IPX counts from 0 on the wire, the vendor app and this app show index + 1).
 

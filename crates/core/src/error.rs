@@ -13,6 +13,8 @@ pub enum Error {
     NotOnline,
     #[error("This control cannot be set")]
     NotControllable,
+    #[error("The settings of the amplifier are still being read")]
+    NotLoaded,
     /// A value outside the range of the control, of the wrong kind, NaN or infinite.
     #[error("{0}")]
     Invalid(String),

@@ -314,6 +314,9 @@ pub mod limiter {
     /// The square of 0.7746 V, the 0 dBu reference.
     const REFERENCE: f64 = 0.6;
 
+    /// The load impedance, in ohm, that can be entered. It only scales the watts.
+    pub const OHM_RANGE: (f64, f64) = (0.5, 100.0);
+
     pub fn watt(vpk: f64, ohm: f64) -> f64 {
         vpk * vpk / (2.0 * ohm)
     }

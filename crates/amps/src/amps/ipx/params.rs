@@ -203,8 +203,6 @@ pub fn slot(param: &Param) -> Option<Slot> {
 /// reports no range, and a real IPX 1200 holds 69 Vpk = 35.98 dBu, above the 33.8 dBu of the IPD 1200,
 /// so the ceiling of the same model number does not do. The user ceilings are the tight limit.
 pub const LIMITER_DBU: (f64, f64) = (16.78, 39.83);
-/// The load impedance, in ohm, that can be entered. It only scales the watts.
-pub const LIMITER_OHM: (f64, f64) = (0.5, 100.0);
 /// The watts that follow from the other two ranges, rounded up.
 pub const LIMITER_WATT: (f64, f64) = (0.0, 12_000.0);
 
@@ -214,7 +212,7 @@ fn limiter_range(param: &Param) -> Option<(f64, f64)> {
             LimiterField::Threshold => {
                 (limiter::vpk_from_dbu(LIMITER_DBU.0), limiter::vpk_from_dbu(LIMITER_DBU.1))
             }
-            LimiterField::Impedance => LIMITER_OHM,
+            LimiterField::Impedance => limiter::OHM_RANGE,
             LimiterField::Power => LIMITER_WATT,
             LimiterField::ThresholdDbu => LIMITER_DBU,
             LimiterField::Release => return None,

@@ -6,10 +6,6 @@ committed.
 
 ## Bugs
 
-- BEH-5 says the IPX amp stores only Vpk and Ohm and that Watt and dBu are calculated.
-  `docs/ipx-protocol.md` says all four limiter fields are plain stored values that the vendor app
-  derives (verified live). Reword BEH-5; `core-limiter` writes all four. Spec: BEH-5
-
 ## Features
 
 ## Chores
@@ -24,3 +20,12 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   fader. Spec: BEH-27, UX-18, SEC-2
 - Choose defaults for the user ceilings. Spec: SEC-3, BEH-40
 - IPD MK2 units (different framing) have not been tried on hardware. Spec: BEH-1
+- IPX limiter range: the IPX reports none. The app takes 16.78 to 39.83 dBu (the widest IPD
+  ceiling), which a real IPX 1200 respects (it holds 35.98 dBu) but is far above what an IPX 1200
+  needs. Find the real limits per model, or choose a tighter default ceiling. Spec: BEH-5, SEC-3
+- IPX gain reduction: the meters have two sets (`gain_reduction_a` / `_b`), both "inferred" in
+  docs/ipx-protocol.md; which one is the output limiter is unknown, so the Levels limiter meter has
+  nothing to show for the IPX yet. The IPD has `gain_reduction_out`. Spec: BEH-28
+- IPX limiter: which of the four stored figures does the DSP limit on? The out2 of the live amp held
+  a dBu that its Vpk does not give. Until known, the app shows the figures derived from Vpk and
+  load, and a threshold edit writes all four. Spec: BEH-5

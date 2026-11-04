@@ -254,3 +254,12 @@ pub async fn wait_value(hub: &Hub, id: AmpId, name: &str, want: Value) {
         panic!("{name} stayed {:?}, expected {want:?}", hub.value(id, &p));
     }
 }
+
+/// What the simulated IPD holds, read through a connection of its own.
+pub async fn ipd_value(sim: &SimServer, name: &str) -> Value {
+    let options = Options { mk2: None, timeout: Duration::from_secs(5) };
+    let amp = IpdAmp::connect_with("127.0.0.1", sim.addr.port(), options).await.unwrap();
+    let value = labgruppen::Amp::get(&amp, &param(name)).await.unwrap();
+    labgruppen::Amp::close(&amp).await;
+    value
+}

@@ -16,6 +16,7 @@ use tokio::sync::{broadcast, watch};
 use tokio::task::JoinSet;
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
+mod limiter;
 mod mute;
 mod presets;
 
@@ -70,6 +71,8 @@ pub enum Update {
     Modified(AmpId, bool),
     /// The loaded preset of the amp changed (`Hub::amps`).
     Preset(AmpId),
+    /// A setting the app keeps for the amp changed: a ceiling or a limiter load (`Hub::amps`).
+    Settings(AmpId),
     Scan(Scan),
 }
 
@@ -362,7 +365,11 @@ impl Hub {
     /// The user ceilings of an amp (SEC-3). Nothing is written to the amp: a control that is above
     /// a lowered ceiling stays where it is until the user moves it.
     pub fn set_ceilings(&self, id: AmpId, ceilings: Ceilings) -> Result<()> {
-        self.0.shared.store().set_ceilings(id, ceilings)
+        let set = self.0.shared.store().set_ceilings(id, ceilings);
+        if set.is_ok() {
+            self.0.shared.emit(Update::Settings(id));
+        }
+        set
     }
 
     fn session(&self, id: AmpId) -> Result<Session> {

@@ -31,15 +31,6 @@ async fn set_and_wait(hub: &Hub, id: AmpId, name: &str, value: Value) {
     wait_value(hub, id, name, value).await;
 }
 
-/// What the simulated IPD holds, read through a connection of its own.
-async fn ipd_truth(sim: &SimServer, name: &str) -> Value {
-    let options = Options { mk2: None, timeout: Duration::from_secs(5) };
-    let amp = IpdAmp::connect_with("127.0.0.1", sim.addr.port(), options).await.unwrap();
-    let value = labgruppen::Amp::get(&amp, &param(name)).await.unwrap();
-    labgruppen::Amp::close(&amp).await;
-    value
-}
-
 /// Another controller sets a parameter of the simulated IPD.
 async fn ipd_elsewhere_set(sim: &SimServer, name: &str, value: Value) {
     let options = Options { mk2: None, timeout: Duration::from_secs(5) };
@@ -103,7 +94,7 @@ async fn mute_per_output_and_per_amp_on_the_ipd() {
     wait_value(&hub, id, "out2.mute", FALSE).await;
     hub.set_mute(id, 0, true).unwrap();
     wait_value(&hub, id, "out1.mute", TRUE).await;
-    assert_eq!((ipd_truth(&sim, "out1.mute").await, ipd_truth(&sim, "out2.mute").await), (TRUE, FALSE));
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, FALSE));
 }
 
 // BEH-24, BEH-26: the label says what the button does
@@ -277,9 +268,9 @@ async fn recall_keeps_a_muted_output_muted_and_mutes_first_on_the_ipd() {
 
     hub.recall_preset(id, 7).await.unwrap();
 
-    assert_eq!(ipd_truth(&sim, "out1.mute").await, TRUE);
-    assert_eq!(ipd_truth(&sim, "out2.mute").await, FALSE);
-    assert_eq!(ipd_truth(&sim, "out1.gain").await, f(-7.5), "the preset was applied");
+    assert_eq!(ipd_value(&sim, "out1.mute").await, TRUE);
+    assert_eq!(ipd_value(&sim, "out2.mute").await, FALSE);
+    assert_eq!(ipd_value(&sim, "out1.gain").await, f(-7.5), "the preset was applied");
     let writes = sim.writes()[before..].to_vec();
     let key = |name: &str| ipd_slot(&param(name)).unwrap().key;
     let load = Key::new(S_COMMAND, M_COMMAND, 0, CMD_LOAD_PRESET);
@@ -486,18 +477,20 @@ async fn load_file_skips_what_it_cannot_set() {
     hub.save_file(id, &path).await.unwrap();
     edit_file(&path, |p| {
         p.insert("out1.polarity".into(), serde_json::json!(true));
-        p.insert("out1.limiter.threshold".into(), serde_json::json!(1e9));
         p.insert("in1.comp.ratio".into(), serde_json::json!(99.0));
         p.insert("out9.gain".into(), serde_json::json!(1.0));
         p.insert("no.such.thing".into(), serde_json::json!(1.0));
     });
-    let limiter = fake.state().sync.clone();
+    let ratio = ipx_value(&fake, "in1.comp.ratio");
+    let polarity = ipx_value(&fake, "out1.polarity");
 
     let report = hub.load_file(id, &path).await.unwrap();
-    for name in ["out1.polarity", "out1.limiter.threshold", "in1.comp.ratio", "out9.gain", "no.such.thing"] {
+    for name in ["out1.polarity", "in1.comp.ratio", "out9.gain", "no.such.thing"] {
         assert!(report.skipped.iter().any(|s| s.starts_with(name)), "{name}: {:?}", report.skipped);
     }
-    assert_eq!(fake.state().sync, limiter, "nothing changed, in particular not the limiter");
+    // what was skipped is as it was (the restored limiter moves by the 4 decimals the file keeps)
+    assert_eq!(ipx_value(&fake, "in1.comp.ratio"), ratio);
+    assert_eq!(ipx_value(&fake, "out1.polarity"), polarity);
 }
 
 #[tokio::test]
