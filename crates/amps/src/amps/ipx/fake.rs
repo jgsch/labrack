@@ -52,6 +52,8 @@ pub struct State {
     pub setprm: Vec<Address>,
     /// Another controller holds the amp: close every new connection at once.
     pub busy: bool,
+    /// How many SETPRMs had arrived when each RECALLPRESET did: tells the order of writes.
+    pub recall_marks: Vec<usize>,
 }
 
 pub struct FakeAmp {
@@ -203,7 +205,16 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
                 vec![]
             }
             Ctrl::RECALLPRESET => {
-                st.recalled.push(u32::from_le_bytes(fr.payload[..4].try_into().unwrap()));
+                let index = u32::from_le_bytes(fr.payload[..4].try_into().unwrap());
+                st.recalled.push(index);
+                let marked = st.setprm.len();
+                st.recall_marks.push(marked);
+                // a stored preset replaces the settings, mutes included, and becomes the current one
+                if let Some((name, audio)) = st.stored.get(&index).cloned() {
+                    st.sync[AUDIO..AUDIO + AUDCFG_SIZE].copy_from_slice(&audio);
+                    st.sync[0..16].copy_from_slice(&padded(&name, 16));
+                    st.sync[16..20].copy_from_slice(&index.to_le_bytes());
+                }
                 vec![]
             }
             _ => vec![],

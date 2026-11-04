@@ -633,6 +633,31 @@ async fn fake_counts_writes_and_not_reads() {
     assert_eq!(fake.writes(), 3);
 }
 
+/// A recall applies the settings stored in the slot, mutes included, and makes it the current preset
+/// (what SEC-6 has to survive). `recall_marks` says how many SETPRMs came before each recall.
+#[tokio::test]
+async fn fake_recall_applies_the_stored_settings() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    amp.set(&param("out1.mute"), Value::Bool(false)).await.unwrap();
+    amp.set(&param("out1.gain"), f(-7.5)).await.unwrap();
+    amp.store_preset(7, "Loud").await.unwrap();
+
+    amp.set(&param("out1.mute"), Value::Bool(true)).await.unwrap();
+    amp.set(&param("out1.gain"), f(0.0)).await.unwrap();
+    amp.recall_preset(7).await.unwrap();
+    assert_eq!(amp.get(&param("out1.mute")).await.unwrap(), Value::Bool(false));
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), f(-7.5));
+    let preset = amp.status().await.unwrap().preset.unwrap();
+    assert_eq!((preset.index, preset.name.as_str()), (7, "Loud"));
+    assert_eq!(fake.state().recall_marks, [4]);
+
+    // a slot nobody stored changes no setting
+    amp.set(&param("out1.gain"), f(1.0)).await.unwrap();
+    amp.recall_preset(20).await.unwrap();
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), f(1.0));
+}
+
 /// ARCH-6: a busy fake accepts the connection and closes it at once, like an amp that has another
 /// controller; it serves again when the other controller is gone.
 #[tokio::test]

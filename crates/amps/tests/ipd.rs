@@ -226,6 +226,28 @@ async fn simulator_records_writes_and_not_reads() {
     }
 }
 
+/// A recall applies the settings saved in the slot, mutes included: what SEC-6 has to survive.
+#[tokio::test(flavor = "multi_thread")]
+async fn recall_applies_the_saved_settings_on_simulator() {
+    let (_srv, amp) = connect(true).await;
+    amp.set(&param("out1.mute"), Value::Bool(false)).await.unwrap();
+    amp.set(&param("out1.gain"), Value::Float(-7.5)).await.unwrap();
+    amp.store_preset(7, "Loud").await.unwrap();
+
+    amp.set(&param("out1.mute"), Value::Bool(true)).await.unwrap();
+    amp.set(&param("out1.gain"), Value::Float(0.0)).await.unwrap();
+    amp.recall_preset(7).await.unwrap();
+    assert_eq!(amp.get(&param("out1.mute")).await.unwrap(), Value::Bool(false));
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), Value::Float(-7.5));
+    assert_eq!(amp.status().await.unwrap().preset.unwrap().name, "Loud");
+
+    // a slot nobody saved changes no setting
+    amp.set(&param("out1.gain"), Value::Float(1.0)).await.unwrap();
+    amp.recall_preset(20).await.unwrap();
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), Value::Float(1.0));
+    amp.close().await;
+}
+
 /// BEH-37: store the current settings to a slot under a name.
 #[tokio::test(flavor = "multi_thread")]
 async fn store_preset_on_simulator() {

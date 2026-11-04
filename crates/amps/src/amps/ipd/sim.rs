@@ -103,6 +103,8 @@ pub struct SimAmp {
     noise: u32,
     /// Key of every SET / FACTORY item the amp processed (commands included), oldest first.
     writes: Vec<Key>,
+    /// Settings saved by CMD_SAVE_PRESET, by slot; CMD_LOAD_PRESET applies them.
+    presets: HashMap<i64, HashMap<Key, Raw>>,
 }
 
 #[allow(non_snake_case)]
@@ -171,6 +173,7 @@ impl SimAmp {
             hw_id: 1,
             noise: 12345,
             writes: Vec::new(),
+            presets: HashMap::new(),
         }
     }
 
@@ -226,6 +229,9 @@ impl SimAmp {
                     .cloned()
                     .unwrap_or(Raw::Text(String::new()));
                 self.values.insert(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), name);
+                if let Some(saved) = self.presets.get(&n) {
+                    self.values.extend(saved.iter().map(|(k, v)| (*k, v.clone())));
+                }
             }
             CMD_SAVE_PRESET => {
                 let n = self
@@ -239,6 +245,9 @@ impl SimAmp {
                     .cloned()
                     .unwrap_or(Raw::Text(String::new()));
                 self.values.insert(Key::new(S_PRESET, M_SHORT_NAME, n as u8, 0), name);
+                let audio = |k: &Key| !matches!(k.struct_id, S_GLOBAL | S_PRESET | S_COMMAND);
+                let settings = self.values.iter().filter(|(k, _)| audio(k)).map(|(k, v)| (*k, v.clone()));
+                self.presets.insert(n, settings.collect());
             }
             CMD_GOTO_STANDBY => {
                 self.values.insert(hw, Raw::Int(status | 4));
