@@ -76,3 +76,12 @@ copies, the same on both families); implements:
   only reported (`Update::LinkOutOfSync`, `Hub::link_drift`): connecting writes nothing (SEC-1). There
   is no sync action; linking a linked pair is a no-op on both families, and unlinking then linking
   makes the channels equal.
+
+## Second revision: show what is stored, correct nothing
+
+The auto-correction is gone (`LinkCorrected`, `LinkOutOfSync`). A pair the amp flags linked while its
+channels differ is **shown as two unlinked channels** with the stored values (`Hub::linked` false,
+`Hub::link_diverged` true, `Update::LinkChanged`), whether found when the state is read or reported by
+the amp; the app writes nothing. The state comes only from what the amp reports, never from the app's
+own writes, so editing a linked pair cannot make it flicker (tested by event). It is shown linked again
+if the channels become equal. LINK on such a pair copies channel 1 to channel 2; UNLINK clears the flag.

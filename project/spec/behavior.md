@@ -13,23 +13,23 @@ statement with a `BEH-<n>` ID.
 - **BEH-4** 10-band EQ per channel (inputs and outputs). High-pass and low-pass filters on outputs
   only. Delay on inputs and on outputs.
 - **BEH-5** Limiter per output, with linked units: Vpk, Ohm, Watt, dBu, converted the same way on
-  both families and showing what the vendor apps show. Vpk and dBu are one quantity, `dBu = 10 *
+  both families. The dBu is the number the amp stores and shows on its front panel (the amps show and
+  set dBu only); Vpk and Watt are the vendor app's. Vpk and dBu are one quantity, `dBu = 10 *
   log10(Vpk² / 1.2)`; the watts need the load, `W = Vpk² / (2 * Ohm)`, so a change of the load
-  moves the watts only. The amps themselves show and set dBu only (front panel).
+  moves the watts only.
   - IPX: the amp stores all four figures as plain values and derives nothing. The app takes the
-    dBu field as the threshold, the one the front panel shows. Editing the threshold (in Vpk, Watt
-    or dBu) writes all four together, as the vendor app does; editing the load writes the load and
-    the watts only, so it cannot move a threshold.
-  - IPD: the amp stores only the threshold in dBu, and the vendor app shows 2.22 dB more than is
-    stored (verified on an IPD 2400: stored 29.04 is shown as 31.26 dBu, 40 Vpk; stored 32.56 as
-    34.78 dBu, 60 Vpk). The app does the same: it shows and takes the vendor app's values, and
-    stores 2.22 dB less. The app keeps the load in Ohm per output (default 4 Ω) in its config and
-    converts.
-  - Ranges, as the vendor app shows them: the IPD takes 16.78 up to 33.8 (IPD 1200), 36.78 (2400) or
-    39.83 (4800) dBu stored, that is 19.0 to 36.02, 39.0 or 42.05 dBu (69, 98 or 138 Vpk at the top).
-    The IPX reports none; the app takes what the Windows app allows on an IPX 1200, 19.22 dBu (10
-    Vpk) to 35.99 dBu (69 Vpk), for every IPX until the others are measured. The load takes 0.5 to
-    100 Ohm.
+    dBu field as the threshold. Editing the threshold (in Vpk, Watt or dBu) writes all four together,
+    as the vendor app does; editing the load writes the load and the watts only, so it cannot move a
+    threshold.
+  - IPD: the amp stores only the threshold in dBu, and shows it as stored. The vendor app's volts
+    and watts go with a dBu 2.22 dB above the stored one (verified on an IPD 2400: stored 29.04 is
+    40 Vpk, stored 32.56 is 60 Vpk). The app shows the stored dBu, and gives Vpk and Watt as the
+    vendor app does; entering Vpk or Watt stores the dBu 2.22 dB lower, entering a dBu stores it as
+    entered. The app keeps the load in Ohm per output (default 4 Ω) in its config.
+  - Ranges: the IPD takes 16.78 up to 33.8 (IPD 1200), 36.78 (2400) or 39.83 (4800) dBu stored, which
+    is 69, 98 or 138 Vpk at the top. The IPX reports none; the app takes what the Windows app allows
+    on an IPX 1200, 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk), for every IPX until the others are
+    measured. The load takes 0.5 to 100 Ohm.
 - **BEH-6** 50 presets per amplifier, slots 1–50, numbered as in the vendor apps (IPD slots 51–100
   are not used; the IPX counts from 0 on the wire, the vendor app and this app show index + 1).
 
@@ -143,13 +143,13 @@ statement with a `BEH-<n>` ID.
   - IPD: the amp mirrors channel 1 to channel 2 itself. The app writes only channel 1 and never
     writes channel 2 while linked (the amp ignores it and may stop answering).
   - IPX: the amp copies the gain and the limiter dBu once when the link is switched on, then keeps
-    the channels independent. The app writes every channel 1 change to channel 2 as well. A change
-    made on the amp itself (front panel) to channel 1 of a linked pair reaches the app as a change
-    of the amp: the app then writes the same value to channel 2 (checked like any value), so the pair
-    stays equal, and warns the user that channel 2 was out of step. If that value is refused (range,
-    ceiling), or the pair is found out of step when the state is read, the app only warns:
-    connecting writes nothing (`SEC-1`). There is no sync action; unlinking and linking again makes
-    the channels equal. An IPD cannot drift.
+    the channels independent. The app writes every channel 1 change to channel 2 as well.
+  - The app shows what is stored in the amp. A pair that the amp flags linked while its channels
+    differ (a change made on the amp itself, or found so when the state is read) is shown as two
+    unlinked channels with their stored values, with a notice that it is linked in the amp. The app
+    writes nothing for it (`SEC-1`) and corrects nothing. If the channels become equal on the amp,
+    the pair is shown linked again. LINK on such a pair makes channel 2 equal to channel 1 (checked,
+    outputs muted around it); UNLINK clears the flag in the amp. An IPD cannot differ.
 - **BEH-33** Linked inputs share one Inputs EQ; linked outputs share one Outputs EQ.
 - **BEH-34** In Levels, linked outputs show one fader and one limiter, with stereo meters (two
   meters and two gain reduction bars).
@@ -180,7 +180,7 @@ statement with a `BEH-<n>` ID.
 - **BEH-40** The app keeps a TOML config file (`labrack/config.toml` in the user's config
   directory): the amplifier list (name, protocol, IP, source, connected or not), the IPD / IPX
   switches, and per amp the load per output (Ω) and the user safety ceilings (maximum output gain in
-  dB, maximum limiter threshold in dBu as the vendor app shows it; no ceiling until one is set). No passwords and no amp
+  dB, maximum limiter threshold in dBu as the amp stores it; no ceiling until one is set). No passwords and no amp
   settings. The list is saved after every change. A missing file means an empty list; a file that
   cannot be read is an error and is never overwritten.
 

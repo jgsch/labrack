@@ -75,13 +75,9 @@ pub enum Update {
     Preset(AmpId),
     /// A setting the app keeps for the amp changed: a ceiling or a limiter load (`Hub::amps`).
     Settings(AmpId),
-    /// The amp itself changed a setting of channel 1 of a linked IPX pair and channel 2 was out of step,
-    /// so the app set channel 2 to channel 1's value. For a warning to the user.
-    LinkCorrected(AmpId, Side, Param),
-    /// A linked pair whose channels differ and that the app did not correct: found when the state was
-    /// read (connecting writes nothing, `SEC-1`), or the correction was refused (range, ceiling).
-    /// [`Hub::link_drift`] says what differs.
-    LinkOutOfSync(AmpId, Side),
+    /// Whether a pair is shown linked changed: the amp flags it linked and its channels now differ, or
+    /// are equal again, or the link was switched ([`Hub::linked`], [`Hub::link_diverged`]).
+    LinkChanged(AmpId, Side),
     Scan(Scan),
 }
 
@@ -131,6 +127,10 @@ struct Live {
     loaded: bool,
     /// Changed since the app recalled or loaded the preset (BEH-38).
     modified: bool,
+    /// Per side (`Side as usize`): the amp flags the pair linked but its channels differ, so the pair is
+    /// shown as two channels with the values stored. Set from what the amp reports, never from the
+    /// app's own writes, which keep a linked pair equal.
+    diverged: [bool; 2],
     /// The open connection, while ONLINE and until it ends.
     session: Option<Session>,
 }
@@ -187,6 +187,7 @@ impl Shared {
                 amp.values.clear();
                 amp.loaded = false;
                 amp.modified = false;
+                amp.diverged = [false; 2];
                 amp.session = None;
             }
             next
@@ -214,7 +215,7 @@ impl Shared {
     /// change, and of every confirmed write of the app. A change of something the app already knew
     /// marks the preset MODIFIED (BEH-38); the first sight of a value, as the state is read, does not.
     fn observed(&self, id: AmpId, param: &Param, value: &Value, own: bool) {
-        let (changed, flipped, twin, follow) = {
+        let (changed, flipped, twin, regrouped) = {
             let mut live = lock(&self.live);
             let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
             let old = amp.values.insert(param.clone(), value.clone());
@@ -222,17 +223,6 @@ impl Shared {
             let modifies = changed && (old.is_some() || own);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
-            // a change the amp reports on channel 1 of a linked IPX pair, which does not follow by itself
-            let follow = (!own && changed && old.is_some() && amp.loaded)
-                .then(|| {
-                    let session = amp.session.clone().filter(Session::is_ipx)?;
-                    let side = pair::follows(param).filter(|_| !pair::is_second(param))?;
-                    let linked = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
-                    let twin = pair::second(param).filter(|_| linked)?;
-                    let behind = amp.values.get(&twin).is_some_and(|other| !link::same(value, other));
-                    behind.then_some((side, twin, session))
-                })
-                .flatten();
             // an IPD mirrors a linked pair by itself and tells nothing of channel 2: the state follows
             let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
             let linked = |side: pair::Side| amp.values.get(&side.flag()) == Some(&Value::Bool(true));
@@ -242,7 +232,18 @@ impl Shared {
             if let Some(twin) = &twin {
                 amp.values.insert(twin.clone(), value.clone());
             }
-            (changed, flipped, twin, follow)
+            // what the amp reports about a pair decides whether it is shown linked: the app writes nothing
+            let regrouped = (!own && changed && amp.loaded)
+                .then(|| pair::follows(param).or_else(|| pair::flag_side(param)))
+                .flatten()
+                .filter(|side| {
+                    let flagged = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
+                    let diverged = flagged && !link::side_drift(&amp.values, *side).is_empty();
+                    let moved = diverged != amp.diverged[*side as usize];
+                    amp.diverged[*side as usize] = diverged;
+                    moved
+                });
+            (changed, flipped, twin, regrouped)
         };
         if changed || own {
             self.emit(Update::Changed(id, param.clone(), value.clone()));
@@ -253,27 +254,16 @@ impl Shared {
         if flipped {
             self.emit(Update::Modified(id, true));
         }
-        if let Some((side, twin, session)) = follow {
-            self.follow(id, side, param, twin, &session, value);
+        if let Some(side) = regrouped {
+            self.emit(Update::LinkChanged(id, side));
         }
     }
 
-    /// Channel 2 of a linked IPX pair is behind a change the amp made to channel 1: set it to the same
-    /// value, if that value is acceptable, and tell the views either way.
-    fn follow(&self, id: AmpId, side: Side, param: &Param, twin: Param, session: &Session, value: &Value) {
-        let ceilings = self.store().get(id).map(|amp| amp.ceilings).unwrap_or_default();
-        let checked = session
-            .amp
-            .spec(&twin)
-            .filter(|spec| spec.writable)
-            .and_then(|spec| dsp::check(&twin, &spec, value, &ceilings).ok());
-        match checked {
-            Some(checked) => {
-                session.writer.push_all([(twin, checked)]);
-                self.emit(Update::LinkCorrected(id, side, param.clone()));
-            }
-            None => self.emit(Update::LinkOutOfSync(id, side)),
-        }
+    /// Show a pair as linked or, with `diverged`, as two channels; true when that changed.
+    fn set_diverged(&self, id: AmpId, side: Side, diverged: bool) -> bool {
+        let mut live = lock(&self.live);
+        let Some(amp) = live.get_mut(&id) else { return false };
+        std::mem::replace(&mut amp.diverged[side as usize], diverged) != diverged
     }
 
     fn set_modified(&self, id: AmpId, modified: bool) {
@@ -299,11 +289,13 @@ impl Shared {
         if let Some(amp) = lock(&self.live).get_mut(&id) {
             amp.values.retain(|param, _| matches!(param, Param::Mute(Channel::Output(_))));
             amp.loaded = false;
+            amp.diverged = [false; 2];
         }
     }
 
     /// The state read from the connection of `token`. What changed since is newer and stays.
     fn load(&self, id: AmpId, token: &Arc<Writer>, snapshot: labgruppen::Snapshot) {
+        let mut shown_apart = Vec::new();
         {
             let mut live = lock(&self.live);
             let current = |amp: &Live| amp.session.as_ref().is_some_and(|s| Arc::ptr_eq(&s.writer, token));
@@ -314,13 +306,19 @@ impl Shared {
                 }
             }
             amp.loaded = true;
+            // a pair the amp flags linked while its channels differ is shown as two: connecting only reads
+            for side in [Side::Inputs, Side::Outputs] {
+                let flagged = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
+                let diverged = flagged && !link::side_drift(&amp.values, side).is_empty();
+                amp.diverged[side as usize] = diverged;
+                if diverged {
+                    shown_apart.push(side);
+                }
+            }
         }
         self.emit(Update::Loaded(id));
-        // a pair found out of step is reported, not written: connecting only reads (SEC-1)
-        for side in [Side::Inputs, Side::Outputs] {
-            if !self.drift(id, side).is_empty() {
-                self.emit(Update::LinkOutOfSync(id, side));
-            }
+        for side in shown_apart {
+            self.emit(Update::LinkChanged(id, side));
         }
     }
 
@@ -613,6 +611,7 @@ impl Hub {
                         values: HashMap::new(),
                         loaded: false,
                         modified: false,
+                        diverged: [false; 2],
                         session: None,
                     };
                     lock(&shared.live).insert(amp.id, live);

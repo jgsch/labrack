@@ -78,3 +78,11 @@ ranges), edits `SEC-3` (the limiter ceiling is a dBu and holds in every unit and
   the Vpk. The notes above that say the display is derived from Vpk describe the first version.
 - The IPX range is the Windows app's for a 1200 (19.22 to 35.99 dBu); the 2400 and 4800 are in the
   backlog.
+
+## Second revision: the dBu shown is the dBu stored
+
+The IPD's dBu is shown exactly as stored (the amps' front panels show and set dBu only). Only the
+volts and watts are the vendor app's, which go with a dBu 2.22 dB above the stored one
+(`Limiter::stored(dbu, ohm, offset)`); entering volts or watts stores 2.22 dB less. Ranges and the
+user ceiling are in the stored dBu. The same edit in dBu is therefore not the same volts on the two
+families; in Vpk or Watt it is. This replaces the first revision's "shown dBu = stored + 2.22".

@@ -9,39 +9,31 @@
 //! the link switched off, so it needs nothing of what the amps copy by themselves and never writes
 //! channel 2 of a linked IPD. The copy is a bulk change (`SEC-6`): the outputs are muted around it.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use labgruppen::{Channel, Param, Value};
 use tokio::time::timeout;
 
 use super::presets::End;
-use super::{Hub, Session, Shared, lock};
+use super::{Hub, Session, lock};
 use crate::link::{self, Side};
 use crate::store::AmpId;
 use crate::{Error, Result, dsp};
 
-impl Shared {
-    pub(super) fn drift(&self, id: AmpId, side: Side) -> Vec<Param> {
-        let live = lock(&self.live);
-        let Some(amp) = live.get(&id).filter(|amp| amp.values.get(&side.flag()) == Some(&Value::Bool(true)))
-        else {
-            return Vec::new();
-        };
-        let differs = |param: &Param, value: &Value| {
-            link::second(param)
-                .and_then(|twin| amp.values.get(&twin))
-                .is_some_and(|other| !same(value, other))
-        };
-        let mut drift: Vec<Param> = amp
-            .values
-            .iter()
-            .filter(|(param, _)| link::follows(param) == Some(side) && !link::is_second(param))
-            .filter(|(param, value)| differs(param, value))
-            .map(|(param, _)| param.clone())
-            .collect();
-        drift.sort_by_key(ToString::to_string);
-        drift
-    }
+/// The settings of channel 1 that channel 2 does not have, by name, in `values`.
+pub(super) fn side_drift(values: &HashMap<Param, Value>, side: Side) -> Vec<Param> {
+    let differs = |param: &Param, value: &Value| {
+        link::second(param).and_then(|twin| values.get(&twin)).is_some_and(|other| !same(value, other))
+    };
+    let mut drift: Vec<Param> = values
+        .iter()
+        .filter(|(param, _)| link::follows(param) == Some(side) && !link::is_second(param))
+        .filter(|(param, value)| differs(param, value))
+        .map(|(param, _)| param.clone())
+        .collect();
+    drift.sort_by_key(ToString::to_string);
+    drift
 }
 
 /// Two values of a pair are the same if they are equal, or numbers closer than the amps tell apart: the
@@ -58,20 +50,34 @@ pub(super) fn same(a: &Value, b: &Value) -> bool {
 }
 
 impl Hub {
-    /// Whether the pair is linked, as far as the app knows.
+    /// Whether the pair is shown linked: the amp flags it linked and its channels are equal. The app
+    /// shows what is stored: a pair that is flagged linked but whose channels differ is shown as two
+    /// channels ([`Hub::link_diverged`]).
     pub fn linked(&self, id: AmpId, side: Side) -> bool {
         let live = lock(&self.0.shared.live);
-        live.get(&id).and_then(|amp| amp.values.get(&side.flag())) == Some(&Value::Bool(true))
+        live.get(&id).is_some_and(|amp| {
+            amp.values.get(&side.flag()) == Some(&Value::Bool(true)) && !amp.diverged[side as usize]
+        })
     }
 
-    /// The settings of channel 1 of a linked pair that channel 2 does not have, by name; empty when the
-    /// pair is not linked or the state is not read. An IPD keeps a pair equal itself. An IPX does not: a
-    /// change made on the amp itself (front panel) while the app is connected is followed by the app
-    /// ([`crate::Update::LinkCorrected`]), but a pair found out of step when the state is read is only
-    /// reported ([`crate::Update::LinkOutOfSync`]), because connecting writes nothing. Unlink and link
-    /// the pair to make it equal.
+    /// The amp flags the pair linked, but its channels differ, so the pair is shown as two channels with
+    /// the values stored. Found when the state is read, or when the amp reports a change (front panel);
+    /// the app writes nothing for it (`SEC-1`). The channels are shown linked again if they become equal
+    /// on the amp. [`Hub::set_link`] with `true` makes channel 2 equal to channel 1; with `false` it
+    /// clears the flag.
+    pub fn link_diverged(&self, id: AmpId, side: Side) -> bool {
+        let live = lock(&self.0.shared.live);
+        live.get(&id).is_some_and(|amp| amp.diverged[side as usize])
+    }
+
+    /// The settings of channel 1 of a flagged pair that channel 2 does not have, by name; empty when the
+    /// pair is not flagged linked or the state is not read. For saying what differs.
     pub fn link_drift(&self, id: AmpId, side: Side) -> Vec<Param> {
-        self.0.shared.drift(id, side)
+        let live = lock(&self.0.shared.live);
+        match live.get(&id).filter(|amp| amp.values.get(&side.flag()) == Some(&Value::Bool(true))) {
+            Some(amp) => side_drift(&amp.values, side),
+            None => Vec::new(),
+        }
     }
 
     /// The channels a view shows for a side: a linked pair is one channel (BEH-33, BEH-34).
@@ -113,12 +119,15 @@ impl Hub {
             let _gate = session.gate.lock().await;
             session.amp.set(&flag, Value::Bool(false)).await?;
             shared.observed(id, &flag, &Value::Bool(false), true);
+            if shared.set_diverged(id, side, false) {
+                shared.emit(crate::Update::LinkChanged(id, side));
+            }
             return Ok(());
         }
 
-        // nothing to do, and no sync: an IPD keeps a linked pair equal itself and channel 2 of a linked IPD
-        // must not be written; an IPX pair is followed as the amp reports changes. To make a pair that is
-        // out of step equal, unlink it and link it again.
+        // nothing to do: an IPD keeps a linked pair equal itself and channel 2 of a linked IPD must not
+        // be written. A pair shown as two channels (flagged linked, channels different) is not shown
+        // linked, so this copies channel 1 to channel 2 and shows it linked again.
         if self.linked(id, side) {
             return Ok(());
         }
@@ -138,6 +147,9 @@ impl Hub {
             shared.observed(id, param, value, true);
         }
         shared.observed(id, &flag, &Value::Bool(true), true);
+        if shared.set_diverged(id, side, false) {
+            shared.emit(crate::Update::LinkChanged(id, side));
+        }
         Ok(())
     }
 

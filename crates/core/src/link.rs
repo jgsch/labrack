@@ -28,6 +28,15 @@ impl Side {
     }
 }
 
+/// The pair a link flag belongs to.
+pub(crate) fn flag_side(param: &Param) -> Option<Side> {
+    match param {
+        Param::Link(Channel::Input(0)) => Some(Side::Inputs),
+        Param::Link(Channel::Output(0)) => Some(Side::Outputs),
+        _ => None,
+    }
+}
+
 fn side_of(channel: Channel) -> Side {
     match channel {
         Channel::Input(_) => Side::Inputs,

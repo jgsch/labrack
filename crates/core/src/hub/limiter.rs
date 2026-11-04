@@ -21,6 +21,11 @@ fn param(output: u8, field: LimiterField) -> Param {
     Param::Limiter { ch: Channel::Output(output), field }
 }
 
+/// How far above its stored dBu the volts of an amp are (BEH-5).
+fn offset(session: &Session) -> f64 {
+    if session.is_ipx() { 0.0 } else { math::IPD_DISPLAY_OFFSET }
+}
+
 fn round6(x: f64) -> f64 {
     (x * 1e6).round() / 1e6
 }
@@ -42,11 +47,11 @@ impl Hub {
         };
         if session.is_ipx() {
             // the dBu is what the amp's front panel shows and sets: the figures follow it
-            Some(Limiter::from_dbu(number(LimiterField::ThresholdDbu)?, number(LimiterField::Impedance)?))
+            Some(Limiter::stored(number(LimiterField::ThresholdDbu)?, number(LimiterField::Impedance)?, 0.0))
         } else {
-            // the vendor app shows an IPD threshold 2.22 dB above the one stored
+            // the dBu shown is the one stored; the volts and watts are the vendor app's
             let ohm = *self.0.shared.store().get(id)?.load_ohms.get(usize::from(output))?;
-            Some(Limiter::from_dbu(number(LimiterField::Threshold)? + math::IPD_DISPLAY_OFFSET, ohm))
+            Some(Limiter::stored(number(LimiterField::Threshold)?, ohm, offset(session)))
         }
     }
 
@@ -54,14 +59,9 @@ impl Hub {
     fn dbu_bounds(session: &Session, output: u8) -> Option<(f64, f64)> {
         let spec = session.amp.spec(&param(output, LimiterField::Threshold))?;
         let (min, max) = (spec.min?, spec.max?);
-        // the IPX range is in Vpk, the IPD's in the dBu it stores: both as the vendor app shows them,
-        // rounded to drop the error of the way
-        let shown = |dbu: f64| round6(dbu);
-        Some(if spec.unit == "Vpk" {
-            (shown(math::dbu(min)), shown(math::dbu(max)))
-        } else {
-            (shown(min + math::IPD_DISPLAY_OFFSET), shown(max + math::IPD_DISPLAY_OFFSET))
-        })
+        // the IPX range is in Vpk, the IPD's in the dBu it stores: both in the dBu stored, rounded to
+        // drop the error of the way
+        Some(if spec.unit == "Vpk" { (round6(math::dbu(min)), round6(math::dbu(max))) } else { (min, max) })
     }
 
     /// What the control of `unit` may be set to: the amp's range, ended by the user ceiling (SEC-3),
@@ -82,7 +82,7 @@ impl Hub {
         let ohm = self.limiter_of(id, output, &session).map(|l| l.ohm);
         let at = |dbu: f64| match (unit, ohm) {
             (Unit::Watt, None) => None,
-            (_, ohm) => Some(Limiter::from_dbu(dbu, ohm.unwrap_or(0.0)).in_unit(unit)),
+            (_, ohm) => Some(Limiter::stored(dbu, ohm.unwrap_or(0.0), offset(&session)).in_unit(unit)),
         };
         Some(Range { min: Some(at(lo)?), max: Some(at(top)?), unit: unit.label() })
     }
@@ -116,7 +116,9 @@ impl Hub {
         let current = match self.limiter_of(id, output, &session) {
             Some(current) => current,
             // an IPD whose threshold is not read yet can still take a new load
-            None if !ipx && unit == Ohm => Limiter::from_dbu(0.0, load().ok_or(Error::UnknownAmp)?),
+            None if !ipx && unit == Ohm => {
+                Limiter::stored(0.0, load().ok_or(Error::UnknownAmp)?, offset(&session))
+            }
             None => return Err(Error::NotLoaded),
         };
 
@@ -133,10 +135,10 @@ impl Hub {
             // an edge reached through another unit is the edge, not a float away from it
             let dbu = snap(new.dbu, (lo, top));
             if dbu != new.dbu {
-                new = Limiter::from_dbu(dbu, current.ohm);
+                new = current.edit(Unit::Dbu, dbu);
             }
             if !(lo..=top).contains(&new.dbu) {
-                let bounds = |dbu| Limiter::from_dbu(dbu, current.ohm).in_unit(unit);
+                let bounds = |dbu| current.edit(Unit::Dbu, dbu).in_unit(unit);
                 return Err(match ceiling {
                     Some(c) if c < hi && new.dbu > top => {
                         Error::AboveCeiling { ceiling: bounds(top), unit: label }
@@ -162,9 +164,9 @@ impl Hub {
                 (param(output, LimiterField::Impedance), Value::Float(new.ohm)),
                 (param(output, LimiterField::Power), Value::Float(new.watt)),
             ],
-            // the IPD stores 2.22 dB less than is shown, in steps of 0.01
+            // the IPD stores the dBu in steps of 0.01
             (false, true) => {
-                let stored = ((new.dbu - math::IPD_DISPLAY_OFFSET) * 100.0).round() / 100.0;
+                let stored = (new.dbu * 100.0).round() / 100.0;
                 vec![(param(output, LimiterField::Threshold), Value::Float(stored))]
             }
             (false, false) => {
