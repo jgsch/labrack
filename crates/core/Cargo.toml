@@ -1,0 +1,16 @@
+[package]
+name = "labrack-core"
+version = "0.1.0"
+edition = "2024"
+description = "LAB.RACK logic without a UI: amplifier list, config, safety rules"
+license = "MIT"
+publish = false
+
+[dependencies]
+dirs = "7"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+toml = "1"
+
+[dev-dependencies]
+tempfile = "3"

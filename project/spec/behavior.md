@@ -23,7 +23,8 @@ statement with a `BEH-<n>` ID.
 ## Amplifier list and status
 
 - **BEH-7** Every amplifier has an index, a name, a protocol, an IP address, a source (AUTO or
-  MANUAL) and a loaded preset.
+  MANUAL) and a loaded preset. The index is the amp's position in the list, starting at 1; removing
+  an amp renumbers the ones after it. The loaded preset is not saved (`BEH-40`).
 - **BEH-8** Each amplifier has one status at a time:
 
   | Status | When | Colour |
@@ -66,10 +67,13 @@ statement with a `BEH-<n>` ID.
 
 ## Manual add, rename and remove
 
-- **BEH-20** Manual add takes a name (optional, defaults to Amp n), a protocol and an IP address.
-  It is the fallback when discovery fails.
+- **BEH-20** Manual add takes a name (optional, defaults to Amp n, where n is the smallest number
+  for which no amp is already named Amp n), a protocol and an IP address. It is the fallback when
+  discovery fails.
 - **BEH-21** Validation: the IP must be a valid IPv4 address and must not already be in the list.
-  Each error is shown next to the add button.
+  Each error is shown next to the add button. Editing the IP of a known amp (`BEH-10`) accepts text
+  that is not a valid IPv4 address (the amp then shows CHECK IP, `BEH-8`), but rejects an address
+  another amp already has; the old IP stays.
 - **BEH-22** Manually added amps have source MANUAL.
 - **BEH-23** Every known amplifier can be renamed (empty names are rejected and the old name
   returns) and removed.
@@ -128,9 +132,12 @@ statement with a `BEH-<n>` ID.
 - **BEH-39** The Amplifiers and Search pages share one amplifier list. Renaming, adding and removing
   are reflected everywhere, including Mix & EQ (which shows a fixed list of three amps in the
   design). Mute state is shared as in `BEH-26`.
-- **BEH-40** The app keeps a TOML config file: the amplifier list (name, protocol, IP, source,
-  connected or not), the IPD / IPX switches, the IPD load per output, and the user safety ceilings.
-  No passwords and no amp settings.
+- **BEH-40** The app keeps a TOML config file (`labrack/config.toml` in the user's config
+  directory): the amplifier list (name, protocol, IP, source, connected or not), the IPD / IPX
+  switches, and per amp the load per output (Ω) and the user safety ceilings (maximum output gain in
+  dB, maximum limiter threshold in dBu; no ceiling until one is set). No passwords and no amp
+  settings. The list is saved after every change. A missing file means an empty list; a file that
+  cannot be read is an error and is never overwritten.
 
 ## Error and empty states
 
