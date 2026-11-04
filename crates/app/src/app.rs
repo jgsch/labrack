@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
-use labgruppen::{Channel, Param, Value};
-use labrack_core::{Hub, Lan, Network, Scan, Side, Store, Timing, Unit, Update};
+use labgruppen::{Channel, EqField, Param, Value, XoverField};
+use labrack_core::{AmpId, Hub, Lan, Network, Scan, Side, Store, Timing, Unit, Update};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::amplifiers::{AmpView, Level};
 use crate::control::Bounds;
-use crate::mixeq::{AmpCard, LIMITER_BOXES, LevelRow, LimiterStrip, MixTab, MixeqView, Strip};
+use crate::eq::{self, Band, Filter};
+use crate::mixeq::{
+    AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixTab, MixeqView, Strip,
+};
 use crate::search::{KnownAmp, SearchView};
 use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
 
@@ -174,6 +177,17 @@ pub fn App() -> Element {
                                         spawn(async move {
                                             let _ = hub.set_link(id, side, linked).await;
                                         });
+                                    }
+                                }
+                            },
+                            on_set: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |writes: Vec<(Param, Value)>| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        for (param, value) in writes {
+                                            let _ = hub.set(id, param, value);
+                                        }
                                     }
                                 }
                             },
@@ -387,13 +401,59 @@ pub fn mixeq_view(hub: &Hub, selected: usize, tab: MixTab) -> MixeqView {
             }
         })
         .collect();
-    MixeqView {
-        amps: cards,
-        selected,
-        tab,
-        linked_inputs: hub.linked(id, Side::Inputs),
-        linked_outputs: hub.linked(id, Side::Outputs),
-        rows,
+    let linked_inputs = hub.linked(id, Side::Inputs);
+    let linked_outputs = hub.linked(id, Side::Outputs);
+    let eq =
+        tab.visible(linked_inputs, linked_outputs).and_then(MixTab::channel).map(|ch| eq_view(hub, id, ch));
+    MixeqView { amps: cards, selected, tab, linked_inputs, linked_outputs, rows, eq }
+}
+
+/// What an EQ tab draws for one channel (UX-20); what is not read yet shows the default band.
+fn eq_view(hub: &Hub, id: AmpId, ch: Channel) -> EqView {
+    let value = |param: &Param| hub.value(id, param);
+    let number = |param: Param, none: f64| value(&param).and_then(|v| v.as_f64()).unwrap_or(none);
+    let on = |param: Param| value(&param).and_then(|v| v.as_bool()).unwrap_or(false);
+    let text = |param: Param, none: &str| {
+        value(&param).and_then(|v| v.as_str().map(str::to_string)).unwrap_or(none.into())
+    };
+    let bounds = |param: Param| {
+        let range = hub.range(id, &param);
+        let (min, max) = labgruppen::shared_range(&param).unwrap_or((0.0, 100_000.0));
+        Bounds::new(range.and_then(|r| r.min).unwrap_or(min), range.and_then(|r| r.max).unwrap_or(max))
+    };
+    let field = |band, field| Param::Eq { ch, band, field };
+    let bands = (0..labgruppen::EQ_BANDS)
+        .map(|band| {
+            let none = eq::default_band(band);
+            Band {
+                on: on(field(band, EqField::Enabled)),
+                kind: text(field(band, EqField::Type), &none.kind),
+                freq: number(field(band, EqField::Freq), none.freq),
+                gain: number(field(band, EqField::Gain), none.gain),
+                q: number(field(band, EqField::Q), none.q),
+            }
+        })
+        .collect();
+    let filter = |high: bool, freq: f64, kind: &str| Filter {
+        on: on(eq::filter_param(ch, high, XoverField::Enabled)),
+        kind: text(eq::filter_param(ch, high, XoverField::Type), kind),
+        freq: number(eq::filter_param(ch, high, XoverField::Freq), freq),
+    };
+    let filters = (!ch.is_input())
+        .then(|| (filter(true, 40.0, "butterworth_24"), filter(false, 20000.0, "linkwitz_riley_24")));
+    EqView {
+        channel: ch,
+        bands,
+        filters,
+        delay_ms: number(Param::Delay(ch), 0.0),
+        bounds: EqBounds {
+            freq: bounds(field(0, EqField::Freq)),
+            gain: bounds(field(0, EqField::Gain)),
+            q: bounds(field(0, EqField::Q)),
+            delay: bounds(Param::Delay(ch)),
+            hpf: bounds(eq::filter_param(Channel::Output(0), true, XoverField::Freq)),
+            lpf: bounds(eq::filter_param(Channel::Output(0), false, XoverField::Freq)),
+        },
     }
 }
 

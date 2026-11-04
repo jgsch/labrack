@@ -22,7 +22,7 @@ No spec change; implements:
 - [ ] Amp selector and tab row with link buttons
 - [ ] Mixer tab
 - [x] Levels tab (IN / OUT / LIMITER rows, same-size dB box and MUTE)
-- [ ] EQ tab component (10 bands; outputs add HPF, LPF, delay)
+- [x] EQ tab component (10 bands; outputs add HPF, LPF, delay)
 - [ ] Linked layouts
 - [ ] Preset actions
 - [ ] Screenshots compared with the Mix & EQ boards
@@ -46,11 +46,16 @@ No spec change; implements:
   (`hub.set_limiter`). The tabs are the board's folder tabs on the panel, the amp cards have the index
   and the meter bars, and the LINK button links the pair of the open tab (outputs on Levels), hidden on
   the Mixer. `mise run app-shot` renders `levels-demo` beside board 03.
-- **Still to do**: the linked Levels layout (BEH-34: one row, stereo meters; what the IN fader does
-  while only the outputs are linked is open), the preset bar, the boxes show `0` where the board shows
-  `0.0` (`control::number`), the Mixer tab (UX-18: two rows of four source cards with fader, meter, gain and
-  mute, and where they go), the EQ tabs (UX-20: ten bands, and HPF, LPF and delay on the outputs), and
-  the screenshot of those against boards 02-05 and 07-09.
+- **EQ tabs** (2026-11-04): `EqPage` in `mixeq.rs`, its logic in `eq.rs` (type names, which boxes a
+  type has, the curve from the cookbook biquads and the Butterworth / Linkwitz-Riley / Bessel filters at
+  48 kHz, ALL OFF and RESET). A shared tab edits channel 1. The types offered are `EQ_TYPES` and
+  `XOVER_TYPES`, the amps' own, not the mockup's list. Decided with the user and written in UX-20: RESET
+  is all off, 0 dB, Q 1.4, keeping type and frequency; DELAY has no checkbox (the amps store a time
+  only). `mise run app-shot` renders `eq-in-demo` and `eq-out-demo` beside boards 04 and 05.
+- **Still to do**: the Mixer tab (UX-18: two rows of four source cards with fader, meter, gain and
+  mute, and where they go, against board 02); the linked Levels layout (BEH-34: one row, stereo meters;
+  what the IN fader does while only the outputs are linked is open); the preset bar; the boxes show
+  `0` where the boards show `0.0` (`control::number`).
 
 - Depends on `core-dsp-control`, `core-limiter`, `core-link`, `core-mute-presets` and
   `app-controls`.

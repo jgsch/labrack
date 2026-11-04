@@ -62,6 +62,13 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   scale line under the meters.
 - **UX-20** EQ tabs: one tab per channel (or one shared tab when linked), with the ten bands;
   outputs add HPF, LPF and delay.
+  - Left: the response curve (20 Hz to 20 kHz, ±15 dB) with a numbered handle per band that is on,
+    and under it the HPF and LPF rows (on/off, Hz, type) on outputs and the DELAY row (ms and the
+    distance in metres of air) on both. Delay has no on/off: the amps store only a time, 0 ms is none.
+  - Right: 10-BAND EQ with one row per band (on, number, type, Hz, dB, Q). Gain is greyed for the
+    types that have none, Q for the shelves and filters. The types offered are the amps' own.
+  - ALL OFF switches the ten bands off. RESET switches them off and sets gain 0 dB and Q 1.4,
+    keeping type and frequency.
 
 ## Interaction details
 

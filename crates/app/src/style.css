@@ -161,3 +161,49 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .limiter-box .value-box input{padding:0 30px 0 6px}
 .limiter-box .value-box .value-unit{right:6px}
 .limiter-box .value-box input:disabled{color:var(--muted)}
+/* EQ tabs (UX-20). --c is the colour of the side: sapphire for inputs, lavender for outputs. */
+.tab-panel{--c:var(--lavender)}
+.tab-panel.in{--c:var(--sapphire)}
+select{min-height:44px;border-radius:4px;background:var(--button);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;padding:0 8px;width:100%;box-sizing:border-box}
+select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.eq-layout{display:flex;flex-wrap:wrap;gap:20px;align-items:stretch}
+.eq-left{flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.eq-graph{position:relative;flex:1 1 auto;min-height:320px;background:var(--base);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.eq-graph svg{position:absolute;inset:0;width:100%;height:100%}
+.eq-graph line{stroke:var(--button);stroke-width:1;vector-effect:non-scaling-stroke}
+.eq-graph line.zero{stroke:var(--border-strong)}
+.eq-graph path.fill{fill:var(--c);fill-opacity:0.16;stroke:none}
+.eq-graph path.curve{fill:none;stroke:var(--c);stroke-width:2.5;vector-effect:non-scaling-stroke}
+.eq-db{position:absolute;left:6px;font-size:10px;color:var(--muted)}
+.eq-hz{position:absolute;bottom:4px;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+.eq-handle{position:absolute;display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin:-11px 0 0 -11px;box-sizing:border-box;border-radius:50%;font-size:11px;font-weight:600;background:var(--base);color:var(--c);border:2px solid var(--c)}
+.eq-extra{display:flex;flex-direction:column;gap:2px;background:var(--base);border:1px solid #7f849c;border-radius:4px;padding:8px 14px}
+.eq-extra.in{border-color:#3f6a85}
+.eq-extra-row{display:grid;grid-template-columns:84px 116px minmax(0,1fr);gap:8px;align-items:center}
+.eq-extra-row.off{opacity:0.6}
+.eq-extra-name{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:15px;font-weight:600}
+.eq-extra-name.plain{cursor:default}
+.eq-extra-name input,.eq-on input{width:22px;height:22px;margin:0 10px 0 0;accent-color:var(--c)}
+.eq-on input{margin:0}
+.eq-extra-row .value-box,.eq-row .value-box{width:100%}
+.eq-extra-row .value-field,.eq-row .value-field{min-width:0;align-items:stretch}
+.eq-extra-row .value-box input{padding:0 30px 0 6px;font-weight:600}
+.eq-extra-row .value-unit{right:7px;font-size:10px}
+.eq-air{font-size:12px;color:var(--muted)}
+.eq-right{flex:0 0 470px;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:4px}
+.eq-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px}
+.eq-head h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;letter-spacing:0.08em;text-transform:uppercase}
+.eq-actions{display:flex;gap:8px}
+.button.eq-action{padding:0 14px;font-size:12px;letter-spacing:0}
+.eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:1px 0;border-bottom:1px solid var(--border)}
+.eq-row.off{opacity:0.5}
+.eq-row.eq-columns{padding:4px 0;border-bottom:2px solid var(--c);font-size:11px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
+.eq-columns .center{text-align:center}
+.eq-columns .right{text-align:right}
+.eq-on{display:flex;align-items:center;justify-content:center;height:44px;cursor:pointer}
+.eq-n{font-size:13px;font-weight:600}
+.eq-row select{padding:0 4px}
+.eq-row .value-box input{padding:0 26px 0 6px;background:var(--base);font-weight:400}
+.eq-row .value-unit{right:7px;font-size:10px}
+.eq-none{opacity:0.3}
+.eq-row > :last-child .value-box input{padding:0 6px}

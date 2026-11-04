@@ -136,13 +136,17 @@ pub fn ValueField(
     /// A raise of more than 6 dB asks first (UX-24); a load or a power is not a level.
     #[props(default = true)]
     ask_raise: bool,
+    /// Decimals shown: one for levels, two for a Q.
+    #[props(default = 1)]
+    digits: usize,
+    #[props(default)] disabled: bool,
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
     let mut draft = use_signal(|| None::<String>);
     let error = use_signal(String::new);
     let mut asked = use_signal(|| None::<f64>);
-    let shown = draft().unwrap_or_else(|| control::number(value));
-    let field = Committed { draft, error, asked, value, bounds, ask_raise, on_change };
+    let shown = draft().unwrap_or_else(|| control::number_to(value, digits));
+    let field = Committed { draft, error, asked, value, bounds, unit: unit.clone(), ask_raise, on_change };
 
     rsx! {
         div { class: "value-field",
@@ -152,9 +156,13 @@ pub fn ValueField(
                     inputmode: "decimal",
                     autocomplete: "off",
                     "aria-label": "{label}",
+                    disabled,
                     value: "{shown}",
                     oninput: move |event| draft.set(Some(event.value())),
-                    onblur: move |_| field.commit(),
+                    onblur: {
+                        let field = field.clone();
+                        move |_| field.commit()
+                    },
                     onkeydown: move |event| {
                         if event.key().to_string() == "Enter" {
                             event.prevent_default();
@@ -186,26 +194,27 @@ pub fn ValueField(
 }
 
 /// What takes a typed value into the amp or refuses it; the pieces of a [`ValueField`].
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Committed {
     draft: Signal<Option<String>>,
     error: Signal<String>,
     asked: Signal<Option<f64>>,
     value: f64,
     bounds: Bounds,
+    unit: String,
     ask_raise: bool,
     on_change: EventHandler<f64>,
 }
 
 impl Committed {
     /// Read the draft, if any: take it, or say why not, or ask first.
-    fn commit(self) {
+    fn commit(&self) {
         let mut draft = self.draft;
         let mut error = self.error;
         let mut asked = self.asked;
         let Some(raw) = draft() else { return };
         draft.set(None);
-        match control::typed_db(&raw, self.bounds) {
+        match control::typed(&raw, self.bounds, &self.unit) {
             Err(why) => error.set(why.0),
             Ok(next) if next == self.value => error.set(String::new()),
             Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next) => {

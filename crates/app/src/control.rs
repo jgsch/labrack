@@ -78,25 +78,35 @@ pub struct NotTaken(pub String);
 /// `off` / `-inf` for the bottom of the range. Refuses what is not a number, NaN, infinity, and a
 /// value outside the range instead of clamping it (SEC-2).
 pub fn typed_db(text: &str, bounds: Bounds) -> Result<f64, NotTaken> {
+    typed(text, bounds, "dB")
+}
+
+/// A value typed into a box of `unit`, read as [`typed_db`] reads a level: the unit may follow the
+/// number, a frequency may be written in kHz (`1k`, `1.5 kHz`), and `off` is the bottom of a level
+/// only. The reason for a refusal names the unit.
+pub fn typed(text: &str, bounds: Bounds, unit: &str) -> Result<f64, NotTaken> {
+    let level = unit.eq_ignore_ascii_case("dB");
+    let what = if level { "a level" } else { "a number" };
     let t = text.trim().to_lowercase().replace(',', ".");
     let t = t.replace('\u{2212}', "-");
-    let t = t.strip_suffix("db").unwrap_or(&t).trim();
+    let lower = unit.to_lowercase();
+    let t = t.strip_suffix(lower.as_str()).unwrap_or(&t).trim();
+    let (t, scale) = match t.strip_suffix('k') {
+        Some(rest) if lower == "hz" => (rest.trim(), 1000.0),
+        _ => (t, 1.0),
+    };
     let value = match t {
-        "off" | "-inf" | "-infinity" => bounds.min,
-        "" => return Err(NotTaken("Enter a level".into())),
+        "off" | "-inf" | "-infinity" if level => bounds.min,
+        "" => return Err(NotTaken(format!("Enter {what}"))),
         _ => match t.parse::<f64>() {
-            Ok(v) if v.is_finite() => v,
-            _ => return Err(NotTaken(format!("{text:?} is not a level"))),
+            Ok(v) if v.is_finite() => v * scale,
+            _ => return Err(NotTaken(format!("{text:?} is not {what}"))),
         },
     };
     if !bounds.contains(value) {
-        return Err(NotTaken(format!(
-            "{} is outside {} to {} {}",
-            number(value),
-            number(bounds.min),
-            number(bounds.max),
-            "dB"
-        )));
+        let why =
+            format!("{} is outside {} to {} {unit}", number(value), number(bounds.min), number(bounds.max));
+        return Err(NotTaken(why.trim_end().into()));
     }
     Ok(value)
 }
@@ -226,11 +236,20 @@ pub fn meter_lanes(count: usize) -> &'static [&'static str] {
 
 /// A number as the boxes show it: no trailing zeros, at most one decimal for tenths.
 pub fn number(value: f64) -> String {
+    number_to(value, 1)
+}
+
+/// A number with at most `digits` decimals and no trailing zeros (a Q of 0.71 needs two).
+pub fn number_to(value: f64, digits: usize) -> String {
     if !value.is_finite() {
         return "off".into();
     }
-    let text = format!("{value:.1}");
-    text.strip_suffix(".0").map(str::to_string).unwrap_or(text)
+    let text = format!("{value:.digits$}");
+    if !text.contains('.') {
+        return text;
+    }
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text == "-0" { "0".into() } else { text.into() }
 }
 
 #[cfg(test)]
@@ -406,5 +425,24 @@ mod tests {
         assert_eq!(number(-6.5), "-6.5");
         assert_eq!(number(0.0), "0");
         assert_eq!(number(f64::NEG_INFINITY), "off");
+        assert_eq!(number_to(0.71, 2), "0.71");
+        assert_eq!(number_to(1.4, 2), "1.4");
+        assert_eq!(number_to(1000.0, 2), "1000");
+        assert_eq!(number_to(-0.001, 1), "0");
+    }
+
+    // UX-20, UX-26: the EQ boxes take hertz (and kHz), Q and milliseconds; a refusal names the unit
+    #[test]
+    fn typed_values_in_other_units() {
+        let hz = Bounds::new(20.0, 20000.0);
+        assert_eq!(typed("1k", hz, "Hz"), Ok(1000.0));
+        assert_eq!(typed("1.5 kHz", hz, "Hz"), Ok(1500.0));
+        assert_eq!(typed("80 Hz", hz, "Hz"), Ok(80.0));
+        assert_eq!(typed("2,5k", hz, "Hz"), Ok(2500.0));
+        assert!(typed("off", hz, "Hz").is_err(), "off is a level only");
+        let err = typed("10", hz, "Hz").unwrap_err();
+        assert_eq!(err.0, "10 is outside 20 to 20000 Hz");
+        assert!(typed("1k", Bounds::new(0.0, 2000.0), "ms").is_err(), "k is for hertz only");
+        assert_eq!(typed("12.5", Bounds::new(0.0, 2000.0), "ms"), Ok(12.5));
     }
 }

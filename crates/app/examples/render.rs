@@ -67,6 +67,16 @@ fn main() {
         dioxus_ssr::render(&dom)
     );
     std::fs::write(dir.join("levels-demo.html"), html).expect("write the levels page");
+
+    for (name, page) in [("eq-in-demo", eq_in_demo as fn() -> Element), ("eq-out-demo", eq_out_demo)] {
+        let mut dom = VirtualDom::new(page);
+        dom.rebuild_in_place();
+        let html = format!(
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>{}</body></html>",
+            dioxus_ssr::render(&dom)
+        );
+        std::fs::write(dir.join(format!("{name}.html")), html).expect("write the EQ page");
+    }
 }
 
 /// A row of the controls, for the visual check of `mise run app-shot` (not a page of the app).
@@ -181,4 +191,56 @@ fn levels_demo() -> Element {
             main { labrack_app::MixeqPage { view } }
         }
     }
+}
+
+/// An EQ tab with the bands of the mockup's boards (04 for an input, 05 for an output).
+fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
+    use labgruppen::Channel;
+    use labrack_app::eq::{Band, Filter, default_band};
+    let on = [true, true, false, true, false, true, true, false, true, false];
+    let bands = (0..10u8)
+        .map(|i| Band { on: on[usize::from(i)], gain: gains[usize::from(i)], ..default_band(i) })
+        .collect();
+    let output = tab == labrack_app::MixTab::Out1;
+    let eq = labrack_app::EqView {
+        channel: if output { Channel::Output(0) } else { Channel::Input(0) },
+        bands,
+        filters: output.then(|| {
+            (
+                Filter { on: true, kind: "butterworth_24".into(), freq: 40.0 },
+                Filter { on: false, kind: "linkwitz_riley_24".into(), freq: 120.0 },
+            )
+        }),
+        delay_ms: 0.0,
+        bounds: labrack_app::EqBounds {
+            freq: Bounds::new(20.0, 20000.0),
+            gain: Bounds::new(-12.0, 12.0),
+            q: Bounds::new(0.2, 25.0),
+            delay: Bounds::new(0.0, 2000.0),
+            hpf: Bounds::new(19.0, 20000.0),
+            lpf: Bounds::new(20.0, 20001.0),
+        },
+    };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let view = labrack_app::MixeqView {
+        amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
+        tab,
+        eq: Some(eq),
+        ..labrack_app::MixeqView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame",
+            Header { page: Page::MixEq, all_muted: false }
+            main { labrack_app::MixeqPage { view } }
+        }
+    }
+}
+
+fn eq_in_demo() -> Element {
+    eq_demo(labrack_app::MixTab::In1, [2.4, -0.8, 0.0, -1.6, 0.0, -2.4, 0.0, 0.0, -0.8, 0.0])
+}
+
+fn eq_out_demo() -> Element {
+    eq_demo(labrack_app::MixTab::Out1, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
 }

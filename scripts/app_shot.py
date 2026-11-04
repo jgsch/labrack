@@ -25,6 +25,8 @@ PAGES = {
     "mix-eq": "02-mix-eq-mixer-tab",
     "search": "06-search-add-amplifiers",
     "levels-demo": "03-mix-eq-levels-tab",
+    "eq-in-demo": "04-mix-eq-inputs-eq-tab",
+    "eq-out-demo": "05-mix-eq-outputs-eq-filters-delay-tab",
 }
 HEADER = 100
 
