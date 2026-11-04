@@ -210,9 +210,10 @@ between the two columns is exactly the dBV-to-dBu distance. The ceilings of the 
 33.8 dBV is 69 Vpk (the maximum of the IPX 1200), 36.78 dBV is 98 Vpk (IPD 2400), 39.83 dBV is 138 Vpk
 (IPD 4800).
 
-The impedance is the app's (default 4 ohm), not the amp's, and so is the display. Both front panels
-(IPD 2400 and IPX 1200) offer dBu only; whether an IPD panel shows 29.04 or the converted 31.26 has not
-been checked (see `project/backlog.md`).
+The impedance is the app's (default 4 ohm), not the amp's, and so is the display. The front panels
+show dBu only. Checked on an IPD 2400 holding 29.04 dBV: its panel shows 31.26 dBu, the converted
+value, so the panel, the Windows app and this library agree (an IPX 1200 holding 36.02 dBu shows 36.02).
+So the amp converts dBV to dBu itself for its display. The IPD 1200 and 4800 have not been checked.
 
 ## Meters
 

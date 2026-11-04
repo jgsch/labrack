@@ -119,7 +119,7 @@ Watts is derived: Vpk^2 / (2 * ohms). Quirk (verified live): a single GETPRM of 
 
 dBu relation (matches every value seen, to 4 decimals): `dBu = 10 * log10(W * ohms / 0.6)` (0.7746 V squared is 0.6). The values written by the vendor app fit it from the watts figure the user typed: preset dBu 36.02 is 600 W into 4 ohm (while Vpk was stored as 69 and Watts as 595); live out1 35.9851 is 69 Vpk (595.125 W); live out2 34.7712 is 450 W (60 Vpk), although its Vpk and Watts now read 69 and 595, so something changed them without updating dBu.
 
-The amp's front panel shows and sets dBu only (checked on an IPX 1200 and an IPD 2400), which suggests the dBu field is the one that counts. Which field the DSP limits on is still not known: it needs a signal above the threshold and the gain reduction meter. Writing all four fields consistently makes the question moot.
+The amp's front panel shows and sets dBu only (checked on an IPX 1200 and an IPD 2400; the IPD converts its stored dBV for the display), which suggests the dBu field is the one that counts. Which field the DSP limits on is still not known: it needs a signal above the threshold and the gain reduction meter. Writing all four fields consistently makes the question moot.
 Amp-side value ranges were not determined; values outside the app's limits were not tried.
 
 EQ type: 0 bell, 1 notch, 2 allpass, 3 low shelf, 4 high shelf, 5 band pass, 6 high pass, 7 low pass.
