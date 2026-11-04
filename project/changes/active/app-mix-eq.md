@@ -44,8 +44,8 @@ No spec change; implements:
   is the board's: dB scale, the level meter inside the fader track, the box and MUTE beside it; the
   LIMITER card has the vertical gain reduction bar and the Load / V peak / Power / Level boxes
   (`hub.set_limiter`). The tabs are the board's folder tabs on the panel, the amp cards have the index
-  and the meter bars, and the LINK button links the pair of the open tab (outputs on Levels), hidden on
-  the Mixer. `mise run app-shot` renders `levels-demo` beside board 03.
+  and the meter bars, and the LINK button links the pair of the open tab (outputs on Levels, inputs
+  on the Mixer, as the user asked; the board hides it there). `mise run app-shot` renders `levels-demo` beside board 03.
 - **EQ tabs** (2026-11-04): `EqPage` in `mixeq.rs`, its logic in `eq.rs` (type names, which boxes a
   type has, the curve from the cookbook biquads and the Butterworth / Linkwitz-Riley / Bessel filters at
   48 kHz, ALL OFF and RESET). A shared tab edits channel 1. The types offered are `EQ_TYPES` and

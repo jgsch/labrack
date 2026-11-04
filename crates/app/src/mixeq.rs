@@ -38,8 +38,8 @@ impl MixTab {
         }
     }
 
-    /// The pair a tab belongs to, which its LINK button links: the Mixer feeds the inputs, the Levels
-    /// tab is the outputs' (as on the mockup).
+    /// The pair a tab belongs to, which its LINK button links: the Mixer feeds the inputs (its own
+    /// settings stay per input, BEH-31), the Levels tab is the outputs' (as on the mockup).
     pub fn side(self) -> Side {
         match self {
             MixTab::Mixer | MixTab::In1 | MixTab::In2 | MixTab::Inputs => Side::Inputs,
@@ -675,14 +675,12 @@ pub fn MixeqPage(
                         "{t.label()}"
                     }
                 }
-                if tab != MixTab::Mixer {
-                    button {
-                        class: link_class,
-                        "aria-pressed": "{linked}",
-                        "aria-label": if linked { "Unlink {pair} 1 and {pair} 2" } else { "Link {pair} 1 and {pair} 2" },
-                        onclick: move |_| on_link.call((side, !linked)),
-                        if linked { "⛓ LINKED · click to split" } else { "⛓ LINK 1 + 2" }
-                    }
+                button {
+                    class: link_class,
+                    "aria-pressed": "{linked}",
+                    "aria-label": if linked { "Unlink {pair} 1 and {pair} 2" } else { "Link {pair} 1 and {pair} 2" },
+                    onclick: move |_| on_link.call((side, !linked)),
+                    if linked { "⛓ LINKED · click to split" } else { "⛓ LINK 1 + 2" }
                 }
             }
             match tab {
@@ -917,7 +915,7 @@ mod tests {
         assert!(out.contains("aria-valuemax=\"0\""), "the mixer's range: {out}");
         assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
-        assert!(!out.contains("LINK 1 + 2"), "no link button on the Mixer");
+        assert!(out.contains("Link IN 1 and IN 2"), "the Mixer links the inputs: {out}");
         assert!(out.contains("tab-panel in"));
     }
 
