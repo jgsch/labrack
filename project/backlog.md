@@ -20,9 +20,12 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   fader. Spec: BEH-27, UX-18, SEC-2
 - Choose defaults for the user ceilings. Spec: SEC-3, BEH-40
 - IPD MK2 units (different framing) have not been tried on hardware. Spec: BEH-1
-- IPX limiter range: the IPX reports none. The app takes 16.78 to 39.83 dBu (the widest IPD
-  ceiling), which a real IPX 1200 respects (it holds 35.98 dBu) but is far above what an IPX 1200
-  needs. Find the real limits per model, or choose a tighter default ceiling. Spec: BEH-5, SEC-3
+- Limiter ranges per model. Measured in the vendor Windows app: IPX 1200 19.22 to 35.99 dBu (10 to
+  69 Vpk), used for every IPX; IPD 2400 19.22 to 39.04 dBu (10 to 98 Vpk), while the library says
+  16.78 to 36.78 for the IPD 2400 (vendor config). Read the other IPX models (2400, 4800) and the IPD
+  1200 / 4800 in the Windows app, and compare the IPD's stored threshold (`labgruppen get
+  out1.limiter.threshold`) with what the app shows for it: the ranges differ by about 2.3 dB at both
+  ends, which looks like an offset between the stored value and the displayed dBu. Spec: BEH-5, SEC-3
 - IPX gain reduction: the meters have two sets (`gain_reduction_a` / `_b`), both "inferred" in
   docs/ipx-protocol.md; which one is the output limiter is unknown, so the Levels limiter meter has
   nothing to show for the IPX yet. The IPD has `gain_reduction_out`. Spec: BEH-28

@@ -20,9 +20,10 @@ statement with a `BEH-<n>` ID.
     the load and the watts only, so it cannot move a threshold.
   - IPD: the amp stores only the threshold in dBu. The app keeps the load in Ohm per output
     (default 4 Ω) in its config and converts.
-  - Ranges: the IPD takes 16.78 dBu up to 33.8 (IPD 1200), 36.78 (2400) or 39.83 (4800). The IPX
-    reports none, and a real IPX 1200 holds 35.98 dBu, so the IPX takes 16.78 to 39.83 dBu. The load
-    takes 0.5 to 100 Ohm.
+  - Ranges: the IPD takes 16.78 dBu up to 33.8 (IPD 1200), 36.78 (2400) or 39.83 (4800), from the
+    vendor config. The IPX reports none; the app takes what the vendor Windows app allows on an IPX
+    1200, 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk), for every IPX until the others are measured. The
+    load takes 0.5 to 100 Ohm.
 - **BEH-6** 50 presets per amplifier, slots 1–50, numbered as in the vendor apps (IPD slots 51–100
   are not used; the IPX counts from 0 on the wire, the vendor app and this app show index + 1).
 

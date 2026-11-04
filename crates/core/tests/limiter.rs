@@ -193,9 +193,13 @@ async fn values_outside_the_range_are_never_sent() {
             assert!(matches!(got, Err(Error::Invalid(_))), "{unit:?} {value}: {got:?}");
         }
     }
-    // the IPD 2400 tops out at 36.78 dBu, the IPX at the widest IPD ceiling
+    // the IPD 2400 tops out at 36.78 dBu (its library range), the IPX 1200 at 35.99 dBu (69 Vpk)
     assert!(matches!(ipd.set_limiter(b, 0, Unit::Dbu, 36.79), Err(Error::Invalid(_))));
-    assert!(ipx.set_limiter(a, 0, Unit::Dbu, 36.79).is_ok());
+    assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 36.0), Err(Error::Invalid(_))));
+    assert!(matches!(ipx.set_limiter(a, 0, Unit::Dbu, 19.2), Err(Error::Invalid(_))));
+    assert!(matches!(ipx.set_limiter(a, 0, Unit::Vpk, 70.0), Err(Error::Invalid(_))));
+    assert!(matches!(ipx.set_limiter(a, 0, Unit::Vpk, 9.9), Err(Error::Invalid(_))));
+    assert!(ipx.set_limiter(a, 0, Unit::Dbu, 35.99).is_ok());
     assert!(matches!(ipx.set_limiter(a, 7, Unit::Dbu, 30.0), Err(Error::NotControllable)));
     sleep(Duration::from_millis(300)).await;
     assert_eq!(sim.writes(), []);
@@ -218,13 +222,13 @@ async fn the_limiter_is_not_set_one_value_at_a_time() {
 async fn the_range_of_a_limiter_control() {
     let (hub, id, _fake) = online_ipx(timing()).await;
     let r = hub.limiter_range(id, 0, Unit::Dbu).unwrap();
-    assert_eq!((r.min, r.max, r.unit), (Some(16.78), Some(39.83), "dBu"));
+    assert_eq!((r.min, r.max, r.unit), (Some(19.22), Some(35.99), "dBu"), "an IPX 1200, as its Windows app");
     let r = hub.limiter_range(id, 0, Unit::Vpk).unwrap();
-    close(r.min.unwrap(), math::vpk_from_dbu(16.78), 1e-9);
-    close(r.max.unwrap(), math::vpk_from_dbu(39.83), 1e-9);
+    close(r.min.unwrap(), 10.0, 0.1); // the Windows app shows whole volts
+    close(r.max.unwrap(), 69.0, 0.1);
     assert_eq!(r.unit, "Vpk");
     let r = hub.limiter_range(id, 0, Unit::Watt).unwrap();
-    close(r.max.unwrap(), math::watt(math::vpk_from_dbu(39.83), 4.0), 1e-6);
+    close(r.max.unwrap(), math::watt(math::vpk_from_dbu(35.99), 4.0), 1e-6);
     assert_eq!(r.unit, "W");
     let r = hub.limiter_range(id, 0, Unit::Ohm).unwrap();
     assert_eq!((r.min, r.max, r.unit), (Some(0.5), Some(100.0), "Ohm"));

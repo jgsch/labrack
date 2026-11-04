@@ -199,10 +199,11 @@ pub fn slot(param: &Param) -> Option<Slot> {
     })
 }
 
-/// The dBu range of an output limiter threshold: the IPD's floor and its highest ceiling (4800). The IPX
-/// reports no range, and a real IPX 1200 holds 69 Vpk = 35.98 dBu, above the 33.8 dBu of the IPD 1200,
-/// so the ceiling of the same model number does not do. The user ceilings are the tight limit.
-pub const LIMITER_DBU: (f64, f64) = (16.78, 39.83);
+/// The dBu range of an output limiter threshold. The IPX reports none; this is what the vendor Windows
+/// app allows on an IPX 1200: 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk). The range depends on the model
+/// (an IPD 2400 goes to 39.04 dBu, 98 Vpk), but no other IPX has been measured, so every IPX takes the
+/// 1200's: that can only restrict. Measure a model and add it here.
+pub const LIMITER_DBU: (f64, f64) = (19.22, 35.99);
 /// The watts that follow from the other two ranges, rounded up.
 pub const LIMITER_WATT: (f64, f64) = (0.0, 12_000.0);
 

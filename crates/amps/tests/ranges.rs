@@ -46,14 +46,14 @@ fn controls_without_a_shared_range_stay_without() {
     }
 }
 
-/// The IPX has no limiter range of its own. A real IPX 1200 holds 69 Vpk (35.98 dBu), above the 33.8 dBu
-/// ceiling of the IPD 1200, so the widest IPD ceiling (39.83 dBu) is the hard limit of every IPX.
+/// The IPX reports no limiter range. The range is what the vendor Windows app allows on an IPX 1200:
+/// 19.22 dBu (10 Vpk) to 35.99 dBu (69 Vpk). Other models are not measured and take the same.
 #[tokio::test]
 async fn the_ipx_limiter_has_a_hard_range_and_all_four_values_can_be_written() {
     use labgruppen::limiter;
     let fake = FakeAmp::start().await;
     let amp = fake.connect().await;
-    let (lo, hi) = (limiter::vpk_from_dbu(16.78), limiter::vpk_from_dbu(39.83));
+    let (lo, hi) = (limiter::vpk_from_dbu(19.22), limiter::vpk_from_dbu(35.99));
 
     for (name, value) in [
         ("out1.limiter.threshold", lo * 0.99),
@@ -64,8 +64,10 @@ async fn the_ipx_limiter_has_a_hard_range_and_all_four_values_can_be_written() {
         ("out1.limiter.impedance", 101.0),
         ("out2.limiter.power", -1.0),
         ("out2.limiter.power", 13_000.0),
+        ("out2.limiter.threshold_dbu", 19.21),
+        ("out2.limiter.threshold_dbu", 35.995),
+        ("out2.limiter.threshold_dbu", 39.0),
         ("out2.limiter.threshold_dbu", 16.7),
-        ("out2.limiter.threshold_dbu", 39.9),
         ("out2.limiter.threshold_dbu", f64::NAN),
     ] {
         let set = amp.set(&param(name), Value::Float(value)).await;
@@ -83,13 +85,15 @@ async fn the_ipx_limiter_has_a_hard_range_and_all_four_values_can_be_written() {
         ("out1.limiter.impedance", 100.0),
         ("out1.limiter.power", 595.125),
         ("out1.limiter.power", 12_000.0),
-        ("out1.limiter.threshold_dbu", 16.78),
-        ("out1.limiter.threshold_dbu", 39.83),
+        ("out1.limiter.threshold_dbu", 19.22),
+        ("out1.limiter.threshold_dbu", 35.99),
         ("out1.limiter.threshold_dbu", 35.9851),
     ] {
         amp.set(&param(name), Value::Float(value)).await.unwrap_or_else(|e| panic!("{name} = {value}: {e}"));
     }
     assert_eq!(fake.writes(), 10);
+    // 69 Vpk, what the real amp holds, is inside
+    assert!(hi > 69.0 && limiter::vpk_from_dbu(19.22) < 10.1);
     assert!(!ipx::spec(&param("out1.name")).unwrap().writable, "names stay read-only");
 }
 
