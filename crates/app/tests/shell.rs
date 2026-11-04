@@ -175,3 +175,17 @@ fn fonts_are_bundled_and_nothing_is_fetched() {
         }
     }
 }
+
+// ARCH-1, PERF-4: the page carries its whole stylesheet, font faces included, so the window and the
+// screenshots of `app-shot` show the same thing and no file is fetched
+#[test]
+fn the_page_carries_its_stylesheet() {
+    let html = {
+        let mut dom = VirtualDom::new(|| rsx! { labrack_app::Style {} });
+        dom.rebuild_in_place();
+        dioxus_ssr::render(&dom)
+    };
+    assert!(html.contains("@font-face"), "no font faces");
+    assert_eq!(html.matches("data:font/woff2;base64,").count(), 6, "six fonts");
+    assert!(html.contains(".frame{min-width:900px;"), "no rules");
+}

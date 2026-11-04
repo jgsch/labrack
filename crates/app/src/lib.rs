@@ -9,4 +9,4 @@ mod style;
 pub use app::App;
 pub use header::Header;
 pub use page::Page;
-pub use style::stylesheet;
+pub use style::{Style, stylesheet};

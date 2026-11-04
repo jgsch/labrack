@@ -47,7 +47,7 @@ Test-first: a behaviour gets its failing test before the code.
   - Chromium (headless) to screenshot the mockup, ImageMagick to compare screenshots, Python 3
     for `scripts/mockup.py`.
 - **ARCH-10** Tasks (`.mise.toml`): `fmt`, `lint` (format check and clippy for both drivers and
-  each alone, warnings are errors), `test`, `build`, `run`, `sim`, `mockup`, `app-shot`,
+  each alone, warnings are errors), `test`, `build`, `app`, `sim`, `mockup`, `app-shot`,
   `mockup-unpack`, `mockup-pack`.
 - **ARCH-11** Formatting settings live in the `fmt` / `lint` tasks (no `rustfmt.toml`). Editors:
   pass the same `--config max_width=110,use_small_heuristics=Max` to rustfmt (rust-analyzer:

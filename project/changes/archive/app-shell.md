@@ -56,8 +56,21 @@ No spec change; implements:
 - **UX-4 and the keyboard.** Tabs are links (`href="#…"`, `aria-current` on the active one), MUTE ALL a
   button: both are in the tab order and draw the mockup's focus ring. Arrow-key movement between the
   tabs is not built.
-- **Seen in a real window** (XWayland, 2026-11-04): the header at two window sizes; a click on SEARCH
-  switches the tab and drops MUTE ALL; a scan found the IPD 2400 and saved it to the config. The tiling
-  desktop gave a 949 px window once, which wrapped the tabs over the title: the frame now has a 900 px
-  minimum width and the labels do not wrap, so a narrow window scrolls instead (test).
+- **Seen in a real window** (niri on Wayland, 2026-11-04; `mise run app`): the header at several window
+  sizes; a click on SEARCH switches the tab and drops MUTE ALL; a scan found the IPD 2400 and saved it
+  to the config. The tiling desktop gave a 949 px window once, which wrapped the tabs over the title:
+  the frame now has a 900 px minimum width and the labels do not wrap, so a narrow window scrolls
+  instead (test).
+- **The stylesheet is part of the page** (`Style`), not the window's head: with the head, WebKitGTK
+  applied the rules but not the font faces, and the page was caught unstyled. The page is the same in
+  the window and in `app-shot`, and a test fails if a font face or the rules go missing.
+- **A WebKitGTK scale bug on Wayland** (niri, display at 1.5, 2026-11-04): the window reported a device
+  pixel ratio of `-2/96` instead of 2, so every page was drawn at a fraction of its size and only the
+  native title bar looked right. The page's ratio is proportional to its zoom, so `App` reads it once
+  and, when it is not the window's scale, sets the zoom to `scale / dpr` (`corrected_zoom`, tested:
+  -2/96 at scale 2 gives -96, which is what this WebKitGTK needs; a right ratio is left alone).
+  X11 was not affected; the app runs natively on Wayland, nothing forces XWayland.
+- **The title bar is dark**: `main` sets `GTK_THEME=Adwaita:dark` when the user set no theme, so the
+  window frame of a dark app is not a light band.
+- **`mise run app`** starts the window (the task was `run`).
 - **UNMUTE ALL is disabled** until `app-controls` adds the second click (SEC-5); MUTE ALL works.

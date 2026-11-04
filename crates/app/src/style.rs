@@ -1,6 +1,8 @@
 //! The stylesheet of the app. The fonts are part of it as data URIs, so the app needs no network
 //! and no files next to it (PERF-4).
 
+use dioxus::prelude::*;
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 
@@ -33,4 +35,13 @@ pub fn stylesheet() -> String {
         );
     }
     css + CSS
+}
+
+/// The stylesheet as part of the page. The desktop webview applies the font faces only when they come
+/// with the page itself; the window and the screenshots of `app-shot` then show the same thing.
+#[component]
+pub fn Style() -> Element {
+    rsx! {
+        style { dangerous_inner_html: stylesheet() }
+    }
 }

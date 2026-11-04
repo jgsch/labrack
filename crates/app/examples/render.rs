@@ -2,7 +2,7 @@
 //! `cargo run -p labrack-app --example render -- <directory>` writes `<directory>/<page>.html`.
 
 use dioxus::prelude::*;
-use labrack_app::{Header, Page, stylesheet};
+use labrack_app::{Header, Page, Style};
 
 thread_local! {
     static PAGE: std::cell::Cell<Page> = const { std::cell::Cell::new(Page::Amplifiers) };
@@ -10,6 +10,7 @@ thread_local! {
 
 fn root() -> Element {
     rsx! {
+        Style {}
         div { class: "frame",
             Header { page: PAGE.get(), all_muted: false }
             main {}
@@ -25,11 +26,9 @@ fn main() {
         let mut dom = VirtualDom::new(root);
         dom.rebuild_in_place();
         let name = page.label().to_lowercase().replace(" & ", "-");
-        let html = format!(
-            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>{}</style></head><body>{}</body></html>",
-            stylesheet(),
-            dioxus_ssr::render(&dom)
-        );
+        let render = dioxus_ssr::render(&dom);
+        let html =
+            format!("<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>{render}</body></html>");
         std::fs::write(dir.join(format!("{name}.html")), html).expect("write the page");
     }
 }
