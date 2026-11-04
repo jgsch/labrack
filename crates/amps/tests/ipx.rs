@@ -142,7 +142,11 @@ fn parameter_table() {
         let slot = params::slot(p).unwrap();
         assert!(addrs.insert(slot.addr), "{p} shares its address");
         assert_eq!(params::param_for(slot.addr), Some(p));
-        assert_eq!(params::spec(p), Some(slot.spec()));
+        // the spec is the slot's, plus the shared range of the basic controls
+        let spec = params::spec(p).unwrap();
+        let ranged =
+            labgruppen::shared_range(p).map_or(slot.spec(), |(min, max)| slot.spec().range(min, max));
+        assert_eq!(spec, ranged);
         assert!(audio_dword(slot.addr).is_some() || slot.addr.env == Env::INPUT_MIXER, "{p}");
     }
 

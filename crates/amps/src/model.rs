@@ -288,6 +288,24 @@ pub enum Kind {
     Text,
 }
 
+/// Range of the basic controls both families have: gain, delay, EQ frequency / gain / Q, crossover
+/// frequency and mixer level. These are the IPD ranges (from the vendor app). The IPX reports none
+/// (docs/ipx-protocol.md: amp-side ranges not determined), so its specs take these too; the IPX may
+/// accept more, never less is assumed to be safe.
+pub fn shared_range(param: &Param) -> Option<(f64, f64)> {
+    Some(match *param {
+        Param::Gain(_) => (-48.0, 12.0),
+        Param::Delay(_) => (0.0, 2000.0),
+        Param::Eq { field: EqField::Freq, .. } => (20.0, 20000.0),
+        Param::Eq { field: EqField::Gain, .. } => (-12.0, 12.0),
+        Param::Eq { field: EqField::Q, .. } => (0.2, 25.0),
+        Param::Xover { filter: XoverFilter::Highpass, field: XoverField::Freq, .. } => (19.0, 20000.0),
+        Param::Xover { filter: XoverFilter::Lowpass, field: XoverField::Freq, .. } => (20.0, 20001.0),
+        Param::Mixer { field: MixerField::Level, .. } => (-48.0, 0.0),
+        _ => return None,
+    })
+}
+
 /// What an amp accepts for a parameter.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParamSpec {

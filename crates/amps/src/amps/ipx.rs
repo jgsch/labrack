@@ -150,7 +150,7 @@ impl IpxAmp {
         if !slot.writable {
             return Err(Error::Unsupported(format!("{param} is read-only")));
         }
-        let value = slot.spec().check(param, &value)?;
+        let value = params::spec(param).unwrap_or_else(|| slot.spec()).check(param, &value)?;
         let bytes = slot.encode(&value)?;
         self.client.set_raw(slot.addr, &bytes).await?;
         slot.decode(&bytes)

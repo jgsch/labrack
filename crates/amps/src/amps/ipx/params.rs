@@ -199,8 +199,13 @@ pub fn slot(param: &Param) -> Option<Slot> {
     })
 }
 
+/// What the IPX accepts: the slot's type and unit, and the shared range of the basic controls.
 pub fn spec(param: &Param) -> Option<ParamSpec> {
-    slot(param).map(|s| s.spec())
+    let spec = slot(param)?.spec();
+    Some(match shared_range(param) {
+        Some((min, max)) => spec.range(min, max),
+        None => spec,
+    })
 }
 
 fn build_all() -> Vec<Param> {
