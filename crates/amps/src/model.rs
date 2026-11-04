@@ -306,6 +306,31 @@ pub fn shared_range(param: &Param) -> Option<(f64, f64)> {
     })
 }
 
+/// Output limiter units (BEH-5). Peak voltage and dBu are one quantity: `dBu = 10 * log10(Vpk^2 / 1.2)`
+/// (0 dBu is 0.7746 V rms, whose square is 0.6). Watts need the load: `W = Vpk^2 / (2 * ohm)`, so
+/// `dBu = 10 * log10(W * ohm / 0.6)`. The vendor app derives them the same way for both families;
+/// the IPX stores all four figures, the IPD only the dBu threshold.
+pub mod limiter {
+    /// The square of 0.7746 V, the 0 dBu reference.
+    const REFERENCE: f64 = 0.6;
+
+    pub fn watt(vpk: f64, ohm: f64) -> f64 {
+        vpk * vpk / (2.0 * ohm)
+    }
+
+    pub fn dbu(vpk: f64) -> f64 {
+        10.0 * (vpk * vpk / (2.0 * REFERENCE)).log10()
+    }
+
+    pub fn vpk_from_dbu(dbu: f64) -> f64 {
+        (2.0 * REFERENCE * 10f64.powf(dbu / 10.0)).sqrt()
+    }
+
+    pub fn vpk_from_watt(watt: f64, ohm: f64) -> f64 {
+        (2.0 * watt * ohm).sqrt()
+    }
+}
+
 /// What an amp accepts for a parameter.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParamSpec {
@@ -467,6 +492,39 @@ mod tests {
         assert!("out0.gain".parse::<Param>().is_err());
         assert!("out1.eq.10.q".parse::<Param>().is_err());
         assert!("out1.bogus".parse::<Param>().is_err());
+    }
+
+    fn close(a: f64, b: f64, tolerance: f64) {
+        assert!((a - b).abs() <= tolerance, "{a} is not within {tolerance} of {b}");
+    }
+
+    /// BEH-5: the figures of docs/ipx-protocol.md, seen on an IPX 1200 with the vendor app.
+    #[test]
+    fn limiter_units_match_what_the_vendor_app_stored() {
+        // 69 Vpk into 4 ohm: 595 W, 35.9851 dBu
+        close(limiter::watt(69.0, 4.0), 595.125, 1e-9);
+        close(limiter::dbu(69.0), 35.9851, 1e-4);
+        // 450 W into 4 ohm: 60 Vpk, 34.7712 dBu; 600 W: 36.02 dBu
+        close(limiter::vpk_from_watt(450.0, 4.0), 60.0, 1e-9);
+        close(limiter::dbu(limiter::vpk_from_watt(450.0, 4.0)), 34.7712, 1e-4);
+        close(limiter::dbu(limiter::vpk_from_watt(600.0, 4.0)), 36.0206, 5e-4);
+        // 0 dBu is 0.7746 V rms
+        close(limiter::vpk_from_dbu(0.0), 0.7746 * 2f64.sqrt(), 1e-4);
+        // dBu = 10 * log10(W * ohm / 0.6), whatever the load
+        for ohm in [2.0, 4.0, 8.0, 16.0] {
+            let w = limiter::watt(40.0, ohm);
+            close(10.0 * (w * ohm / 0.6).log10(), limiter::dbu(40.0), 1e-9);
+        }
+    }
+
+    #[test]
+    fn limiter_units_convert_back_and_forth() {
+        for vpk in [7.56, 20.0, 69.0, 107.5] {
+            close(limiter::vpk_from_dbu(limiter::dbu(vpk)), vpk, 1e-9);
+            for ohm in [2.0, 4.0, 8.0] {
+                close(limiter::vpk_from_watt(limiter::watt(vpk, ohm), ohm), vpk, 1e-9);
+            }
+        }
     }
 
     /// SEC-2: NaN and infinity never pass, whatever the kind or range.

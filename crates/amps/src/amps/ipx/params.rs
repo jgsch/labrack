@@ -186,8 +186,8 @@ pub fn slot(param: &Param) -> Option<Slot> {
             match field {
                 LimiterField::Threshold => s(env, 0, 0, Ty::Float).unit("Vpk"),
                 LimiterField::Impedance => s(env, 0, 1, Ty::Float).unit("ohm"),
-                LimiterField::Power => s(env, 0, 2, Ty::Float).unit("W").read_only(),
-                LimiterField::ThresholdDbu => s(env, 0, 3, Ty::Float).unit("dBu").read_only(),
+                LimiterField::Power => s(env, 0, 2, Ty::Float).unit("W"),
+                LimiterField::ThresholdDbu => s(env, 0, 3, Ty::Float).unit("dBu"),
                 LimiterField::Release => s(env, 0, 4, Ty::Int).unit("ms"),
             }
         }
@@ -199,10 +199,35 @@ pub fn slot(param: &Param) -> Option<Slot> {
     })
 }
 
-/// What the IPX accepts: the slot's type and unit, and the shared range of the basic controls.
+/// The dBu range of an output limiter threshold: the IPD's floor and its highest ceiling (4800). The IPX
+/// reports no range, and a real IPX 1200 holds 69 Vpk = 35.98 dBu, above the 33.8 dBu of the IPD 1200,
+/// so the ceiling of the same model number does not do. The user ceilings are the tight limit.
+pub const LIMITER_DBU: (f64, f64) = (16.78, 39.83);
+/// The load impedance, in ohm, that can be entered. It only scales the watts.
+pub const LIMITER_OHM: (f64, f64) = (0.5, 100.0);
+/// The watts that follow from the other two ranges, rounded up.
+pub const LIMITER_WATT: (f64, f64) = (0.0, 12_000.0);
+
+fn limiter_range(param: &Param) -> Option<(f64, f64)> {
+    match *param {
+        Param::Limiter { ch: Channel::Output(_), field } => Some(match field {
+            LimiterField::Threshold => {
+                (limiter::vpk_from_dbu(LIMITER_DBU.0), limiter::vpk_from_dbu(LIMITER_DBU.1))
+            }
+            LimiterField::Impedance => LIMITER_OHM,
+            LimiterField::Power => LIMITER_WATT,
+            LimiterField::ThresholdDbu => LIMITER_DBU,
+            LimiterField::Release => return None,
+        }),
+        _ => None,
+    }
+}
+
+/// What the IPX accepts: the slot's type and unit, and a range for the basic controls (shared with the
+/// IPD) and the output limiter.
 pub fn spec(param: &Param) -> Option<ParamSpec> {
     let spec = slot(param)?.spec();
-    Some(match shared_range(param) {
+    Some(match shared_range(param).or_else(|| limiter_range(param)) {
         Some((min, max)) => spec.range(min, max),
         None => spec,
     })

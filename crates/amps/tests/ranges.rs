@@ -46,6 +46,53 @@ fn controls_without_a_shared_range_stay_without() {
     }
 }
 
+/// The IPX has no limiter range of its own. A real IPX 1200 holds 69 Vpk (35.98 dBu), above the 33.8 dBu
+/// ceiling of the IPD 1200, so the widest IPD ceiling (39.83 dBu) is the hard limit of every IPX.
+#[tokio::test]
+async fn the_ipx_limiter_has_a_hard_range_and_all_four_values_can_be_written() {
+    use labgruppen::limiter;
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let (lo, hi) = (limiter::vpk_from_dbu(16.78), limiter::vpk_from_dbu(39.83));
+
+    for (name, value) in [
+        ("out1.limiter.threshold", lo * 0.99),
+        ("out1.limiter.threshold", hi * 1.01),
+        ("out1.limiter.threshold", 1e9),
+        ("out1.limiter.impedance", 0.0),
+        ("out1.limiter.impedance", 0.4),
+        ("out1.limiter.impedance", 101.0),
+        ("out2.limiter.power", -1.0),
+        ("out2.limiter.power", 13_000.0),
+        ("out2.limiter.threshold_dbu", 16.7),
+        ("out2.limiter.threshold_dbu", 39.9),
+        ("out2.limiter.threshold_dbu", f64::NAN),
+    ] {
+        let set = amp.set(&param(name), Value::Float(value)).await;
+        assert!(matches!(set, Err(Error::InvalidValue(_))), "{name} = {value}: {set:?}");
+    }
+    assert_eq!(fake.writes(), 0);
+
+    // the edges, and the figures a real IPX 1200 holds, are fine; so is a power with decimals, which
+    // the amp reads back as an integer
+    for (name, value) in [
+        ("out1.limiter.threshold", lo),
+        ("out1.limiter.threshold", hi),
+        ("out1.limiter.threshold", 69.0),
+        ("out1.limiter.impedance", 0.5),
+        ("out1.limiter.impedance", 100.0),
+        ("out1.limiter.power", 595.125),
+        ("out1.limiter.power", 12_000.0),
+        ("out1.limiter.threshold_dbu", 16.78),
+        ("out1.limiter.threshold_dbu", 39.83),
+        ("out1.limiter.threshold_dbu", 35.9851),
+    ] {
+        amp.set(&param(name), Value::Float(value)).await.unwrap_or_else(|e| panic!("{name} = {value}: {e}"));
+    }
+    assert_eq!(fake.writes(), 10);
+    assert!(!ipx::spec(&param("out1.name")).unwrap().writable, "names stay read-only");
+}
+
 #[tokio::test]
 async fn the_ipx_refuses_values_outside_the_range_and_sends_nothing() {
     let fake = FakeAmp::start().await;

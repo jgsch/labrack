@@ -219,7 +219,13 @@ impl Amp for IpxAmp {
                 other => break other?,
             }
         };
-        if got != expected {
+        // the derived watts come back as an integer from a single read (docs/ipx-protocol.md)
+        let watts = matches!(param, Param::Limiter { field: LimiterField::Power, .. });
+        let same = match (expected.as_f64(), got.as_f64()) {
+            (Some(e), Some(g)) if watts => (e - g).abs() < 1.0,
+            _ => got == expected,
+        };
+        if !same {
             return Err(Error::NotConfirmed(format!("{param}: wrote {expected}, amp reports {got}")));
         }
         Ok(())

@@ -142,19 +142,22 @@ fn parameter_table() {
         let slot = params::slot(p).unwrap();
         assert!(addrs.insert(slot.addr), "{p} shares its address");
         assert_eq!(params::param_for(slot.addr), Some(p));
-        // the spec is the slot's, plus the shared range of the basic controls
-        let spec = params::spec(p).unwrap();
-        let ranged =
-            labgruppen::shared_range(p).map_or(slot.spec(), |(min, max)| slot.spec().range(min, max));
-        assert_eq!(spec, ranged);
+        // the spec is the slot's, plus a range for the basic controls and the output limiter
+        // (ranges.rs checks the ranges)
+        let (spec, plain) = (params::spec(p).unwrap(), slot.spec());
+        assert_eq!((spec.kind, spec.unit, spec.writable), (plain.kind, plain.unit, plain.writable), "{p}");
         assert!(audio_dword(slot.addr).is_some() || slot.addr.env == Env::INPUT_MIXER, "{p}");
     }
 
     for missing in ["in1.polarity", "in1.xover.hp.freq", "out1.mixer.analog1.level", "in1.limiter.power"] {
         assert!(params::slot(&param(missing)).is_none(), "{missing}");
     }
-    for read_only in ["out1.name", "in2.name", "out1.limiter.power", "out2.limiter.threshold_dbu"] {
+    for read_only in ["out1.name", "in2.name"] {
         assert!(!params::spec(&param(read_only)).unwrap().writable, "{read_only}");
+    }
+    // plain stored values (docs/ipx-protocol.md): the amp derives nothing, so all four can be written
+    for writable in ["out1.limiter.power", "out2.limiter.threshold_dbu", "out2.limiter.impedance"] {
+        assert!(params::spec(&param(writable)).unwrap().writable, "{writable}");
     }
     assert!(params::slot(&param("out2.limiter.threshold")).unwrap().writable);
     assert_eq!(params::slot(&param("out1.limiter.threshold")).unwrap().ty, Ty::Float);
@@ -334,7 +337,6 @@ async fn end_to_end_get_set_verify() {
     assert_eq!(read(&wrote, "out1.xover.lp.type"), text("bessel_12"));
 
     assert!(matches!(amp.set(&param("out1.name"), text("x")).await, Err(Error::Unsupported(_))));
-    assert!(matches!(amp.set(&param("out1.limiter.power"), f(1.0)).await, Err(Error::Unsupported(_))));
     assert!(matches!(amp.set(&param("out1.eq.0.type"), text("bogus")).await, Err(Error::InvalidValue(_))));
     assert!(matches!(amp.get(&param("in1.polarity")).await, Err(Error::Unsupported(_))));
     assert!(matches!(amp.set(&param("in1.polarity"), Value::Bool(true)).await, Err(Error::Unsupported(_))));
@@ -412,8 +414,9 @@ async fn snapshot_matches_single_reads_and_restores() {
 
     let report = amp.restore(&snap, false).await.unwrap();
     assert!(report.failed.is_empty(), "{:?}", report.failed);
-    assert_eq!(report.applied, 280);
-    assert_eq!(report.skipped.len(), 8);
+    // everything but the four names: the limiter's watts and dBu are written too (BEH-5)
+    assert_eq!(report.applied, 284);
+    assert_eq!(report.skipped.len(), 4);
     assert_eq!(amp.snapshot().await.unwrap().params, snap.params);
 }
 
