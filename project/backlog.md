@@ -26,6 +26,11 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   1200 / 4800 in the Windows app, and compare the IPD's stored threshold (`labgruppen get
   out1.limiter.threshold`) with what the app shows for it: the ranges differ by about 2.3 dB at both
   ends, which looks like an offset between the stored value and the displayed dBu. Spec: BEH-5, SEC-3
+- When there is access to an IPX 4800: read its limiter range in the Windows app (lowest and highest
+  threshold in dBu and Vpk) and add it to `LIMITER_DBU` in `amps` (`ipx/params.rs`), which now holds
+  the IPX 1200's range, 19.22 to 35.99 dBu (10 to 69 Vpk), for every IPX. Do the same for the IPX 2400
+  (guess from the IPD 2400: about 98 Vpk). The range depends on the amp model, and the app has to
+  know the model to use it. Spec: BEH-5, SEC-3
 - IPX gain reduction: the meters have two sets (`gain_reduction_a` / `_b`), both "inferred" in
   docs/ipx-protocol.md; which one is the output limiter is unknown, so the Levels limiter meter has
   nothing to show for the IPX yet. The IPD has `gain_reduction_out`. Spec: BEH-28
