@@ -111,10 +111,9 @@ pub fn Fader(
                     div { class: "fader-groove {lane}", "aria-hidden": "true" }
                 }
                 for (lane, cover) in meters {
-                    div {
-                        class: "fader-meter {lane}",
-                        "aria-hidden": "true",
-                        style: "background: {colours}; clip-path: inset({cover}% 0 0 0)",
+                    // the colours never change; only the dark cover on top of them moves
+                    div { class: "fader-meter {lane}", "aria-hidden": "true", style: "background: {colours}",
+                        div { class: "fader-meter-cover", style: "height: {cover}%" }
                     }
                 }
                 div { class: "fader-ticks", "aria-hidden": "true" }
