@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dioxus::prelude::*;
 use labgruppen::{Channel, EqField, MixerField, Param, Value, XoverField};
@@ -73,7 +74,7 @@ pub fn App() -> Element {
     let mut scan_message = use_signal(String::new);
     let mut scanning = use_signal(|| false);
 
-    // everything the core tells but the meters, which pages that show them follow themselves
+    // everything the core tells; the meters redraw the pages that show them at most every 100 ms (PERF-2)
     let mut changes = use_signal(|| 0u64);
     use_future({
         let hub = hub.clone();
@@ -81,9 +82,22 @@ pub fn App() -> Element {
             let mut updates = hub.subscribe();
             let hub = hub.clone();
             async move {
+                let mut tick = tokio::time::interval(Duration::from_millis(100));
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                let mut moved = false;
                 loop {
-                    match updates.recv().await {
-                        Ok(Update::Meters(..)) => {}
+                    let update = tokio::select! {
+                        update = updates.recv() => update,
+                        _ = tick.tick() => {
+                            if moved && page().shows_meters() {
+                                moved = false;
+                                changes += 1;
+                            }
+                            continue;
+                        }
+                    };
+                    match update {
+                        Ok(Update::Meters(..)) => moved = true,
                         Ok(Update::Scan(Scan::Started)) => {
                             scanning.set(true);
                             scan_message.set(String::new());
