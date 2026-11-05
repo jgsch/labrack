@@ -408,5 +408,44 @@ pub async fn discover(timeout: Duration) -> Result<Vec<Discovered>> {
     Ok(found)
 }
 
+/// Ask every address of a /24 subnet (`192.168.1`) whether an IPX answers on the control port, within
+/// `limit`: the amps do not broadcast on every network. Only reads (the system attributes); an amp that
+/// already has a controller closes the connection and is not listed. Returns the addresses and models.
+pub async fn scan(subnet: &str, limit: Duration) -> Vec<(String, String)> {
+    scan_port(subnet, TCP_PORT, limit).await
+}
+
+/// [`scan`] on another port.
+pub async fn scan_port(subnet: &str, port: u16, limit: Duration) -> Vec<(String, String)> {
+    let mut set = tokio::task::JoinSet::new();
+    for i in 1..=254u32 {
+        let ip = format!("{subnet}.{i}");
+        set.spawn(async move { probe(&ip, port, limit).await.map(|model| (ip, model)) });
+    }
+    let mut found = Vec::new();
+    while let Some(r) = set.join_next().await {
+        if let Ok(Some(hit)) = r {
+            found.push(hit);
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Whether an IPX answers at `host`, and its model.
+async fn probe(host: &str, port: u16, limit: Duration) -> Option<String> {
+    let config = ClientConfig {
+        port,
+        connect_timeout: limit,
+        timeout: limit.min(Duration::from_secs(2)),
+        heartbeat: None,
+    };
+    let amp =
+        timeout_at(Instant::now() + limit, IpxAmp::connect_with_config(host, &config)).await.ok()?.ok()?;
+    let model = amp.info().model.clone();
+    amp.close().await;
+    Some(model)
+}
+
 /// Default TCP port, re-exported for callers that build their own [`ClientConfig`].
 pub const DEFAULT_PORT: u16 = TCP_PORT;

@@ -370,6 +370,11 @@ async fn discover(seconds: f64, scan: Option<&str>) -> Res<()> {
             }
             Err(e) => eprintln!("ipx discovery: {e}"),
         }
+        if let Some(subnet) = scan {
+            for (ip, model) in labgruppen::amps::ipx::scan(subnet, Duration::from_secs(3)).await {
+                println!("ipx  {ip}  {model}");
+            }
+        }
     };
     #[cfg(not(feature = "ipx"))]
     let ipx = async {};

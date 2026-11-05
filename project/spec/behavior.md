@@ -94,9 +94,11 @@ statement with a `BEH-<n>` ID.
 - **BEH-18** Switching a protocol on starts a scan of that protocol. A scan can also be started
   manually (SCAN NOW), which searches every protocol that is on. A scan runs for 5 s, and SCAN NOW
   does nothing while one runs. The app also scans when it starts (only the protocols that are on). The IPX is searched
-  by listening for its UDP broadcasts; the IPD by listening for its announcements and by probing
-  every address of the /24 subnet of each network interface of the computer (not only the one of its
-  default route; loopback and link-local addresses excluded), all at the same time.
+  by listening for its UDP broadcasts and by asking every address of the /24 subnets below on its
+  control port (TCP 50168; only the system attributes are read, and an amp that already has a
+  controller is not found). The IPD by listening for its announcements and by probing every address
+  of the /24 subnet of each network interface of the computer (not only the one of its default route;
+  loopback and link-local addresses excluded), all at the same time.
 - **BEH-19** Amplifiers found are added with source AUTO and a default name (`BEH-20`). An IP that
   is already known is never added twice. What a protocol finds after its switch went off is
   dropped.

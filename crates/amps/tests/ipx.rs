@@ -788,3 +788,26 @@ async fn discovery_listener_sees_a_broadcast() {
         Err(e) => panic!("{e}"),
     }
 }
+
+// BEH-18: an IPX that does not broadcast is found by asking every address of the subnet; what listens
+// on the port but does not speak IPX is not taken for one
+#[tokio::test]
+async fn a_scan_finds_an_ipx_on_its_port_and_nothing_else() {
+    let fake = FakeAmp::start().await;
+    let found = labgruppen::amps::ipx::scan_port("127.0.0", fake.port, Duration::from_secs(3)).await;
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].0, "127.0.0.1");
+    assert!(!found[0].1.is_empty(), "the model");
+    assert_eq!(fake.writes(), 0, "a scan only reads");
+
+    let mute = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = mute.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((sock, _)) = mute.accept().await {
+            held.push(sock); // accepts and says nothing
+        }
+    });
+    let found = labgruppen::amps::ipx::scan_port("127.0.0", port, Duration::from_secs(2)).await;
+    assert!(found.is_empty(), "{found:?}");
+}

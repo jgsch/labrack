@@ -17,7 +17,8 @@ pub trait Finder: Send + Sync + 'static {
 
 /// The local network.
 ///
-/// * IPX: listens for the amps' UDP broadcasts.
+/// * IPX: listens for the amps' UDP broadcasts, and asks every address of the /24 subnet of each network
+///   interface on the control port: the broadcasts were never seen on a real network.
 /// * IPD: listens for their UDP announcements, and probes every address of the /24 subnet of each
 ///   network interface of the computer, as the vendor app does for one network (the amps were not seen
 ///   announcing). The amps need not be on the network of the default route.
@@ -28,9 +29,19 @@ impl Finder for Lan {
     async fn find(&self, protocol: Protocol, window: Duration) -> labgruppen::Result<Vec<Ipv4Addr>> {
         match protocol {
             Protocol::Ipx => {
-                let heard = ipx::discover(window).await?;
-                // the address in the packet is the one the vendor app connects to
-                Ok(heard.iter().filter_map(|d| address(&d.ip).or_else(|| address(&d.source))).collect())
+                let subnets = subnets_of(local_ipv4s());
+                let (heard, probed) = tokio::join!(ipx::discover(window), scan_ipx(subnets, window));
+                let mut found: Vec<Ipv4Addr> = probed.iter().filter_map(|(ip, _)| address(ip)).collect();
+                match heard {
+                    // the address in the packet is the one the vendor app connects to
+                    Ok(heard) => found
+                        .extend(heard.iter().filter_map(|d| address(&d.ip).or_else(|| address(&d.source)))),
+                    Err(e) if found.is_empty() => return Err(e),
+                    Err(_) => {}
+                }
+                found.sort();
+                found.dedup();
+                Ok(found)
             }
             Protocol::Ipd => {
                 let subnets = subnets_of(local_ipv4s());
@@ -89,7 +100,20 @@ async fn scan_all(subnets: Vec<String>, window: Duration) -> Vec<(String, ipd::A
     found
 }
 
-/// `192.168.1` for 192.168.1.20, the form `ipd::scan` takes.
+/// Ask all the subnets for an IPX at the same time.
+async fn scan_ipx(subnets: Vec<String>, window: Duration) -> Vec<(String, String)> {
+    let mut set = JoinSet::new();
+    for subnet in subnets {
+        set.spawn(async move { ipx::scan(&subnet, window).await });
+    }
+    let mut found = Vec::new();
+    while let Some(hits) = set.join_next().await {
+        found.extend(hits.unwrap_or_default());
+    }
+    found
+}
+
+/// `192.168.1` for 192.168.1.20, the form `ipd::scan` and `ipx::scan` take.
 fn subnet_of(ip: Ipv4Addr) -> String {
     let [a, b, c, _] = ip.octets();
     format!("{a}.{b}.{c}")
