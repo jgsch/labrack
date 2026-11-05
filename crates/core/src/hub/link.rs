@@ -1,13 +1,16 @@
-//! Linking channels (BEH-31 to BEH-35). Channel 1 is the master of a pair and channel 2 follows it:
+//! Linking channels (BEH-31 to BEH-35). Channel 1 is the master of a pair and channel 2 follows it, in
+//! the level only (what follows is in [`crate::link`]):
 //!
-//! * IPD: the amp mirrors writes on channel 1 by itself, and a write on channel 2 is ignored and may
-//!   leave it unanswering (docs/ipd-protocol.md). The app writes channel 1 only.
-//! * IPX: the amp copies the gain and the limiter dBu once when the link is switched on and then keeps
-//!   the channels independent. The app writes channel 1 and channel 2 together.
+//! * IPX: the amp keeps the link flag, copies the gain and the limiter dBu once when it is switched
+//!   on and then keeps the channels independent. The app writes channel 1 and channel 2 together.
+//! * IPD: the amp's own flag mirrors everything of channel 1 (EQ included) and ignores channel 2, so
+//!   the app does not switch it on: the link is the app's, kept in the config, and the app writes both
+//!   channels. A flag found on is respected: the amp keeps channel 2 equal, and a write of channel 2 is
+//!   ignored and may leave the amp unanswering (docs/ipd-protocol.md), so it is refused.
 //!
-//! What follows is in [`crate::link`]. Linking copies all of it from channel 1 to channel 2 first, with
-//! the link switched off, so it needs nothing of what the amps copy by themselves and never writes
-//! channel 2 of a linked IPD. The copy is a bulk change (`SEC-6`): the outputs are muted around it.
+//! Linking copies the shared settings from channel 1 to channel 2 first, so it needs nothing of what
+//! the amps copy by themselves. The copy is a bulk change (`SEC-6`): the outputs are muted around it.
+//! The same machinery copies the EQ of a channel to the other one ([`Hub::copy_eq`], BEH-33).
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -54,9 +57,24 @@ impl Hub {
     /// shows what is stored: a pair that is flagged linked but whose channels differ is shown as two
     /// channels ([`Hub::link_diverged`]).
     pub fn linked(&self, id: AmpId, side: Side) -> bool {
+        let kept = self.0.shared.store().get(id).is_some_and(|amp| amp.links[side as usize]);
         let live = lock(&self.0.shared.live);
         live.get(&id).is_some_and(|amp| {
-            amp.values.get(&side.flag()) == Some(&Value::Bool(true)) && !amp.diverged[side as usize]
+            let flagged = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
+            match amp.session.as_ref() {
+                Some(session) if !session.is_ipx() => flagged || kept,
+                _ => flagged && !amp.diverged[side as usize],
+            }
+        })
+    }
+
+    /// Whether the IPD's own flag is on for the pair: the amp then keeps all of channel 2 equal to
+    /// channel 1 and ignores what is written to it (BEH-32).
+    pub fn amp_keeps_equal(&self, id: AmpId, side: Side) -> bool {
+        let live = lock(&self.0.shared.live);
+        live.get(&id).is_some_and(|amp| {
+            amp.session.as_ref().is_some_and(|session| !session.is_ipx())
+                && amp.values.get(&side.flag()) == Some(&Value::Bool(true))
         })
     }
 
@@ -89,9 +107,16 @@ impl Hub {
         if self.linked(id, side) { vec![first] } else { vec![first, second] }
     }
 
-    /// Where a write of `param` has to go. A setting of a linked pair goes to channel 1, and also to
-    /// channel 2 on the IPX; a write to channel 2 of a linked pair is refused.
+    /// Where a write of `param` has to go. A shared setting of a linked pair goes to channel 1 and to
+    /// channel 2; a write to channel 2 of a linked pair is refused. An IPD that links a pair itself
+    /// mirrors all of channel 1 (BEH-32): channel 1 only, and channel 2 of anything it mirrors is refused.
     pub(super) fn route(&self, id: AmpId, session: &Session, param: &Param) -> Result<Vec<Param>> {
+        if !session.is_ipx()
+            && let Some(side) = link::mirrored(param)
+            && self.amp_keeps_equal(id, side)
+        {
+            return if link::is_second(param) { Err(Error::Linked) } else { Ok(vec![param.clone()]) };
+        }
         let Some(side) = link::follows(param) else { return Ok(vec![param.clone()]) };
         if !self.linked(id, side) {
             return Ok(vec![param.clone()]);
@@ -99,36 +124,38 @@ impl Hub {
         if link::is_second(param) {
             return Err(Error::Linked);
         }
-        let mut targets = vec![param.clone()];
-        if session.is_ipx() {
-            targets.extend(link::second(param));
-        }
-        Ok(targets)
+        Ok(std::iter::once(param.clone()).chain(link::second(param)).collect())
     }
 
-    /// Link or unlink a pair (BEH-31, BEH-35). Linking makes channel 2 equal to channel 1: every
-    /// shared setting is read from channel 1, checked like any value (ranges, ceilings), and written
-    /// to channel 2 with the outputs muted, then the link is switched on; the mutes end as they were.
-    /// If a value is not acceptable nothing is written. Unlinking changes no value.
+    /// Link or unlink a pair (BEH-31, BEH-35). Linking makes channel 2 equal to channel 1 in what the
+    /// pair shares: every shared setting is read from channel 1, checked like any value (ranges,
+    /// ceilings), and written to channel 2 with the outputs muted; the mutes end as they were. An IPX
+    /// then gets its flag switched on in the amp; an IPD never does (BEH-32), its link is kept in the
+    /// config. If a value is not acceptable nothing is written. Unlinking changes no value.
     pub async fn set_link(&self, id: AmpId, side: Side, linked: bool) -> Result<()> {
         let session = self.session(id)?;
         let flag = side.flag();
         self.permit_channel(id, flag.channel())?;
         let shared = &self.0.shared;
+        let ipx = session.is_ipx();
 
         if !linked {
             let _gate = session.gate.lock().await;
-            session.amp.set(&flag, Value::Bool(false)).await?;
-            shared.observed(id, &flag, &Value::Bool(false), true);
+            // an IPD whose own flag is on (front panel, another tool) gets it switched off: the user asks
+            if ipx || self.amp_keeps_equal(id, side) {
+                session.amp.set(&flag, Value::Bool(false)).await?;
+                shared.observed(id, &flag, &Value::Bool(false), true);
+            }
+            shared.store().set_link(id, side as usize, false)?;
             if shared.set_diverged(id, side, false) {
                 shared.emit(crate::Update::LinkChanged(id, side));
             }
+            shared.emit(crate::Update::Settings(id));
             return Ok(());
         }
 
-        // nothing to do: an IPD keeps a linked pair equal itself and channel 2 of a linked IPD must not
-        // be written. A pair shown as two channels (flagged linked, channels different) is not shown
-        // linked, so this copies channel 1 to channel 2 and shows it linked again.
+        // nothing to do for a pair shown linked. A pair shown as two channels (an IPX that flags it
+        // linked while its channels differ) copies channel 1 to channel 2 and shows it linked again.
         if self.linked(id, side) {
             return Ok(());
         }
@@ -139,7 +166,7 @@ impl Hub {
             for result in amp.set_many(&to_write).await {
                 result?;
             }
-            amp.set(&switch, Value::Bool(true)).await
+            if ipx { amp.set(&switch, Value::Bool(true)).await } else { Ok(()) }
         })
         .await?;
 
@@ -147,9 +174,65 @@ impl Hub {
         for (param, value) in &copy {
             shared.observed(id, param, value, true);
         }
-        shared.observed(id, &flag, &Value::Bool(true), true);
+        if ipx {
+            shared.observed(id, &flag, &Value::Bool(true), true);
+        } else {
+            // the load of an IPD limiter is the app's: a linked pair has one
+            let mut store = shared.store();
+            if side == Side::Outputs
+                && let Some(load) = store.get(id).map(|amp| amp.load_ohms[0])
+            {
+                store.set_load(id, 1, load)?;
+            }
+            store.set_link(id, side as usize, true)?;
+        }
         if shared.set_diverged(id, side, false) {
             shared.emit(crate::Update::LinkChanged(id, side));
+        }
+        shared.emit(crate::Update::Settings(id));
+        Ok(())
+    }
+
+    /// Copy the EQ of the other channel of the pair to `to` (BEH-33): the ten bands and, on outputs, the
+    /// HPF and LPF; not the delay. Read from the state, checked like any value (ranges), written with
+    /// the outputs muted; the mutes end as they were. The channels are not linked by it.
+    pub async fn copy_eq(&self, id: AmpId, to: Channel) -> Result<()> {
+        let session = self.session(id)?;
+        self.permit_channel(id, to)?;
+        if !self.loaded(id) {
+            return Err(Error::NotLoaded);
+        }
+        let side = link::side_of(to);
+        if !session.is_ipx() && self.amp_keeps_equal(id, side) {
+            return Err(Error::Linked);
+        }
+        let from = match to {
+            Channel::Input(n) => Channel::Input(1 - n.min(1)),
+            Channel::Output(n) => Channel::Output(1 - n.min(1)),
+        };
+        let ceilings = self.0.shared.store().get(id).ok_or(Error::UnknownAmp)?.ceilings;
+        let mut copy = Vec::new();
+        for (param, value) in self.values(id) {
+            let twin = match param {
+                Param::Eq { ch, band, field } if ch == from => Param::Eq { ch: to, band, field },
+                Param::Xover { ch, filter, field } if ch == from => Param::Xover { ch: to, filter, field },
+                _ => continue,
+            };
+            let Some(spec) = session.amp.spec(&twin).filter(|spec| spec.writable) else { continue };
+            let checked = dsp::check(&twin, &spec, &value, &ceilings)
+                .map_err(|e| Error::Invalid(format!("Cannot copy: {twin}: {e}")))?;
+            copy.push((twin, checked));
+        }
+        let to_write = copy.clone();
+        self.bulk(id, &session, End::AsBefore, true, |amp| async move {
+            for result in amp.set_many(&to_write).await {
+                result?;
+            }
+            Ok(())
+        })
+        .await?;
+        for (param, value) in &copy {
+            self.0.shared.observed(id, param, value, true);
         }
         Ok(())
     }

@@ -28,6 +28,8 @@ pub(crate) struct Entry {
     load_ohms: [f64; 2],
     #[serde(default)]
     ceilings: Ceilings,
+    #[serde(default)]
+    links: [bool; 2],
 }
 
 pub(crate) const fn default_load() -> [f64; 2] {
@@ -44,6 +46,7 @@ impl Entry {
             connected: amp.connected,
             load_ohms: amp.load_ohms,
             ceilings: amp.ceilings,
+            links: amp.links,
         }
     }
 
@@ -57,6 +60,7 @@ impl Entry {
             connected: self.connected,
             load_ohms: self.load_ohms,
             ceilings: self.ceilings,
+            links: self.links,
             preset: None,
         }
     }

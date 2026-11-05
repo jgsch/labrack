@@ -135,7 +135,8 @@ impl Hub {
             serde_json::from_str(&text).map_err(|e| Error::Invalid(format!("Not a settings file: {e}")))?;
         let ceilings = self.0.shared.store().get(id).ok_or(Error::UnknownAmp)?.ceilings;
         let linked = [self.linked(id, Side::Inputs), self.linked(id, Side::Outputs)];
-        let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings, linked)?;
+        let mirrors = [self.amp_keeps_equal(id, Side::Inputs), self.amp_keeps_equal(id, Side::Outputs)];
+        let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings, linked, mirrors)?;
 
         let report = self
             .bulk(id, &session, End::Muted, true, |amp| async move {
@@ -255,6 +256,7 @@ fn plan_load(
     snapshot: &Snapshot,
     ceilings: &Ceilings,
     linked: [bool; 2],
+    mirrors: [bool; 2],
 ) -> Result<(Snapshot, Vec<String>)> {
     if snapshot.format != Snapshot::FORMAT {
         return Err(Error::Invalid(format!(
@@ -288,8 +290,15 @@ fn plan_load(
                 continue;
             }
         };
-        // a linked pair is one channel: channel 2 is not written from the file; the IPX gets channel 1's
-        // value there, the IPD mirrors it itself
+        // an IPD that links a pair itself mirrors all of channel 1 and ignores channel 2
+        if let Some(side) = link::mirrored(&param)
+            && mirrors[side as usize]
+            && link::is_second(&param)
+        {
+            skipped.push(format!("{name}: the amplifier keeps channel 2 equal to channel 1"));
+            continue;
+        }
+        // a linked pair shares its level: channel 2 is not read from the file, it gets channel 1's value
         if let Some(side) = link::follows(&param)
             && linked[side as usize]
         {
@@ -297,7 +306,7 @@ fn plan_load(
                 skipped.push(format!("{name}: follows channel 1 while the pair is linked"));
                 continue;
             }
-            if session.is_ipx()
+            if !mirrors[side as usize]
                 && let Some(twin) = link::second(&param)
             {
                 accepted.params.insert(twin.to_string(), checked.clone());

@@ -91,6 +91,9 @@ pub struct Amp {
     /// IPD load per output in ohm (BEH-5).
     pub load_ohms: [f64; 2],
     pub ceilings: Ceilings,
+    /// The links the app keeps (inputs, outputs): only an IPD uses them, as its own flag mirrors more
+    /// than a link shares (BEH-32). An IPX keeps its link in the amp.
+    pub links: [bool; 2],
     /// Not saved: the app only knows it while connected.
     pub preset: Option<Preset>,
 }
@@ -184,6 +187,7 @@ impl Store {
             connected: true,
             load_ohms: config::default_load(),
             ceilings: Ceilings::default(),
+            links: [false; 2],
             preset: None,
         });
         self.save()?;
@@ -244,6 +248,12 @@ impl Store {
         }
         let amp = self.get_mut(id)?;
         *amp.load_ohms.get_mut(usize::from(output)).ok_or(Error::NotControllable)? = ohm;
+        self.save()
+    }
+
+    /// Whether the app keeps the pair linked (`side` is `Side as usize`).
+    pub fn set_link(&mut self, id: AmpId, side: usize, linked: bool) -> Result<()> {
+        *self.get_mut(id)?.links.get_mut(side).ok_or(Error::NotControllable)? = linked;
         self.save()
     }
 

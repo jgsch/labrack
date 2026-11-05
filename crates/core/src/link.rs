@@ -1,8 +1,8 @@
 //! Which settings a linked pair shares (BEH-31). Channel 1 is the master: channel 2 follows it.
 //!
-//! The gain, the delay, the EQ, the output filters and the output limiter follow. The mute stays per
-//! output (a link must never unmute anything, `SEC-7`), and the mixer stays per input channel: it
-//! routes four sources to each of them (the mockup mirrors neither).
+//! A link shares the level: the gain and the output limiter. The EQ, the output filters, the delay and
+//! the mixer stay per channel, and so does the mute (a link must never unmute anything, `SEC-7`).
+//! What the IPD's own link flag mirrors is wider ([`mirrored`]), which is why the app does not use it.
 
 use labgruppen::{Channel, LimiterField, Param};
 
@@ -37,18 +37,18 @@ pub(crate) fn flag_side(param: &Param) -> Option<Side> {
     }
 }
 
-fn side_of(channel: Channel) -> Side {
+pub(crate) fn side_of(channel: Channel) -> Side {
     match channel {
         Channel::Input(_) => Side::Inputs,
         Channel::Output(_) => Side::Outputs,
     }
 }
 
-/// The pair a setting is shared in, if `param` is one a linked pair shares.
+/// The pair a setting is shared in, if `param` is one a linked pair shares: the gain and the output
+/// limiter (BEH-31).
 pub(crate) fn follows(param: &Param) -> Option<Side> {
     let shared = match param {
-        Param::Gain(_) | Param::Delay(_) | Param::Eq { .. } => true,
-        Param::Xover { ch, .. } => !ch.is_input(),
+        Param::Gain(_) => true,
         Param::Limiter { ch, field } => {
             !ch.is_input()
                 && matches!(
@@ -60,6 +60,17 @@ pub(crate) fn follows(param: &Param) -> Option<Side> {
                 )
         }
         _ => false,
+    };
+    shared.then(|| side_of(param.channel()))
+}
+
+/// The pair a setting is mirrored in by the IPD's own link flag, which copies everything of channel 1 to
+/// channel 2: the gain, the delay, the EQ, the output filters and the output limiter (BEH-32).
+pub(crate) fn mirrored(param: &Param) -> Option<Side> {
+    let shared = match param {
+        Param::Gain(_) | Param::Delay(_) | Param::Eq { .. } => true,
+        Param::Xover { ch, .. } => !ch.is_input(),
+        _ => return follows(param),
     };
     shared.then(|| side_of(param.channel()))
 }
@@ -123,18 +134,14 @@ mod tests {
         assert_eq!(first(&param("out1.gain")), None);
     }
 
-    // BEH-31
+    // BEH-31: a link shares the level, the gain and the output limiter, nothing else
     #[test]
     fn the_shared_settings() {
         for (name, side) in [
             ("in1.gain", Side::Inputs),
-            ("in2.delay", Side::Inputs),
-            ("in1.eq.9.q", Side::Inputs),
+            ("in2.gain", Side::Inputs),
             ("out1.gain", Side::Outputs),
-            ("out2.delay", Side::Outputs),
-            ("out2.eq.0.type", Side::Outputs),
-            ("out1.xover.hp.freq", Side::Outputs),
-            ("out2.xover.lp.enabled", Side::Outputs),
+            ("out2.gain", Side::Outputs),
             ("out1.limiter.threshold", Side::Outputs),
             ("out1.limiter.impedance", Side::Outputs),
             ("out2.limiter.power", Side::Outputs),
@@ -144,10 +151,18 @@ mod tests {
         }
     }
 
-    // SEC-7: a link never carries a mute; the mixer routes per channel
+    // BEH-31, SEC-7: the EQs are never merged, and a link carries no mute
     #[test]
-    fn mutes_the_mixer_and_the_rest_stay_per_channel() {
+    fn the_eqs_the_delay_the_mixer_and_the_mutes_stay_per_channel() {
         for name in [
+            "in1.eq.0.gain",
+            "in2.eq.9.q",
+            "out1.eq.3.freq",
+            "out2.eq.0.type",
+            "out1.xover.hp.freq",
+            "out2.xover.lp.enabled",
+            "in1.delay",
+            "out2.delay",
             "in1.mute",
             "out1.mute",
             "in1.mixer.aes1.level",
@@ -165,6 +180,23 @@ mod tests {
         }
     }
 
+    // BEH-32: what the IPD's own flag mirrors is wider: the reason the app does not use it
+    #[test]
+    fn the_ipd_flag_mirrors_everything_of_a_channel() {
+        for (name, side) in [
+            ("in1.gain", Side::Inputs),
+            ("in1.delay", Side::Inputs),
+            ("in1.eq.9.q", Side::Inputs),
+            ("out2.eq.0.type", Side::Outputs),
+            ("out1.xover.hp.freq", Side::Outputs),
+            ("out1.limiter.threshold", Side::Outputs),
+        ] {
+            assert_eq!(mirrored(&param(name)), Some(side), "{name}");
+        }
+        assert_eq!(mirrored(&param("out1.mute")), None);
+        assert_eq!(mirrored(&param("in1.mixer.aes1.level")), None);
+    }
+
     #[test]
     fn the_twin_of_a_setting_is_the_same_on_channel_2() {
         for (one, two) in [
@@ -176,8 +208,7 @@ mod tests {
         ] {
             assert_eq!(second(&param(one)), Some(param(two)), "{one}");
             assert!(!is_second(&param(one)) && is_second(&param(two)));
-            // every twin follows as well
-            assert_eq!(follows(&param(two)), follows(&param(one)));
+            assert_eq!(mirrored(&param(two)), mirrored(&param(one)));
         }
         // a twin has no twin; what is not shared has none
         assert_eq!(second(&param("out2.gain")), None);

@@ -238,7 +238,7 @@ impl Shared {
                 values.get(&side.flag()) == Some(&Value::Bool(true))
             };
             // and it cannot differ (BEH-32): what it reports for channel 2 of a linked pair is channel 1's
-            let value = match pair::follows(param) {
+            let value = match pair::mirrored(param) {
                 Some(side) if ipd && pair::is_second(param) && linked(&amp.values, side) => {
                     pair::first(param)
                         .and_then(|first| amp.values.get(&first).cloned())
@@ -252,7 +252,7 @@ impl Shared {
             let modifies = changed && (old.is_some() || own);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
-            let twin = pair::follows(param)
+            let twin = pair::mirrored(param)
                 .filter(|side| ipd && !pair::is_second(param) && linked(&amp.values, *side))
                 .and_then(|_| pair::second(param));
             if let Some(twin) = &twin {
@@ -346,6 +346,8 @@ impl Shared {
     /// The state read from the connection of `token`. What changed since is newer and stays.
     fn load(&self, id: AmpId, token: &Arc<Writer>, snapshot: labgruppen::Snapshot) {
         let mut shown_apart = Vec::new();
+        let kept = self.store().get(id).map(|amp| amp.links).unwrap_or_default();
+        let mut dropped = Vec::new();
         {
             let mut live = lock(&self.live);
             let current = |amp: &Live| amp.session.as_ref().is_some_and(|s| Arc::ptr_eq(&s.writer, token));
@@ -364,12 +366,21 @@ impl Shared {
                 if ipd && flagged {
                     mirror_ipd(&mut amp.values, side);
                 }
+                // a link the app keeps for an IPD, whose channels differ now (changed by someone else), is
+                // dropped: the pair is shown as two channels
+                if ipd && kept[side as usize] && !flagged && !link::side_drift(&amp.values, side).is_empty() {
+                    dropped.push(side);
+                }
                 let diverged = !ipd && flagged && !link::side_drift(&amp.values, side).is_empty();
                 amp.diverged[side as usize] = diverged;
                 if diverged {
                     shown_apart.push(side);
                 }
             }
+        }
+        for side in dropped {
+            let _ = self.store().set_link(id, side as usize, false);
+            shown_apart.push(side);
         }
         self.emit(Update::Loaded(id));
         for side in shown_apart {
@@ -387,11 +398,11 @@ impl Shared {
     }
 }
 
-/// Channel 2 of a pair an IPD has linked takes channel 1's values in the state, as in the amp.
+/// Channel 2 of a pair the IPD itself has linked takes channel 1's values in the state, as in the amp.
 fn mirror_ipd(values: &mut HashMap<Param, Value>, side: Side) {
     let copies: Vec<(Param, Value)> = values
         .iter()
-        .filter(|(param, _)| pair::follows(param) == Some(side) && !pair::is_second(param))
+        .filter(|(param, _)| pair::mirrored(param) == Some(side) && !pair::is_second(param))
         .filter_map(|(param, value)| pair::second(param).map(|twin| (twin, value.clone())))
         .collect();
     values.extend(copies);

@@ -126,6 +126,23 @@ fn load_per_output_and_ceilings_are_read_and_kept_when_the_list_changes() {
     assert_eq!(again.amps()[1].load_ohms, [4.0, 4.0]);
 }
 
+// BEH-32: the link of an IPD is the app's, so it is kept in the config (no link in an old file)
+#[test]
+fn the_links_the_app_keeps_survive_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    fs::write(&path, FULL).unwrap();
+    let mut store = Store::open(&path).unwrap();
+    let id = store.amps()[0].id;
+    assert_eq!(store.amps()[0].links, [false, false], "none in a file without them");
+
+    store.set_link(id, 1, true).unwrap();
+
+    assert_eq!(Store::open(&path).unwrap().amps()[0].links, [false, true]);
+    store.set_link(id, 1, false).unwrap();
+    assert_eq!(Store::open(&path).unwrap().amps()[0].links, [false, false]);
+}
+
 // BEH-40, BEH-7
 #[test]
 fn the_loaded_preset_is_not_saved() {
@@ -234,6 +251,7 @@ fn the_file_holds_no_password_and_no_dsp_setting() {
         "amp.source",
         "amp.connected",
         "amp.load_ohms",
+        "amp.links",
         "amp.ceilings",
         "amp.ceilings.max_output_gain_db",
         "amp.ceilings.max_limiter_dbu",

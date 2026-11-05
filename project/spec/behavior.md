@@ -141,28 +141,40 @@ statement with a `BEH-<n>` ID.
 
 ## Link
 
-- **BEH-31** Inputs and outputs can each be linked. In a linked pair, channel 1 is the master:
-  channel 2 follows channel 1 in the gain, delay, EQ, output filters and output limiter (faders and
-  limiter included). The mute stays per output (`SEC-7`: a link never unmutes) and the mixer per input
-  channel. A setting of channel 2 of a linked pair cannot be edited; the app refuses it.
-- **BEH-32** Linking makes channel 2 equal to channel 1. The amps differ, and the app hides it:
-  - Both: the app reads every shared setting of channel 1, checks it (ranges, ceilings: if one fails
-    nothing is written), mutes the outputs (`SEC-6`), writes it to channel 2 while the link is still
-    off, then switches the link on. It does not rely on what the amp copies by itself.
-  - IPD: the amp mirrors channel 1 to channel 2 itself. The app writes only channel 1 and never
-    writes channel 2 while linked (the amp ignores it and may stop answering).
-  - IPX: the amp copies the gain and the limiter dBu once when the link is switched on, then keeps
-    the channels independent. The app writes every channel 1 change to channel 2 as well.
-  - The app shows what is stored in the amp. A pair that the amp flags linked while its channels
-    differ (a change made on the amp itself, or found so when the state is read) is shown as two
-    unlinked channels with their stored values, with a notice that it is linked in the amp. The app
-    writes nothing for it (`SEC-1`) and corrects nothing. If the channels become equal on the amp,
-    the pair is shown linked again. LINK on such a pair makes channel 2 equal to channel 1 (checked,
-    outputs muted around it); UNLINK clears the flag in the amp. An IPD cannot differ.
-- **BEH-33** Linked inputs share one Inputs EQ; linked outputs share one Outputs EQ.
-- **BEH-34** In Levels, linked channels show one row: IN 1 + 2 and OUT 1 + 2 with one fader each
-  (channel 1's) and stereo meters, and LIMITER 1 + 2 with channel 1's figures and two gain reduction
-  bars. Each card keeps a MUTE per channel (MUTE 1, MUTE 2), as mutes stay per channel.
+- **BEH-31** Inputs and outputs are linked separately. A linked pair shares its **level** only: the
+  gain of both channels and, for outputs, the limiter (load, V peak, power, level). Channel 1 is the
+  master: channel 2 follows it. The EQ, the output filters, the delay, the mixer and the mutes stay
+  per channel (`SEC-7`: a link never unmutes): the EQs are never merged. A shared setting of channel 2
+  of a linked pair cannot be edited; the app refuses it.
+- **BEH-32** Linking makes channel 2 equal to channel 1 in what the pair shares. The amps differ, and
+  the app hides it:
+  - Both: the app reads the shared settings of channel 1, checks them (ranges, ceilings: if one fails
+    nothing is written), mutes the outputs (`SEC-6`), writes them to channel 2, then makes the link
+    effective; the mutes end as they were. It does not rely on what the amp copies by itself.
+  - IPX: the amp keeps the link flag, copies the gain and the limiter dBu once when it is switched
+    on, then keeps the channels independent. The app writes every change of a shared setting to both
+    channels. The app shows what is stored in the amp: a pair that the amp flags linked while the
+    shared settings of its channels differ (a change made on the amp itself, or found so when the state
+    is read) is shown as two unlinked channels with their stored values, with a notice that it is
+    linked in the amp. The app writes nothing for it (`SEC-1`). If the channels become equal on the
+    amp, the pair is shown linked again. LINK on such a pair makes channel 2 equal to channel 1
+    (checked, outputs muted around it); UNLINK clears the flag in the amp.
+  - IPD: the amp's own link flag copies **everything** of channel 1 to channel 2 (EQ, filters, delay
+    included) and ignores what is written to channel 2, so the app never switches it on. The link is
+    the app's: it is kept in the config of the amp and the app writes both channels. The load of the
+    limiter, which the app keeps, is shared as well. A link kept by the app whose channels differ when
+    the state is read is dropped (the pair is shown as two channels). A pair that the IPD itself has
+    linked (front panel, another tool) is shown linked with channel 1's values; nothing of channel 2
+    can then be edited, because the amp keeps it equal, and UNLINK switches the flag off in the amp.
+- **BEH-33** Each EQ tab has a COPY button that takes the EQ of the other channel of the pair (input 1
+  and 2, output 1 and 2): the ten bands and, on outputs, the HPF and LPF. The delay is not copied. It
+  asks first, mutes the outputs while it is done and puts them back as they were (`SEC-6`, `SEC-7`).
+  The channels are otherwise never merged.
+- **BEH-34** In Levels, linked inputs show one IN 1 + 2 card with one fader (channel 1's) and stereo
+  meters, and linked outputs show one OUT 1 + 2 card and one LIMITER 1 + 2 card with channel 1's
+  figures and two gain reduction bars. Each card keeps a MUTE per channel (MUTE 1, MUTE 2), as mutes
+  stay per channel. The sides are independent: with only one side linked, the second row shows the
+  other side's channel 2 alone.
 - **BEH-35** Unlinking restores separate channels and keeps the current values.
 
 ## Presets

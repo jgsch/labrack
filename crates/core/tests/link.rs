@@ -29,13 +29,23 @@ async fn set_and_wait(hub: &Hub, id: AmpId, name: &str, value: Value) {
     wait_value(hub, id, name, value).await;
 }
 
-/// The settings a linked pair shares, as names for `out` (0 or 1).
+/// The settings a linked pair shares, as names for a channel (0 or 1): the gain; the limiter is
+/// [`limiter_names`].
 fn shared_names(side: Side, channel: u8) -> Vec<String> {
-    let c = match side {
+    vec![format!("{}.gain", channel_name(side, channel))]
+}
+
+fn channel_name(side: Side, channel: u8) -> String {
+    match side {
         Side::Inputs => format!("in{}", channel + 1),
         Side::Outputs => format!("out{}", channel + 1),
-    };
-    let mut names = vec![format!("{c}.gain"), format!("{c}.delay")];
+    }
+}
+
+/// What a link leaves per channel: the delay, the EQ and the output filters.
+fn per_channel_names(side: Side, channel: u8) -> Vec<String> {
+    let c = channel_name(side, channel);
+    let mut names = vec![format!("{c}.delay")];
     for band in 0..10 {
         for field in ["enabled", "type", "freq", "gain", "q"] {
             names.push(format!("{c}.eq.{band}.{field}"));
@@ -154,11 +164,13 @@ async fn link_needs_an_online_amp() {
     assert_eq!(hub.channels(id, Side::Outputs).len(), 2);
 }
 
-// BEH-31, BEH-32: linking copies every shared setting of channel 1 to channel 2, also what the IPX
-// does not copy by itself (it copies the gain and the limiter dBu only)
+// BEH-31, BEH-32: linking copies the level of channel 1 to channel 2 (the gain, and the whole limiter,
+// of which the IPX copies the dBu only), and nothing else: the EQs are never merged
 #[tokio::test]
-async fn linking_copies_channel_1_to_channel_2_on_the_ipx() {
+async fn linking_copies_the_level_of_channel_1_to_channel_2_and_nothing_else_on_the_ipx() {
     let (hub, id, fake) = ipx_ready().await;
+    let eq_before = ipx_value(&fake, "out2.eq.2.gain");
+    assert_ne!(eq_before, ipx_value(&fake, "out1.eq.2.gain"));
     for side in [Side::Outputs, Side::Inputs] {
         hub.set_link(id, side, true).await.unwrap();
         assert!(hub.linked(id, side));
@@ -166,6 +178,10 @@ async fn linking_copies_channel_1_to_channel_2_on_the_ipx() {
             assert_eq!(ipx_value(&fake, a), ipx_value(&fake, &b), "{b} follows {a}");
         }
     }
+    assert_eq!(ipx_value(&fake, "out2.eq.2.gain"), eq_before, "the EQ of channel 2 is untouched");
+    assert_eq!(ipx_value(&fake, "out2.eq.4.freq"), Value::Int(2500));
+    assert_eq!(ipx_value(&fake, "out2.xover.hp.freq"), Value::Int(120));
+    assert_eq!(ipx_value(&fake, "in2.eq.1.q"), f(5.0));
     for (a, b) in limiter_names(0).iter().zip(limiter_names(1)) {
         assert_eq!(ipx_value(&fake, a), ipx_value(&fake, &b), "{b} follows {a}");
     }
@@ -175,7 +191,8 @@ async fn linking_copies_channel_1_to_channel_2_on_the_ipx() {
         Some(3000.0)
     );
     // the cache says so too, for the views
-    assert_eq!(hub.value(id, &param("out2.eq.2.gain")), Some(f(4.0)));
+    assert_eq!(hub.value(id, &param("out2.gain")), Some(f(-10.0)));
+    assert_eq!(hub.value(id, &param("out2.eq.2.gain")), Some(eq_before));
     assert_eq!(
         hub.value(id, &param("out2.link")).unwrap_or(FALSE),
         FALSE,
@@ -198,32 +215,39 @@ async fn the_link_copy_mutes_first_and_leaves_the_mutes_as_they_were_on_the_ipx(
     assert!(!writes.contains(&addr("out1.mute")), "the muted one is not touched");
     let flag = writes.iter().position(|a| *a == addr("out1.link")).expect("the flag is written");
     let copied = writes.iter().filter(|a| a.channel == 1 && a.env != addr("out2.mute").env).count();
-    assert!(copied >= 60, "{copied} settings copied");
+    assert!((4..=8).contains(&copied), "{copied} settings copied: the gain and the limiter, no EQ");
     assert!(writes[..flag].iter().filter(|a| a.channel == 1).count() >= copied, "copied before the flag");
 }
 
-// BEH-32: while linked every channel 1 change is also written to channel 2 on the IPX
+// BEH-31, BEH-32: while linked every gain change is also written to channel 2 on the IPX; the EQ, the
+// filters and the delay are written where they are made
 #[tokio::test]
-async fn linked_edits_are_written_to_both_channels_on_the_ipx() {
+async fn linked_gains_are_written_to_both_channels_and_the_eq_to_one_on_the_ipx() {
     let (hub, id, fake) = ipx_ready().await;
     hub.set_link(id, Side::Outputs, true).await.unwrap();
     hub.set_link(id, Side::Inputs, true).await.unwrap();
     let before = fake.state().setprm.len();
 
-    for (name, twin, value) in [
-        ("out1.gain", "out2.gain", f(-3.0)),
-        ("out1.delay", "out2.delay", f(7.0)),
-        ("out1.eq.4.q", "out2.eq.4.q", f(3.5)),
-        ("out1.xover.lp.freq", "out2.xover.lp.freq", Value::Int(9000)),
-        ("in1.gain", "in2.gain", f(-2.0)),
-        ("in1.eq.0.freq", "in2.eq.0.freq", Value::Int(200)),
-    ] {
+    for (name, twin, value) in [("out1.gain", "out2.gain", f(-3.0)), ("in1.gain", "in2.gain", f(-2.0))] {
         hub.set(id, param(name), value.clone()).unwrap();
         wait_value(&hub, id, twin, value.clone()).await;
         assert_eq!(ipx_value(&fake, name), value, "{name}");
         assert_eq!(ipx_value(&fake, twin), value, "{twin}");
     }
-    assert_eq!(fake.state().setprm.len() - before, 12, "each change once per channel");
+    assert_eq!(fake.state().setprm.len() - before, 4, "each gain once per channel");
+
+    let before = fake.state().setprm.len();
+    for (name, twin, value) in [
+        ("out1.delay", "out2.delay", f(7.0)),
+        ("out1.eq.4.q", "out2.eq.4.q", f(3.5)),
+        ("out1.xover.lp.freq", "out2.xover.lp.freq", Value::Int(9000)),
+        ("in1.eq.0.freq", "in2.eq.0.freq", Value::Int(200)),
+    ] {
+        let other = ipx_value(&fake, twin);
+        set_and_wait(&hub, id, name, value.clone()).await;
+        assert_eq!(ipx_value(&fake, twin), other, "{twin} is not touched by {name}");
+    }
+    assert_eq!(fake.state().setprm.len() - before, 4, "each EQ change once");
 
     // the limiter, all four values, on both
     hub.set_limiter(id, 0, Unit::Dbu, 28.0).unwrap();
@@ -243,15 +267,8 @@ async fn channel_2_of_a_linked_pair_cannot_be_edited_directly() {
     hub.set_link(id, Side::Outputs, true).await.unwrap();
     let writes = fake.writes();
 
-    for (name, value) in [
-        ("out2.gain", f(0.0)),
-        ("out2.delay", f(1.0)),
-        ("out2.eq.3.gain", f(1.0)),
-        ("out2.xover.hp.freq", Value::Int(100)),
-    ] {
-        let got = hub.set(id, param(name), value);
-        assert!(matches!(got, Err(Error::Linked)), "{name}: {got:?}");
-    }
+    let got = hub.set(id, param("out2.gain"), f(0.0));
+    assert!(matches!(got, Err(Error::Linked)), "out2.gain: {got:?}");
     for unit in [Unit::Dbu, Unit::Vpk, Unit::Watt, Unit::Ohm] {
         let got = hub.set_limiter(id, 1, unit, 10.0);
         assert!(matches!(got, Err(Error::Linked)), "{unit:?}: {got:?}");
@@ -260,7 +277,10 @@ async fn channel_2_of_a_linked_pair_cannot_be_edited_directly() {
     sleep(Duration::from_millis(200)).await;
     assert_eq!(fake.writes(), writes);
 
-    // what is not part of the link stays per channel: mutes, and the other pair
+    // what is not part of the link stays per channel: the EQ, the filters, the delay, mutes, the other pair
+    set_and_wait(&hub, id, "out2.eq.3.gain", f(1.0)).await;
+    set_and_wait(&hub, id, "out2.delay", f(1.0)).await;
+    set_and_wait(&hub, id, "out2.xover.hp.freq", Value::Int(100)).await;
     set_and_wait(&hub, id, "out2.mute", TRUE).await;
     assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "out1 was muted already");
     set_and_wait(&hub, id, "out1.mute", FALSE).await;
@@ -314,7 +334,7 @@ async fn the_link_copy_is_refused_above_a_ceiling() {
 #[tokio::test]
 async fn a_failed_link_copy_leaves_the_outputs_muted() {
     let (hub, id, fake) = ipx_ready().await;
-    fake.state().reject_writes.insert(addr("out2.eq.2.gain"));
+    fake.state().reject_writes.insert(addr("out2.gain"));
 
     let got = hub.set_link(id, Side::Outputs, true).await;
     assert!(matches!(got, Err(Error::LeftMuted(_))), "{got:?}");
@@ -328,53 +348,59 @@ async fn a_failed_link_copy_leaves_the_outputs_muted() {
 
 // ---- IPD ---------------------------------------------------------------------------------------
 
-// BEH-32: nothing is ever written to channel 2 of a linked IPD: the amp mirrors by itself
+// BEH-32: the link of an IPD is the app's: it never switches the amp's flag on (that would merge the EQs),
+// writes the gain and the limiter to both channels, and the EQ where it is made
 #[tokio::test(flavor = "multi_thread")]
-async fn no_write_reaches_channel_2_of_a_linked_ipd() {
+async fn a_linked_ipd_writes_the_level_to_both_channels_and_never_switches_its_flag_on() {
     let (hub, id, sim) = ipd_ready().await;
     hub.set_link(id, Side::Outputs, true).await.unwrap();
     hub.set_link(id, Side::Inputs, true).await.unwrap();
-    assert_eq!(sim.link_violations(), []);
+    assert!(hub.linked(id, Side::Outputs) && hub.linked(id, Side::Inputs));
+    assert!(!hub.amp_keeps_equal(id, Side::Outputs), "the amp's own link is off");
     let before = sim.writes().len();
 
-    for (name, value) in [
-        ("out1.gain", f(-3.0)),
-        ("out1.delay", f(7.0)),
-        ("out1.eq.4.q", f(3.5)),
-        ("out1.xover.lp.freq", Value::Int(9000)),
-        ("in1.gain", f(-2.0)),
-        ("in1.eq.0.freq", Value::Int(200)),
-    ] {
+    for (name, value) in [("out1.gain", f(-3.0)), ("in1.gain", f(-2.0))] {
         hub.set(id, param(name), value.clone()).unwrap();
-        wait_value(&hub, id, name, value.clone()).await;
-        // the amp mirrored it; so does the shared state, for the views
         let twin = name.replacen('1', "2", 1);
+        wait_value(&hub, id, &twin, value.clone()).await;
+        assert_eq!(ipd_value(&sim, name).await, value, "{name} on the amp");
         assert_eq!(ipd_value(&sim, &twin).await, value, "{twin} on the amp");
-        wait_value(&hub, id, &twin, value).await;
     }
     hub.set_limiter(id, 0, Unit::Dbu, 28.0).unwrap();
     wait_limiter_dbu(&hub, id, 1, 28.0).await;
     hub.set_load(id, 0, 8.0).unwrap();
     assert_eq!(hub.amps()[0].load_ohms, [8.0, 8.0], "the load follows too");
+    assert_eq!(
+        ipd_value(&sim, "out1.limiter.threshold").await,
+        ipd_value(&sim, "out2.limiter.threshold").await,
+        "the limiter on both channels"
+    );
 
-    // nothing was written to a channel 2 key since the link, and the amp never saw one it ignores
-    let second = |k: &Key| k.channel & 0x7F == 1 && k.struct_id != S_MUTE && k.struct_id != S_MIXER;
-    let writes = sim.writes()[before..].to_vec();
-    assert!(!writes.iter().any(second), "{:?}", writes.iter().filter(|k| second(k)).collect::<Vec<_>>());
-    assert!(!writes.is_empty());
+    // the EQ is written where it is made, and channel 2 can be edited
+    let other = ipd_value(&sim, "out2.eq.4.q").await;
+    set_and_wait(&hub, id, "out1.eq.4.q", f(3.5)).await;
+    assert_eq!(ipd_value(&sim, "out2.eq.4.q").await, other, "EQ 2 is not merged");
+    set_and_wait(&hub, id, "out2.eq.4.q", f(6.0)).await;
+    assert_eq!(ipd_value(&sim, "out1.eq.4.q").await, f(3.5));
+
+    let flag = |k: &Key| k.struct_id == labgruppen::amps::ipd::protocol::S_LINK;
+    assert!(!sim.writes().iter().any(flag), "the amp's link flag is never written");
     assert_eq!(sim.link_violations(), []);
+    assert!(sim.writes().len() > before);
 
-    // channel 2 cannot be edited directly
+    // the gain of channel 2 cannot be edited directly
     assert!(matches!(hub.set(id, param("out2.gain"), f(0.0)), Err(Error::Linked)));
     assert!(matches!(hub.set_limiter(id, 1, Unit::Dbu, 20.0), Err(Error::Linked)));
-    sleep(Duration::from_millis(200)).await;
-    assert_eq!(sim.link_violations(), []);
 }
 
-// BEH-31: linking copies the settings of channel 1 over channel 2 on the IPD too
+// BEH-31: linking copies the level of channel 1 over channel 2 on the IPD too, and not the EQ
 #[tokio::test(flavor = "multi_thread")]
-async fn linking_copies_channel_1_to_channel_2_on_the_ipd() {
+async fn linking_copies_the_level_of_channel_1_to_channel_2_and_nothing_else_on_the_ipd() {
     let (hub, id, sim) = ipd_ready().await;
+    let mut before = Vec::new();
+    for name in per_channel_names(Side::Outputs, 1) {
+        before.push((name.clone(), ipd_value(&sim, &name).await));
+    }
     hub.set_link(id, Side::Outputs, true).await.unwrap();
     for (a, b) in shared_names(Side::Outputs, 0).iter().zip(shared_names(Side::Outputs, 1)) {
         assert_eq!(ipd_value(&sim, a).await, ipd_value(&sim, &b).await, "{b} follows {a}");
@@ -382,11 +408,13 @@ async fn linking_copies_channel_1_to_channel_2_on_the_ipd() {
     let (a, b) =
         (ipd_value(&sim, "out1.limiter.threshold").await, ipd_value(&sim, "out2.limiter.threshold").await);
     assert_eq!(a, b);
-    assert_eq!(sim.link_violations(), [], "the copy came before the flag");
+    for (name, value) in before {
+        assert_eq!(ipd_value(&sim, &name).await, value, "{name} stays what it was");
+    }
+    assert_eq!(hub.amps()[0].load_ohms[1], hub.amps()[0].load_ohms[0]);
+    assert_eq!(hub.value(id, &param("out2.gain")), Some(f(-10.0)));
     // the inputs were not linked: their channels differ still
     assert_ne!(ipd_value(&sim, "in1.gain").await, ipd_value(&sim, "in2.gain").await);
-    // the state for the views
-    assert_eq!(hub.value(id, &param("out2.gain")), Some(f(-10.0)));
 }
 
 // SEC-6, SEC-7 on the IPD
@@ -403,9 +431,8 @@ async fn the_link_copy_mutes_first_and_leaves_the_mutes_as_they_were_on_the_ipd(
     assert_eq!(writes.first(), Some(&key("out2.mute")));
     assert_eq!(writes.last(), Some(&key("out2.mute")));
     assert!(!writes.contains(&key("out1.mute")));
-    let flag = writes.iter().position(|k| *k == key("out1.link")).expect("the flag is written");
-    assert!(writes[..flag].contains(&key("out2.gain")), "copied before the flag");
-    assert!(!writes[flag..].iter().any(|k| k.channel == 0x81 && k.struct_id != S_MUTE), "nothing after it");
+    assert!(writes.contains(&key("out2.gain")), "the gain is copied");
+    assert!(!writes.contains(&key("out1.link")), "and the amp's flag is not written");
 }
 
 // BEH-35 on the IPD: the values stay, the channels are independent again
@@ -426,9 +453,9 @@ async fn unlinking_keeps_the_values_on_the_ipd() {
     assert_eq!(sim.link_violations(), [], "unlinked, channel 2 may be written");
 }
 
-// BEH-37 with a link: a file never writes channel 2 of a linked pair
+// BEH-37 with a link: a file gives channel 2 of a linked pair the level of channel 1
 #[tokio::test(flavor = "multi_thread")]
-async fn a_file_load_into_a_linked_pair_writes_channel_1_only_on_the_ipd() {
+async fn a_file_load_into_a_linked_pair_gives_channel_2_the_level_of_channel_1_on_the_ipd() {
     let (hub, id, sim) = ipd_ready().await;
     hub.set_link(id, Side::Outputs, true).await.unwrap();
     let dir = tempfile::tempdir().unwrap();
@@ -803,4 +830,146 @@ async fn a_value_outside_the_range_is_still_refused_above_a_ceiling() {
 
     assert!(hub.set_link(id, Side::Outputs, true).await.is_err());
     assert!(!hub.linked(id, Side::Outputs));
+}
+
+// ---- the link an IPD keeps for itself, an IPD that links a pair itself, and the EQ copy -------------------
+
+/// A simulated IPD whose own link flag is on for the outputs, set by another tool before the app comes.
+async fn ipd_linked_by_the_amp() -> (Hub, AmpId, SimServer) {
+    use labgruppen::amps::ipd::IpdAmp;
+    use labgruppen::amps::ipd::client::Options;
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let other = IpdAmp::connect_with(
+        "127.0.0.1",
+        sim.addr.port(),
+        Options { mk2: None, timeout: Duration::from_secs(5) },
+    )
+    .await
+    .unwrap();
+    for (name, value) in [("out1.eq.4.q", f(2.0)), ("out2.eq.4.q", f(5.0)), ("out1.link", TRUE)] {
+        labgruppen::Amp::set(&other, &param(name), value).await.unwrap();
+    }
+    labgruppen::Amp::close(&other).await;
+    let (hub, local) = hub();
+    local.route("10.0.0.1", sim.addr.port());
+    let id = hub.add_manual("Right", labrack_core::Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+    (hub, id, sim)
+}
+
+// BEH-32: a pair the IPD itself has linked keeps channel 2 equal in everything, so nothing of channel 2 can be
+// edited, and UNLINK switches the amp's flag off: then the EQs are independent
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipd_that_links_a_pair_itself_refuses_channel_2_until_unlinked() {
+    let (hub, id, sim) = ipd_linked_by_the_amp().await;
+    assert!(hub.linked(id, Side::Outputs) && hub.amp_keeps_equal(id, Side::Outputs));
+    let writes = sim.writes().len();
+
+    for (name, value) in [
+        ("out2.eq.4.q", f(1.0)),
+        ("out2.gain", f(0.0)),
+        ("out2.delay", f(1.0)),
+        ("out2.xover.hp.freq", Value::Int(100)),
+    ] {
+        let got = hub.set(id, param(name), value);
+        assert!(matches!(got, Err(Error::Linked)), "{name}: {got:?}");
+    }
+    assert!(matches!(hub.copy_eq(id, Channel::Output(1)).await, Err(Error::Linked)));
+    set_and_wait(&hub, id, "out1.eq.4.q", f(3.0)).await;
+    wait_value(&hub, id, "out2.eq.4.q", f(3.0)).await;
+    assert_eq!(sim.link_violations(), []);
+    assert!(sim.writes()[writes..].iter().all(|k| k.channel & 0x7F == 0), "channel 1 only");
+
+    hub.set_link(id, Side::Outputs, false).await.unwrap();
+
+    assert!(!hub.linked(id, Side::Outputs) && !hub.amp_keeps_equal(id, Side::Outputs));
+    assert_eq!(ipd_value(&sim, "out1.link").await, FALSE, "the amp's own flag is off");
+    set_and_wait(&hub, id, "out2.eq.4.q", f(6.0)).await;
+    assert_eq!(ipd_value(&sim, "out1.eq.4.q").await, f(3.0), "the EQs are independent");
+}
+
+// BEH-32: the link of an IPD is kept in the config, so it is still there after a reconnect; a link whose
+// channels no longer match when the state is read (changed by another tool meanwhile) is dropped
+#[tokio::test(flavor = "multi_thread")]
+async fn the_link_the_app_keeps_for_an_ipd_survives_a_reconnect_unless_the_channels_differ() {
+    let (hub, id, sim) = ipd_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    assert_eq!(hub.amps()[0].links, [false, true]);
+
+    hub.disconnect(id).unwrap();
+    wait_status(&hub, id, labrack_core::Status::Disconnected).await;
+    assert!(!hub.linked(id, Side::Outputs), "nothing is shown while the amp is not online");
+    hub.connect(id).unwrap();
+    wait_loaded(&hub, id).await;
+    assert!(hub.linked(id, Side::Outputs), "still linked");
+    assert_eq!(hub.channels(id, Side::Outputs), [Channel::Output(0)]);
+
+    hub.disconnect(id).unwrap();
+    wait_status(&hub, id, labrack_core::Status::Disconnected).await;
+    {
+        use labgruppen::amps::ipd::IpdAmp;
+        use labgruppen::amps::ipd::client::Options;
+        let other = IpdAmp::connect_with(
+            "127.0.0.1",
+            sim.addr.port(),
+            Options { mk2: None, timeout: Duration::from_secs(5) },
+        )
+        .await
+        .unwrap();
+        labgruppen::Amp::set(&other, &param("out2.gain"), f(-30.0)).await.unwrap();
+        labgruppen::Amp::close(&other).await;
+    }
+    hub.connect(id).unwrap();
+    wait_loaded(&hub, id).await;
+
+    assert!(!hub.linked(id, Side::Outputs), "dropped: the channels differ");
+    assert_eq!(hub.channels(id, Side::Outputs).len(), 2);
+    assert_eq!(hub.amps()[0].links, [false, false]);
+    assert_eq!(hub.value(id, &param("out2.gain")), Some(f(-30.0)), "nothing was corrected (SEC-1)");
+}
+
+// BEH-33: COPY takes the EQ of the other channel: the bands and the output filters, not the delay; the mutes
+// end as they were
+#[tokio::test]
+async fn copying_an_eq_takes_the_bands_and_the_filters_but_not_the_delay_on_the_ipx() {
+    let (hub, id, fake) = ipx_ready().await;
+    assert_ne!(ipx_value(&fake, "out1.eq.2.gain"), ipx_value(&fake, "out2.eq.2.gain"));
+    let delay = ipx_value(&fake, "out2.delay");
+
+    hub.copy_eq(id, Channel::Output(1)).await.unwrap();
+
+    assert_eq!(ipx_value(&fake, "out2.eq.2.gain"), f(4.0));
+    assert_eq!(ipx_value(&fake, "out2.eq.4.freq"), Value::Int(1500));
+    assert_eq!(ipx_value(&fake, "out2.xover.hp.freq"), Value::Int(80));
+    assert_eq!(ipx_value(&fake, "out2.delay"), delay, "the delay is not copied");
+    assert_eq!(ipx_value(&fake, "out1.eq.2.gain"), f(4.0), "the source is untouched");
+    assert_eq!(hub.value(id, &param("out2.eq.2.gain")), Some(f(4.0)), "and the views see it");
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, FALSE));
+    assert!(!hub.linked(id, Side::Outputs), "copying does not link");
+
+    // and the other way round, on the inputs
+    hub.copy_eq(id, Channel::Input(0)).await.unwrap();
+    assert_eq!(ipx_value(&fake, "in1.eq.1.q"), f(5.0));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn copying_an_eq_works_on_the_ipd_too() {
+    let (hub, id, sim) = ipd_ready().await;
+
+    hub.copy_eq(id, Channel::Output(1)).await.unwrap();
+
+    assert_eq!(ipd_value(&sim, "out2.eq.2.gain").await, f(4.0));
+    assert_eq!(ipd_value(&sim, "out2.xover.hp.freq").await, Value::Int(80));
+    assert_ne!(ipd_value(&sim, "out2.delay").await, ipd_value(&sim, "out1.delay").await);
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, FALSE));
+    assert_eq!(sim.link_violations(), []);
+}
+
+// SEC-1: nothing to copy from before the state is read, and an amp that is not online takes nothing
+#[tokio::test]
+async fn copying_an_eq_needs_an_online_amp() {
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    hub.disconnect(id).unwrap();
+    wait_status(&hub, id, labrack_core::Status::Disconnected).await;
+    assert!(matches!(hub.copy_eq(id, Channel::Output(1)).await, Err(Error::NotOnline)));
 }
