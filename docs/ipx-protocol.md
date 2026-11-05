@@ -167,7 +167,7 @@ Total 0x152 dwords = 0x548 bytes. The same audio config appears in a GETPRESET r
 
 | Index | Meter | Status |
 |---|---|---|
-| 0-1 | input signal ch A/B, before input gain | verified with live audio |
+| 0-1 | input signal ch A/B, before input gain | verified with live audio; shown as the ANALOG 1 and ANALOG 2 meters of the mixer (inferred) |
 | 2-3 | "output signal" ch A/B (-150 when muted) | read -150 dB constantly on an IPX 1200 with the outputs unmuted and the amp playing (2026-11-05): not used for the output level |
 | 4-5 | post input (after mixer and input gain) | verified |
 | 6-7 | amp / output-stage meter: the output level | follows the signal and the output gain of each channel on a live IPX 1200 (-45 to -56 dB with input 2 at -20 dB; out1 gain -10 dB lower moved A by 10 dB, 2026-11-05) |

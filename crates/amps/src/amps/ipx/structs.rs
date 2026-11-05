@@ -267,6 +267,9 @@ impl From<&Meters> for crate::model::Meters {
         let extra = [
             ("post_input", m.post_input),
             ("output_signal", m.output),
+            // the two input signals are what ANALOG 1 and ANALOG 2 bring to the mixer; there is no
+            // meter for AES 1 and 2
+            ("raw_input", m.input),
             ("gain_reduction_a", m.gain_reduction_a),
             ("gain_reduction_b", m.gain_reduction_b),
         ];
