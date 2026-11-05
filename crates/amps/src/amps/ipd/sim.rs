@@ -423,6 +423,14 @@ impl SimServer {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).reads.clone()
     }
 
+    /// What the amp says about the preset it runs: its number (0: none known, as an IPD can say) and
+    /// its name.
+    pub fn set_current_preset(&self, index: i64, name: &str) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        amp.values.insert(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(index));
+        amp.values.insert(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text(name.into()));
+    }
+
     /// Put the amp at user level `level` (index in `USERS`) with these access rights, as if someone
     /// had logged in or out at the front panel.
     pub fn set_access(&self, level: i64, rights: u32) {

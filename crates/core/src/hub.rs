@@ -754,6 +754,10 @@ async fn session(
                 delay = timing.retry_first;
                 // the preset first: whoever sees ONLINE finds it
                 let _ = shared.store().set_preset(id, link.preset.take());
+                // an amp still named by default is named after its model
+                if shared.store().name_by_model(id, &link.model).unwrap_or(false) {
+                    shared.emit(Update::Settings(id));
+                }
                 let writer = Arc::new(Writer::new(timing.write_interval));
                 let gate = Arc::new(tokio::sync::Mutex::new(()));
                 let session = Session { amp: link.amp.clone(), writer: writer.clone(), gate: gate.clone() };
@@ -762,8 +766,9 @@ async fn session(
                 // the helpers end with the connection: what they still hold is dropped, never sent later
                 let mut helpers = JoinSet::new();
                 helpers.spawn(load_state(shared.clone(), id, link.amp.clone(), writer.clone()));
-                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer, gate));
-                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone()));
+                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer, gate.clone()));
+                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone(), gate.clone()));
+                helpers.spawn(resolve_preset(shared.clone(), id, link.amp.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -798,6 +803,7 @@ struct Link {
     events: broadcast::Receiver<AmpEvent>,
     preset: Option<Preset>,
     access: Option<Access>,
+    model: String,
 }
 
 /// An amp is ONLINE when it is connected and its state could be read.
@@ -808,11 +814,13 @@ async fn connect_and_read(shared: &Shared, target: &Target) -> labgruppen::Resul
     match (amp.status().await, amp.access().await) {
         (Ok(status), Ok(access)) => {
             let slots = amp.preset_slots();
+            // an IPD can say a name and no number (0): the preset is shown by its name until the number is
+            // found among the stored ones ([`resolve_preset`])
             let preset = status
                 .preset
-                .filter(|p| slots.contains(&p.index))
-                .map(|p| Preset { number: p.index, name: p.name });
-            Ok(Link { amp, events, preset, access })
+                .filter(|p| slots.contains(&p.index) || !p.name.trim().is_empty())
+                .map(|p| Preset { number: if slots.contains(&p.index) { p.index } else { 0 }, name: p.name });
+            Ok(Link { amp, events, preset, access, model: status.model })
         }
         (Err(e), _) | (_, Err(e)) => {
             amp.close().await;
@@ -831,20 +839,54 @@ async fn load_state(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp
 
 /// The IPD tells nothing of a mute made on its front panel, so the output mutes are asked for about
 /// as often as the meters arrive (BEH-12). The IPX tells by itself.
-async fn poll_mutes(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
+async fn poll_mutes(
+    shared: Arc<Shared>,
+    id: AmpId,
+    amp: Arc<dyn labgruppen::Amp>,
+    gate: Arc<tokio::sync::Mutex<()>>,
+) {
     if amp.info().driver != "ipd" {
         return;
     }
+    // an IPD answers one thing at a time: the polling waits until the state is read, and never runs during
+    // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
+    wait_loaded(&shared, id).await;
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
     let mut tick = interval(shared.timing.meter_interval);
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         tick.tick().await;
+        let _gate = gate.lock().await;
         if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&outputs)).await {
             for (param, value) in outputs.iter().zip(values) {
                 shared.observed(id, param, &value, false);
             }
         }
+    }
+}
+
+/// Wait until the state of the amp is read: an IPD answers one thing at a time, so what is not needed at
+/// once waits for it.
+async fn wait_loaded(shared: &Shared, id: AmpId) {
+    while !lock(&shared.live).get(&id).is_some_and(|amp| amp.loaded) {
+        sleep(shared.timing.meter_interval).await;
+    }
+}
+
+/// An IPD that says the name of its preset but not its number (0): look the name up among the stored
+/// presets, and take the number when exactly one has it.
+async fn resolve_preset(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
+    let unknown = |shared: &Shared| {
+        shared.store().get(id).and_then(|a| a.preset.clone()).filter(|p| p.number == 0).map(|p| p.name)
+    };
+    let Some(name) = unknown(&shared) else { return };
+    wait_loaded(&shared, id).await;
+    let Ok(stored) = amp.presets().await else { return };
+    let mut matching = stored.iter().filter(|p| p.name.trim().eq_ignore_ascii_case(name.trim()));
+    if let (Some(found), None) = (matching.next(), matching.next())
+        && unknown(&shared).as_deref() == Some(name.as_str())
+    {
+        shared.set_loaded_preset(id, Some(Preset { number: found.index, name: found.name.clone() }));
     }
 }
 

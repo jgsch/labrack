@@ -442,3 +442,57 @@ async fn dropping_the_hub_closes_the_connections() {
     drop(hub);
     assert!(another_controller_can_connect(fake.port).await);
 }
+
+// BEH-20: an amp still named by default takes the name of its model once it is online; a name the user chose
+// stays, and a second amp of the same model is numbered
+#[tokio::test(flavor = "multi_thread")]
+async fn an_amp_named_by_default_is_named_after_its_model_once_online() {
+    let one = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let two = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let three = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let (hub, local) = hub();
+    local.route("10.0.0.1", one.addr.port());
+    local.route("10.0.0.2", two.addr.port());
+    local.route("10.0.0.3", three.addr.port());
+
+    let a = hub.add_manual("", Protocol::Ipd, "10.0.0.1").unwrap();
+    assert_eq!(hub.amps()[0].name, "Amp 1", "before it is online");
+    wait_status(&hub, a, Status::Online).await;
+    assert_eq!(hub.amps()[0].name, "IPD2400");
+
+    let b = hub.add_manual("", Protocol::Ipd, "10.0.0.2").unwrap();
+    wait_status(&hub, b, Status::Online).await;
+    let c = hub.add_manual("Stage left", Protocol::Ipd, "10.0.0.3").unwrap();
+    wait_status(&hub, c, Status::Online).await;
+    let names: Vec<_> = hub.amps().into_iter().map(|a| a.name).collect();
+    assert_eq!(names, ["IPD2400", "IPD2400 2", "Stage left"]);
+}
+
+// BEH-11: an IPD that says the name of its preset and no number is shown by that name, then by its slot
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipd_that_says_no_preset_number_is_resolved_by_the_name() {
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    sim.set_current_preset(0, "Sub");
+    let (hub, local) = hub();
+    local.route("10.0.0.1", sim.addr.port());
+    let id = hub.add_manual("A", Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_status(&hub, id, Status::Online).await;
+    assert!(hub.amps()[0].preset.as_ref().is_some_and(|p| p.name == "Sub"), "by its name at once");
+
+    wait_loaded(&hub, id).await;
+    let resolved = async {
+        while hub.amps()[0].preset != Some(Preset { number: 2, name: "Sub".into() }) {
+            sleep(Duration::from_millis(20)).await;
+        }
+    };
+    timeout(Duration::from_secs(10), resolved).await.expect("slot 2 is found by the name");
+
+    // a name no slot has stays a name
+    let other = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    other.set_current_preset(0, "Unsaved");
+    local.route("10.0.0.2", other.addr.port());
+    let id = hub.add_manual("B", Protocol::Ipd, "10.0.0.2").unwrap();
+    wait_loaded(&hub, id).await;
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(hub.amps()[1].preset, Some(Preset { number: 0, name: "Unsaved".into() }));
+}

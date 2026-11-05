@@ -278,6 +278,25 @@ impl Store {
         if taken { Err(Error::DuplicateIp) } else { Ok(ip.to_string()) }
     }
 
+    /// An amp still named by default (`Amp 3`) takes its model's name once the amp says it (`IPX 1200`,
+    /// `IPX 1200 2` when that is taken); a name the user chose stays. True when the name changed.
+    pub fn name_by_model(&mut self, id: AmpId, model: &str) -> Result<bool> {
+        let model = model.trim();
+        let current = self.amps.iter().find(|a| a.id == id).ok_or(Error::UnknownAmp)?;
+        let is_default = current.name.strip_prefix("Amp ").is_some_and(|n| n.parse::<usize>().is_ok());
+        if model.is_empty() || !is_default {
+            return Ok(false);
+        }
+        let taken = |name: &str| self.amps.iter().any(|a| a.id != id && a.name == name);
+        let name = std::iter::once(model.to_string())
+            .chain((2..).map(|n| format!("{model} {n}")))
+            .find(|name| !taken(name))
+            .expect("endless range");
+        self.get_mut(id)?.name = name;
+        self.save()?;
+        Ok(true)
+    }
+
     fn default_name(&self) -> String {
         let taken = |n: usize| self.amps.iter().any(|a| a.name == format!("Amp {n}"));
         let n = (1..).find(|&n| !taken(n)).expect("endless range");

@@ -154,6 +154,10 @@ impl Hub {
             return Ok(());
         }
 
+        if !self.loaded(id) {
+            return Err(Error::NotLoaded);
+        }
+
         // nothing to do for a pair shown linked. A pair shown as two channels (an IPX that flags it
         // linked while its channels differ) copies channel 1 to channel 2 and shows it linked again.
         if self.linked(id, side) {
