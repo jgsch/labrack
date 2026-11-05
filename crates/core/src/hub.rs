@@ -312,6 +312,20 @@ impl Shared {
         }
     }
 
+    /// An IPD can say the name of its preset and no number (0): once the stored presets are known, the
+    /// number is the slot of the one that has that name, when exactly one has it.
+    fn resolve_preset(&self, id: AmpId, stored: &[Preset]) {
+        let Some(unknown) = self.store().get(id).and_then(|a| a.preset.clone()).filter(|p| p.number == 0)
+        else {
+            return;
+        };
+        let same = |p: &&Preset| p.name.trim().eq_ignore_ascii_case(unknown.name.trim());
+        let mut matching = stored.iter().filter(same);
+        if let (Some(found), None) = (matching.next(), matching.next()) {
+            self.set_loaded_preset(id, Some(found.clone()));
+        }
+    }
+
     fn set_loaded_preset(&self, id: AmpId, preset: Option<Preset>) {
         let _ = self.store().set_preset(id, preset);
         self.emit(Update::Preset(id));
@@ -768,7 +782,6 @@ async fn session(
                 helpers.spawn(load_state(shared.clone(), id, link.amp.clone(), writer.clone()));
                 helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer, gate.clone()));
                 helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone(), gate.clone()));
-                helpers.spawn(resolve_preset(shared.clone(), id, link.amp.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -870,23 +883,6 @@ async fn poll_mutes(
 async fn wait_loaded(shared: &Shared, id: AmpId) {
     while !lock(&shared.live).get(&id).is_some_and(|amp| amp.loaded) {
         sleep(shared.timing.meter_interval).await;
-    }
-}
-
-/// An IPD that says the name of its preset but not its number (0): look the name up among the stored
-/// presets, and take the number when exactly one has it.
-async fn resolve_preset(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
-    let unknown = |shared: &Shared| {
-        shared.store().get(id).and_then(|a| a.preset.clone()).filter(|p| p.number == 0).map(|p| p.name)
-    };
-    let Some(name) = unknown(&shared) else { return };
-    wait_loaded(&shared, id).await;
-    let Ok(stored) = amp.presets().await else { return };
-    let mut matching = stored.iter().filter(|p| p.name.trim().eq_ignore_ascii_case(name.trim()));
-    if let (Some(found), None) = (matching.next(), matching.next())
-        && unknown(&shared).as_deref() == Some(name.as_str())
-    {
-        shared.set_loaded_preset(id, Some(Preset { number: found.index, name: found.name.clone() }));
     }
 }
 

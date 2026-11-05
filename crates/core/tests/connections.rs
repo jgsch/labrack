@@ -480,6 +480,7 @@ async fn an_ipd_that_says_no_preset_number_is_resolved_by_the_name() {
     assert!(hub.amps()[0].preset.as_ref().is_some_and(|p| p.name == "Sub"), "by its name at once");
 
     wait_loaded(&hub, id).await;
+    hub.presets(id).await.unwrap();
     let resolved = async {
         while hub.amps()[0].preset != Some(Preset { number: 2, name: "Sub".into() }) {
             sleep(Duration::from_millis(20)).await;
@@ -493,6 +494,6 @@ async fn an_ipd_that_says_no_preset_number_is_resolved_by_the_name() {
     local.route("10.0.0.2", other.addr.port());
     let id = hub.add_manual("B", Protocol::Ipd, "10.0.0.2").unwrap();
     wait_loaded(&hub, id).await;
-    sleep(Duration::from_millis(500)).await;
+    hub.presets(id).await.unwrap();
     assert_eq!(hub.amps()[1].preset, Some(Preset { number: 0, name: "Unsaved".into() }));
 }

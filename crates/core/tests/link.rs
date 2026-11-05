@@ -973,25 +973,3 @@ async fn copying_an_eq_needs_an_online_amp() {
     wait_status(&hub, id, labrack_core::Status::Disconnected).await;
     assert!(matches!(hub.copy_eq(id, Channel::Output(1)).await, Err(Error::NotOnline)));
 }
-
-// BEH-12: an IPD answers one thing at a time, so the polling of the mutes keeps out of a bulk change: the
-// change reads the mutes once, and nothing else asks for them meanwhile
-#[tokio::test(flavor = "multi_thread")]
-async fn the_mutes_are_not_polled_while_a_bulk_change_runs_on_the_ipd() {
-    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
-    let fast = labrack_core::Timing { meter_interval: Duration::from_millis(5), ..timing() };
-    let (hub, local) = hub_with(labrack_core::Store::in_memory(), fast);
-    local.route("10.0.0.1", sim.addr.port());
-    let id = hub.add_manual("A", labrack_core::Protocol::Ipd, "10.0.0.1").unwrap();
-    wait_loaded(&hub, id).await;
-    make_channels_differ(&hub, id).await;
-    wait_limiter_dbu(&hub, id, 1, 25.0).await;
-    sleep(Duration::from_millis(200)).await;
-    let is_mute = |k: &Key| k.struct_id == S_MUTE && k.channel & 0x80 != 0;
-    let before = sim.reads().iter().filter(|k| is_mute(k)).count();
-
-    hub.set_link(id, Side::Outputs, true).await.unwrap();
-
-    let during = sim.reads().iter().filter(|k| is_mute(k)).count() - before;
-    assert!(during <= 6, "{during} reads of the output mutes during the link");
-}

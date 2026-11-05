@@ -63,8 +63,13 @@ impl Hub {
     /// The presets stored on the amp (BEH-36).
     pub async fn presets(&self, id: AmpId) -> Result<Vec<Preset>> {
         let session = self.session(id)?;
+        // an IPD answers one thing at a time and reads these names slowly: after its state
+        super::wait_loaded(&self.0.shared, id).await;
         let list = session.amp.presets().await?;
-        Ok(list.into_iter().map(|p| Preset { number: p.index, name: p.name }).collect())
+        let stored: Vec<Preset> =
+            list.into_iter().map(|p| Preset { number: p.index, name: p.name }).collect();
+        self.0.shared.resolve_preset(id, &stored);
+        Ok(stored)
     }
 
     /// The slots of the amp's presets (BEH-6), for a view to list; `None` when it is not ONLINE.
