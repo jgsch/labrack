@@ -52,18 +52,17 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 
 - **UX-16** Six tabs in one row: Mixer, Levels, Inputs 1 EQ, Inputs 2 EQ, Outputs 1 EQ, Outputs 2
   EQ. The tab itself is the page title; there is no separate heading.
-- **UX-17** One link button sits in the tab row, on every tab: LINK 1 + 2 links the inputs and the
-  outputs together, LINKED · click to split splits both. When linked, the two input tabs become one
-  and the two output tabs become one. A pair the amp has linked alone (another tool) shows its
-  shared tab; the button then links the other pair too.
+- **UX-17** Links are on the Levels tab only: two buttons in the tab row, LINK INPUTS and LINK
+  OUTPUTS, each linked (pressed) or split. The Mixer and the EQ tabs have no link button, and the six
+  tabs never change. A linked pair is one card in Levels (`BEH-34`).
 - **UX-18** Mixer: two rows (IN 1, IN 2). Each row shows the four sources as bordered cards with
   their fader, meter, gain and mute, and a line showing where they go (→ IN 1, → IN 2).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
   scale line under the meters.
-- **UX-20** EQ tabs: one tab per channel (or one shared tab when linked), with the ten bands;
-  outputs add HPF, LPF and delay.
+- **UX-20** EQ tabs: one tab per channel, with the ten bands; outputs add HPF, LPF and delay. A
+  COPY FROM INPUT 2 / INPUT 1 / OUTPUT 2 / OUTPUT 1 button takes the other channel's EQ (`BEH-33`).
   - Left: the response curve (20 Hz to 20 kHz, ±15 dB) with a numbered handle per band that is on,
     and under it the HPF and LPF rows (on/off, Hz, type) on outputs and the DELAY row (on/off and
     ms) on both. The amps store only a time: DELAY is ticked while it is above
@@ -91,7 +90,7 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-23** Typed values apply on Enter or when the field loses focus, never while typing (typing
   −20 passes through −2).
 - **UX-24** Dangerous actions are confirmed. An action that mutes the outputs of an amp (preset
-  recall, storing a preset, loading a file, linking channels) opens a validation popup that names
+  recall, storing a preset, loading a file, linking channels, copying an EQ) opens a validation popup that names
   the amplifier, says that its outputs will be muted and, for recall, store and load, that they
   stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
   same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a

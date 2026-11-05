@@ -147,11 +147,12 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .mix-tab.in{--c:var(--sapphire);--bg:#1c2a38;--bd:#3f6a85}
 .mix-tab.on{position:relative;z-index:2;background:var(--c);color:var(--base);border-color:var(--c);margin-bottom:-2px;padding-bottom:8px}
 .link-button{margin-left:auto;margin-bottom:8px;min-height:44px;padding:0 14px;border-radius:4px;font-size:12px;font-weight:600;letter-spacing:0.06em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.link-button+.link-button{margin-left:0}
 .link-button.on.in{background:var(--sapphire);color:var(--base);border-color:var(--sapphire)}
 .link-button.on.out{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .tab-panel{display:flex;flex-direction:column;gap:16px;padding:16px 20px;box-sizing:border-box;min-height:718px;border:2px solid var(--lavender);border-radius:6px;background:#222236}
 .tab-panel.in{border-color:var(--sapphire);background:#1b2635}
-.levels-row{display:flex;align-items:stretch;gap:10px;min-width:0}
+.levels-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:10px;min-width:0}
 .levels-row+.levels-row{padding-top:16px;border-top:2px dashed var(--border-strong)}
 .level-card{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;padding:22px 12px 12px;background:var(--inset);border:1px solid var(--border);border-radius:4px;box-sizing:border-box}
 .level-card.out{background:#222236;border:2px solid var(--lavender)}

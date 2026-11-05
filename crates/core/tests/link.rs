@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use common::*;
 use labgruppen::amps::ipd::params::slot as ipd_slot;
-use labgruppen::amps::ipd::protocol::{Key, S_MIXER, S_MUTE};
+use labgruppen::amps::ipd::protocol::{Key, S_MUTE};
 use labgruppen::amps::ipd::sim::SimServer;
 use labgruppen::amps::ipx::fake::{Cmd, FakeAmp};
 use labgruppen::amps::ipx::params as ipx_params;

@@ -278,13 +278,22 @@ pub fn App() -> Element {
                             on_link: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
-                                move |linked: bool| {
+                                move |(side, linked): (Side, bool)| {
                                     let Some(id) = ids.get(picked()).copied() else { return };
                                     if linked {
                                         // linking mutes the outputs while it runs: it asks first (UX-24)
-                                        asking.set(Some((id, Ask::Link)));
+                                        asking.set(Some((id, Ask::Link(side))));
                                     } else {
-                                        spawn(set_links(hub.clone(), id, false, preset_errors));
+                                        spawn(set_link(hub.clone(), id, side, false, preset_errors));
+                                    }
+                                }
+                            },
+                            // copying an EQ mutes the outputs while it runs: it asks first (UX-24)
+                            on_copy: {
+                                let ids = ids.clone();
+                                move |_| {
+                                    if let (Some(id), Some(ch)) = (ids.get(picked()).copied(), tab().channel()) {
+                                        asking.set(Some((id, Ask::CopyEq(ch))));
                                     }
                                 }
                             },
@@ -431,22 +440,16 @@ fn said(mut errors: Errors, id: AmpId, done: labrack_core::Result<()>) {
     };
 }
 
-/// Link or split both pairs (UX-17): each one not yet as asked.
-async fn set_links(hub: Hub, id: AmpId, linked: bool, errors: Errors) {
-    for side in [Side::Inputs, Side::Outputs] {
-        if hub.linked(id, side) != linked
-            && let Err(e) = hub.set_link(id, side, linked).await
-        {
-            return said(errors, id, Err(e));
-        }
-    }
-    said(errors, id, Ok(()));
+/// Link or split one pair (UX-17).
+async fn set_link(hub: Hub, id: AmpId, side: Side, linked: bool, errors: Errors) {
+    said(errors, id, hub.set_link(id, side, linked).await);
 }
 
 /// Do what the user said yes to (UX-24). What it did shows in the bar itself: the running preset.
 async fn run_ask(hub: Hub, id: AmpId, ask: Ask, lists: Signal<HashMap<AmpId, Vec<Preset>>>, errors: Errors) {
     let done = match ask {
-        Ask::Link => return set_links(hub, id, true, errors).await,
+        Ask::Link(side) => hub.set_link(id, side, true).await,
+        Ask::CopyEq(to) => hub.copy_eq(id, to).await,
         Ask::Recall { slot, .. } => hub.recall_preset(id, slot).await,
         Ask::Store { slot, name, .. } => {
             let done = hub.store_preset(id, slot, &name).await;
@@ -641,8 +644,7 @@ pub fn mixeq_view(
     let linked_inputs = hub.linked(id, Side::Inputs);
     let linked_outputs = hub.linked(id, Side::Outputs);
     let eq = tab
-        .visible(linked_inputs, linked_outputs)
-        .and_then(MixTab::channel)
+        .channel()
         .map(|ch| EqView { delay_restore: delays.get(&(id, ch)).copied(), ..eq_view(hub, id, ch) });
     MixeqView {
         amps: cards,

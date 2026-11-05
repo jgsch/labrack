@@ -29,8 +29,8 @@ PAGES = {
     "eq-out-demo": "05-mix-eq-outputs-eq-filters-delay-tab",
     "mixer-demo": "02-mix-eq-mixer-tab",
     "linked-demo": "07-link-on-levels-tab",
-    "eq-inputs-demo": "08-link-on-one-inputs-eq-tab",
-    "eq-outputs-demo": "09-link-on-one-outputs-eq-tab",
+    "inputs-linked-demo": "07-link-on-levels-tab",
+    "outputs-linked-demo": "07-link-on-levels-tab",
 }
 HEADER = 100
 

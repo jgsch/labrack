@@ -18,19 +18,20 @@ the app's.
 
 ## Tasks
 
-- [ ] `core`: a link follows gain and limiter only; IPD link kept in the config, both channels written
-- [ ] `core`: `Hub::copy_eq`
-- [ ] `app`: no link on Mixer and EQ tabs, six fixed tabs, LINK INPUTS / LINK OUTPUTS on Levels
-- [ ] `app`: COPY button and its popup on the EQ tabs
-- [ ] Remove the "amp took the link back" check (the IPD flag is no longer written to link)
+- [x] `core`: a link follows gain and limiter only; IPD link kept in the config, both channels written
+- [x] `core`: `Hub::copy_eq`
+- [x] `app`: no link on Mixer and EQ tabs, six fixed tabs, LINK INPUTS / LINK OUTPUTS on Levels
+- [x] `app`: COPY button and its popup on the EQ tabs
+- [x] Remove the "amp took the link back" check (the IPD flag is no longer written to link)
 
 ## Done when
 
-- [ ] Tests for `BEH-31` to `BEH-35`, `UX-17`, `UX-20` pass
-- [ ] The Levels, EQ and linked screens rendered and looked at
+- [x] Tests for `BEH-31` to `BEH-35`, `UX-17`, `UX-20` pass
+- [x] The Levels, EQ and linked screens rendered and looked at
 
 ## Notes
 
+- Not archived yet: the new links and COPY wait for a try on the real amps.
 - The IPD2400 refused its link flag from this app for a while and then accepted it after the Windows
   app set it; the cause is unknown. Not needed any more: the app does not write the flag to link.
 - COPY copies the bands and the HPF/LPF, not the delay (a time alignment, not part of the tone).

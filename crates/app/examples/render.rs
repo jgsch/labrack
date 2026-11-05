@@ -73,9 +73,9 @@ fn main() {
         ("eq-out-demo", eq_out_demo),
         ("mixer-demo", mixer_demo),
         ("linked-demo", linked_demo),
+        ("inputs-linked-demo", inputs_linked_demo),
+        ("outputs-linked-demo", outputs_linked_demo),
         ("ask-demo", ask_demo),
-        ("eq-inputs-demo", eq_inputs_demo),
-        ("eq-outputs-demo", eq_outputs_demo),
     ] {
         let mut dom = VirtualDom::new(page);
         dom.rebuild_in_place();
@@ -163,15 +163,25 @@ fn search_demo() -> Element {
 
 /// The Levels tab with the figures of the mockup's board, for the visual check of the page.
 fn levels_demo() -> Element {
-    levels_page(false)
+    levels_page(false, false)
 }
 
 /// The Levels tab linked, as on the mockup's board 07: one row, two meters per fader.
 fn linked_demo() -> Element {
-    levels_page(true)
+    levels_page(true, true)
 }
 
-fn levels_page(linked: bool) -> Element {
+/// Only the inputs linked: IN 1 + 2 in the first row, the outputs of channel 2 below.
+fn inputs_linked_demo() -> Element {
+    levels_page(true, false)
+}
+
+/// Only the outputs linked: the second row keeps IN 2 alone.
+fn outputs_linked_demo() -> Element {
+    levels_page(false, true)
+}
+
+fn levels_page(linked_inputs: bool, linked_outputs: bool) -> Element {
     let strip = |label: &str, level_db: f64| labrack_app::Strip {
         label: label.into(),
         db: 0.0,
@@ -197,11 +207,11 @@ fn levels_page(linked: bool) -> Element {
             labrack_app::LevelRow {
                 input: strip("IN 2", -18.0),
                 output: strip("OUT 2", -18.0),
-                limiter: limiter("LIMITER 2", if linked { 8.0 } else { 0.0 }),
+                limiter: limiter("LIMITER 2", if linked_outputs { 8.0 } else { 0.0 }),
             },
         ],
-        linked_inputs: linked,
-        linked_outputs: linked,
+        linked_inputs,
+        linked_outputs,
         ..labrack_app::MixeqView::default()
     };
     rsx! {
@@ -221,8 +231,7 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
     let bands = (0..10u8)
         .map(|i| Band { on: on[usize::from(i)], gain: gains[usize::from(i)], ..default_band(i) })
         .collect();
-    let output = matches!(tab, labrack_app::MixTab::Out1 | labrack_app::MixTab::Outputs);
-    let linked = matches!(tab, labrack_app::MixTab::Inputs | labrack_app::MixTab::Outputs);
+    let output = matches!(tab, labrack_app::MixTab::Out1);
     let eq = labrack_app::EqView {
         channel: if output { Channel::Output(0) } else { Channel::Input(0) },
         bands,
@@ -247,8 +256,6 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab,
-        linked_inputs: linked,
-        linked_outputs: linked,
         eq: Some(eq),
         presets: demo_presets(),
         ..labrack_app::MixeqView::default()
@@ -268,15 +275,6 @@ fn eq_in_demo() -> Element {
 
 fn eq_out_demo() -> Element {
     eq_demo(labrack_app::MixTab::Out1, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
-}
-
-/// The shared EQ tabs of a linked amp (boards 08 and 09).
-fn eq_inputs_demo() -> Element {
-    eq_demo(labrack_app::MixTab::Inputs, [2.4, -0.8, 0.0, -1.6, 0.0, -2.4, 0.0, 0.0, -0.8, 0.0])
-}
-
-fn eq_outputs_demo() -> Element {
-    eq_demo(labrack_app::MixTab::Outputs, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
 }
 
 /// The Mixer with the sources of the mockup's board 02: ANALOG 1 into IN 1, ANALOG 2 into IN 2.

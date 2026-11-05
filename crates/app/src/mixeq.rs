@@ -10,7 +10,7 @@ use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
 use crate::{Fader, ValueField};
 
-/// The six tabs of UX-16, plus the shared ones a linked pair shows instead of two.
+/// The six tabs of UX-16. They never change: a link does not merge EQs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MixTab {
     Mixer,
@@ -19,13 +19,13 @@ pub enum MixTab {
     In2,
     Out1,
     Out2,
-    /// Both inputs on one tab: they are linked.
-    Inputs,
-    /// Both outputs on one tab: they are linked.
-    Outputs,
 }
 
 impl MixTab {
+    /// The tabs in the row (UX-16).
+    pub const ALL: [MixTab; 6] =
+        [MixTab::Mixer, MixTab::Levels, MixTab::In1, MixTab::In2, MixTab::Out1, MixTab::Out2];
+
     pub fn label(self) -> &'static str {
         match self {
             MixTab::Mixer => "MIXER",
@@ -34,8 +34,6 @@ impl MixTab {
             MixTab::In2 => "INPUT 2 · EQ",
             MixTab::Out1 => "OUTPUT 1 · EQ",
             MixTab::Out2 => "OUTPUT 2 · EQ",
-            MixTab::Inputs => "INPUTS 1 + 2 · EQ",
-            MixTab::Outputs => "OUTPUTS 1 + 2 · EQ",
         }
     }
 
@@ -43,51 +41,20 @@ impl MixTab {
     /// is the outputs'.
     pub fn side(self) -> Side {
         match self {
-            MixTab::Mixer | MixTab::In1 | MixTab::In2 | MixTab::Inputs => Side::Inputs,
-            MixTab::Levels | MixTab::Out1 | MixTab::Out2 | MixTab::Outputs => Side::Outputs,
+            MixTab::Mixer | MixTab::In1 | MixTab::In2 => Side::Inputs,
+            MixTab::Levels | MixTab::Out1 | MixTab::Out2 => Side::Outputs,
         }
     }
 
-    /// The channel an EQ tab edits: a shared tab edits channel 1, which channel 2 follows (BEH-31).
+    /// The channel an EQ tab edits.
     pub fn channel(self) -> Option<Channel> {
         match self {
-            MixTab::In1 | MixTab::Inputs => Some(Channel::Input(0)),
+            MixTab::In1 => Some(Channel::Input(0)),
             MixTab::In2 => Some(Channel::Input(1)),
-            MixTab::Out1 | MixTab::Outputs => Some(Channel::Output(0)),
+            MixTab::Out1 => Some(Channel::Output(0)),
             MixTab::Out2 => Some(Channel::Output(1)),
             MixTab::Mixer | MixTab::Levels => None,
         }
-    }
-
-    /// The tabs in the row (UX-17): a linked pair is one tab instead of two.
-    pub fn row(linked_inputs: bool, linked_outputs: bool) -> Vec<MixTab> {
-        let mut tabs = vec![MixTab::Mixer, MixTab::Levels];
-        if linked_inputs {
-            tabs.push(MixTab::Inputs);
-        } else {
-            tabs.extend([MixTab::In1, MixTab::In2]);
-        }
-        if linked_outputs {
-            tabs.push(MixTab::Outputs);
-        } else {
-            tabs.extend([MixTab::Out1, MixTab::Out2]);
-        }
-        tabs
-    }
-
-    /// Where a tab shows while its pair is linked, or not (the tab row changed under the user).
-    pub fn visible(self, linked_inputs: bool, linked_outputs: bool) -> Option<MixTab> {
-        let row = MixTab::row(linked_inputs, linked_outputs);
-        if row.contains(&self) {
-            return Some(self);
-        }
-        Some(match self {
-            MixTab::In1 | MixTab::In2 => MixTab::Inputs,
-            MixTab::Out1 | MixTab::Out2 => MixTab::Outputs,
-            MixTab::Inputs => MixTab::In1,
-            MixTab::Outputs => MixTab::Out1,
-            other => other,
-        })
     }
 }
 
@@ -520,6 +487,15 @@ fn BandRow(
     }
 }
 
+/// The label of the COPY button of a channel: it names the channel the EQ comes from (UX-20).
+pub fn copy_label(channel: Channel) -> String {
+    let (kind, other) = match channel {
+        Channel::Input(n) => ("INPUT", 2 - usize::from(n.min(1))),
+        Channel::Output(n) => ("OUTPUT", 2 - usize::from(n.min(1))),
+    };
+    format!("COPY FROM {kind} {other}")
+}
+
 /// An EQ tab (UX-20): the curve with its handles, the filters and delay under it, and the ten bands.
 /// Every change goes out as the writes it makes.
 #[component]
@@ -529,8 +505,12 @@ pub fn EqPage(
     /// DELAY ticked or unticked, with the time it showed (UX-20).
     #[props(default)]
     on_delay: EventHandler<(Channel, bool, f64)>,
+    /// COPY FROM the other channel (BEH-33).
+    #[props(default)]
+    on_copy: EventHandler<()>,
 ) -> Element {
     let ch = eq.channel;
+    let copy_label = copy_label(ch);
     // ticked with nothing to restore: the box is open for a time, on this channel only
     let mut armed = use_signal(|| None::<Channel>);
     let delay_on = eq.delay_ms > 0.0 || armed() == Some(ch);
@@ -616,6 +596,12 @@ pub fn EqPage(
                         div { class: "eq-actions",
                             button { class: "button eq-action", onclick: move |_| on_set.call(eq::all_off(ch)), "ALL OFF" }
                             button { class: "button eq-action", onclick: move |_| on_set.call(eq::reset(ch)), "RESET" }
+                            button {
+                                class: "button eq-action",
+                                "aria-label": "{copy_label}",
+                                onclick: move |_| on_copy.call(()),
+                                "{copy_label}"
+                            }
                         }
                     }
                     div { class: "eq-row eq-columns",
@@ -635,7 +621,9 @@ pub fn EqPage(
     }
 }
 
-/// The Levels tab (UX-19): two rows of IN, OUT and LIMITER, in the outputs' panel.
+/// The Levels tab (UX-19): two rows of IN, OUT and LIMITER, in the outputs' panel. The inputs and the
+/// outputs are linked on their own (BEH-34): a linked side is one card in the first row, with its two
+/// meters and a MUTE per channel, and the second row shows what is left.
 #[component]
 pub fn LevelsPage(
     view: MixeqView,
@@ -643,54 +631,60 @@ pub fn LevelsPage(
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
 ) -> Element {
-    // linked (BEH-34): one row with channel 1's controls, channel 2's meters beside them
-    if let ([one, two], true) = (view.rows.as_slice(), view.linked_inputs && view.linked_outputs) {
-        let named = |s: &Strip, label: &str| Strip { label: label.into(), ..s.clone() };
-        return rsx! {
-            section { class: "tab-panel out",
-                div { class: "levels-row",
-                    LevelCard {
-                        strip: named(&one.input, "IN 1 + 2"),
-                        second: two.input.clone(),
-                        on_gain: move |db| on_gain.call((0, 0, db)),
-                        on_mute: move |m| on_mute.call((0, 0, m)),
-                        on_mute_second: move |m| on_mute.call((1, 0, m)),
-                    }
-                    LevelCard {
-                        strip: named(&one.output, "OUT 1 + 2"),
-                        second: two.output.clone(),
-                        out: true,
-                        on_gain: move |db| on_gain.call((0, 1, db)),
-                        on_mute: move |m| on_mute.call((0, 1, m)),
-                        on_mute_second: move |m| on_mute.call((1, 1, m)),
-                    }
-                    LimiterCard {
-                        limiter: LimiterStrip { label: "LIMITER 1 + 2".into(), ..one.limiter.clone() },
-                        gr_second: two.limiter.gr_db,
-                        on_change: move |(unit, value)| on_limiter.call((0, unit, value)),
-                    }
-                }
-            }
-        };
-    }
+    let pair = view.rows.len() == 2;
+    let (linked_in, linked_out) = (pair && view.linked_inputs, pair && view.linked_outputs);
+    let named = |s: &Strip, label: &str| Strip { label: label.into(), ..s.clone() };
     rsx! {
         section { class: "tab-panel out",
             for (channel, row) in view.rows.iter().enumerate() {
-                div { class: "levels-row", key: "{channel}",
-                    LevelCard {
-                        strip: row.input.clone(),
-                        on_gain: move |db| on_gain.call((channel, 0, db)),
-                        on_mute: move |muted| on_mute.call((channel, 0, muted)),
-                    }
-                    LevelCard {
-                        strip: row.output.clone(),
-                        out: true,
-                        on_gain: move |db| on_gain.call((channel, 1, db)),
-                        on_mute: move |muted| on_mute.call((channel, 1, muted)),
-                    }
-                    LimiterCard {
-                        limiter: row.limiter.clone(),
-                        on_change: move |(unit, value)| on_limiter.call((channel, unit, value)),
+                if !(channel == 1 && linked_in && linked_out) {
+                    div { class: "levels-row", key: "{channel}",
+                        if linked_in && channel == 1 {
+                            div { class: "levels-empty" }
+                        } else if linked_in {
+                            LevelCard {
+                                strip: named(&row.input, "IN 1 + 2"),
+                                second: view.rows[1].input.clone(),
+                                on_gain: move |db| on_gain.call((0, 0, db)),
+                                on_mute: move |m| on_mute.call((0, 0, m)),
+                                on_mute_second: move |m| on_mute.call((1, 0, m)),
+                            }
+                        } else {
+                            LevelCard {
+                                strip: row.input.clone(),
+                                on_gain: move |db| on_gain.call((channel, 0, db)),
+                                on_mute: move |muted| on_mute.call((channel, 0, muted)),
+                            }
+                        }
+                        if linked_out && channel == 1 {
+                            div { class: "levels-empty" }
+                            div { class: "levels-empty" }
+                        } else if linked_out {
+                            LevelCard {
+                                strip: named(&row.output, "OUT 1 + 2"),
+                                second: view.rows[1].output.clone(),
+                                out: true,
+                                on_gain: move |db| on_gain.call((0, 1, db)),
+                                on_mute: move |m| on_mute.call((0, 1, m)),
+                                on_mute_second: move |m| on_mute.call((1, 1, m)),
+                            }
+                            LimiterCard {
+                                limiter: LimiterStrip { label: "LIMITER 1 + 2".into(), ..row.limiter.clone() },
+                                gr_second: view.rows[1].limiter.gr_db,
+                                on_change: move |(unit, value)| on_limiter.call((0, unit, value)),
+                            }
+                        } else {
+                            LevelCard {
+                                strip: row.output.clone(),
+                                out: true,
+                                on_gain: move |db| on_gain.call((channel, 1, db)),
+                                on_mute: move |muted| on_mute.call((channel, 1, muted)),
+                            }
+                            LimiterCard {
+                                limiter: row.limiter.clone(),
+                                on_change: move |(unit, value)| on_limiter.call((channel, unit, value)),
+                            }
+                        }
                     }
                 }
             }
@@ -704,9 +698,12 @@ pub fn MixeqPage(
     view: MixeqView,
     #[props(default)] on_pick: EventHandler<usize>,
     #[props(default)] on_tab: EventHandler<MixTab>,
-    /// LINK 1 + 2: both pairs linked, or both split (UX-17).
+    /// LINK INPUTS / LINK OUTPUTS on the Levels tab: that pair linked, or split (UX-17).
     #[props(default)]
-    on_link: EventHandler<bool>,
+    on_link: EventHandler<(Side, bool)>,
+    /// COPY on an EQ tab: take the EQ of the other channel (UX-20, BEH-33).
+    #[props(default)]
+    on_copy: EventHandler<()>,
     #[props(default)] on_gain: EventHandler<(usize, u8, f64)>,
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
@@ -721,11 +718,8 @@ pub fn MixeqPage(
     on_answer: EventHandler<bool>,
 ) -> Element {
     let amp_name = view.amps.get(view.selected).map(|a| a.name.clone()).unwrap_or_default();
-    let tabs = MixTab::row(view.linked_inputs, view.linked_outputs);
-    let tab = view.tab.visible(view.linked_inputs, view.linked_outputs).unwrap_or(MixTab::Levels);
+    let tab = view.tab;
     let side_class = if tab.side() == Side::Inputs { "in" } else { "out" };
-    // one link for everything: inputs and outputs (UX-17)
-    let linked = view.linked_inputs && view.linked_outputs;
     rsx! {
         div { class: "mixeq",
             div { class: "amp-picker",
@@ -769,7 +763,7 @@ pub fn MixeqPage(
                 }
             }
             div { class: "tab-row", role: "group", "aria-label": "Sections",
-                for t in tabs {
+                for t in MixTab::ALL {
                     button {
                         class: format!("mix-tab {}{}", if t.side() == Side::Inputs { "in" } else { "out" }, if t == tab { " on" } else { "" }),
                         "aria-pressed": "{t == tab}",
@@ -777,19 +771,27 @@ pub fn MixeqPage(
                         "{t.label()}"
                     }
                 }
-                button {
-                    class: if linked { "link-button on out" } else { "link-button" },
-                    "aria-pressed": "{linked}",
-                    "aria-label": if linked { "Split channels 1 and 2" } else { "Link channels 1 and 2, inputs and outputs" },
-                    onclick: move |_| on_link.call(!linked),
-                    if linked { "⛓ LINKED · click to split" } else { "⛓ LINK 1 + 2" }
+                if tab == MixTab::Levels {
+                    for (side, linked, name, side_class) in [
+                        (Side::Inputs, view.linked_inputs, "INPUTS", "in"),
+                        (Side::Outputs, view.linked_outputs, "OUTPUTS", "out"),
+                    ] {
+                        button {
+                            key: "{name}",
+                            class: if linked { "link-button on {side_class}" } else { "link-button" },
+                            "aria-pressed": "{linked}",
+                            "aria-label": if linked { "Split the {name} 1 and 2" } else { "Link the {name} 1 and 2" },
+                            onclick: move |_| on_link.call((side, !linked)),
+                            if linked { "⛓ {name} LINKED" } else { "⛓ LINK {name}" }
+                        }
+                    }
                 }
             }
             match tab {
                 MixTab::Levels => rsx! { LevelsPage { view: view.clone(), on_gain, on_mute, on_limiter } },
                 MixTab::Mixer => rsx! { MixerPage { rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
                 _ => match view.eq.clone() {
-                    Some(eq) => rsx! { EqPage { eq, on_set, on_delay } },
+                    Some(eq) => rsx! { EqPage { eq, on_set, on_delay, on_copy } },
                     None => rsx! { section { class: "tab-panel {side_class}" } },
                 },
             }
@@ -801,40 +803,21 @@ pub fn MixeqPage(
 mod tests {
     use super::*;
 
-    // UX-16, UX-17: six tabs; a linked pair shows one tab instead of two
+    // UX-16: six tabs, always the same
     #[test]
-    fn the_tab_row_follows_the_links() {
-        assert_eq!(MixTab::row(false, false).len(), 6);
+    fn the_six_tabs_never_change() {
+        assert_eq!(MixTab::ALL.len(), 6);
         assert_eq!(MixTab::In1.label(), "INPUT 1 · EQ");
-        assert_eq!(
-            MixTab::row(true, false),
-            [MixTab::Mixer, MixTab::Levels, MixTab::Inputs, MixTab::Out1, MixTab::Out2]
-        );
-        assert_eq!(
-            MixTab::row(false, true),
-            [MixTab::Mixer, MixTab::Levels, MixTab::In1, MixTab::In2, MixTab::Outputs]
-        );
-        assert_eq!(MixTab::row(true, true).len(), 4);
+        assert_eq!(MixTab::Out2.label(), "OUTPUT 2 · EQ");
     }
 
-    // UX-17: a tab that disappears under the user shows the shared tab instead, and back
+    // UX-16: the Levels tab is the outputs' colour, the Mixer and the input EQs the inputs'
     #[test]
-    fn a_hidden_tab_falls_back_to_the_shared_one() {
-        assert_eq!(MixTab::In2.visible(true, false), Some(MixTab::Inputs));
-        assert_eq!(MixTab::Out1.visible(false, true), Some(MixTab::Outputs));
-        assert_eq!(MixTab::In1.visible(false, false), Some(MixTab::In1));
-        assert_eq!(MixTab::Levels.visible(true, true), Some(MixTab::Levels));
-        assert_eq!(MixTab::Mixer.visible(true, true), Some(MixTab::Mixer));
-        assert_eq!(MixTab::Outputs.visible(false, false), Some(MixTab::Out1), "unlinked under the user");
-    }
-
-    // UX-17: the LINK button of a tab links its own pair; the Levels tab is the outputs'
-    #[test]
-    fn each_tab_links_its_own_pair() {
+    fn each_tab_has_the_colour_of_its_side() {
         assert_eq!(MixTab::Levels.side(), Side::Outputs);
         assert_eq!(MixTab::Out2.side(), Side::Outputs);
         assert_eq!(MixTab::In1.side(), Side::Inputs);
-        assert_eq!(MixTab::Inputs.side(), Side::Inputs);
+        assert_eq!(MixTab::Mixer.side(), Side::Inputs);
     }
 
     fn html(page: fn() -> Element) -> String {
@@ -876,27 +859,33 @@ mod tests {
         html(Probe)
     }
 
-    // UX-16, UX-17: the row shows the tabs of the links, and the link button says its state
+    // UX-16, UX-17: the six tabs stay whatever is linked; the links are on Levels, one per side
     #[test]
-    fn the_page_shows_the_row_and_the_links() {
+    fn the_page_shows_the_six_tabs_and_the_links_on_levels() {
         let out = page_html(view(false));
-        assert_eq!(out.matches("INPUT 1 · EQ").count(), 1, "{out}");
-        assert!(out.contains("INPUT 2 · EQ"));
-        assert!(out.contains("LINK 1 + 2"));
-        assert!(out.contains("Link channels 1 and 2, inputs and outputs"), "one link for both: {out}");
+        for tab in ["MIXER", "LEVELS", "INPUT 1 · EQ", "INPUT 2 · EQ", "OUTPUT 1 · EQ", "OUTPUT 2 · EQ"] {
+            assert_eq!(out.matches(tab).count(), 1, "{tab}: {out}");
+        }
+        assert!(out.contains("LINK INPUTS") && out.contains("LINK OUTPUTS"), "{out}");
+        assert!(out.contains("Link the INPUTS 1 and 2") && out.contains("Link the OUTPUTS 1 and 2"));
 
         let out = page_html(view(true));
-        assert!(out.contains("INPUTS 1 + 2 · EQ"), "one tab when linked: {out}");
-        assert!(!out.contains("INPUT 2 · EQ"));
+        assert!(out.contains("INPUT 2 · EQ"), "a link merges no EQ tab: {out}");
+        assert!(out.contains("INPUTS LINKED") && out.contains("LINK OUTPUTS"), "{out}");
+        assert!(out.contains("Split the INPUTS 1 and 2"));
+
+        for tab in [MixTab::Mixer, MixTab::In1, MixTab::Out2] {
+            let eq = tab.channel().map(eq_view);
+            let out = page_html(MixeqView { tab, eq, ..view(true) });
+            assert!(!out.contains("link-button"), "no link button on {tab:?}: {out}");
+        }
     }
 
-    // UX-20, BEH-31: an EQ tab edits its channel; a shared tab edits channel 1
+    // UX-20: an EQ tab edits its own channel
     #[test]
     fn each_eq_tab_edits_its_channel() {
         assert_eq!(MixTab::In2.channel(), Some(Channel::Input(1)));
-        assert_eq!(MixTab::Inputs.channel(), Some(Channel::Input(0)));
         assert_eq!(MixTab::Out2.channel(), Some(Channel::Output(1)));
-        assert_eq!(MixTab::Outputs.channel(), Some(Channel::Output(0)));
         assert_eq!(MixTab::Levels.channel(), None);
     }
 
@@ -947,6 +936,17 @@ mod tests {
         assert!(out.contains(">Low shelf<") && out.contains(">High-pass<"), "the amps' types: {out}");
         assert!(out.contains("10-band EQ") && out.contains("ALL OFF") && out.contains("RESET"));
         assert!(out.contains("class=\"curve\""));
+    }
+
+    // UX-20, BEH-33: the COPY button names the channel the EQ comes from
+    #[test]
+    fn the_copy_button_names_the_other_channel() {
+        assert_eq!(copy_label(Channel::Input(0)), "COPY FROM INPUT 2");
+        assert_eq!(copy_label(Channel::Input(1)), "COPY FROM INPUT 1");
+        assert_eq!(copy_label(Channel::Output(0)), "COPY FROM OUTPUT 2");
+        assert_eq!(copy_label(Channel::Output(1)), "COPY FROM OUTPUT 1");
+        assert!(eq_html(Channel::Input(1)).contains("COPY FROM INPUT 1"));
+        assert!(eq_html(Channel::Output(0)).contains("COPY FROM OUTPUT 2"));
     }
 
     // UX-20, BEH-30: an output has HPF and LPF with the amps' shapes, and delay; an input only delay
@@ -1019,7 +1019,7 @@ mod tests {
         assert_eq!(out.matches(">\u{2212}48<").count(), 8);
         assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
-        assert!(out.contains("Link channels 1 and 2"), "the LINK button on the Mixer too: {out}");
+        assert!(!out.contains("link-button"), "no link on the Mixer (UX-17): {out}");
         assert!(out.contains("tab-panel in"));
     }
 
@@ -1066,8 +1066,26 @@ mod tests {
         assert_eq!(out.matches("class=\"gr-bar half\"").count(), 2, "{out}");
         assert!(out.contains("Mute OUT 1 + 2 channel 1") && out.contains("Unmute OUT 1 + 2 channel 2"));
         assert!(out.contains("Mute IN 1 + 2 channel 2"));
-        assert!(out.contains("LINKED · click to split") && out.contains("Split channels 1 and 2"));
-        assert!(out.contains("INPUTS 1 + 2 · EQ") && out.contains("OUTPUTS 1 + 2 · EQ"));
+        assert!(out.contains("INPUTS LINKED") && out.contains("OUTPUTS LINKED"), "{out}");
+        assert!(!out.contains("levels-empty"), "nothing left of a second row: {out}");
+    }
+
+    // BEH-34: the sides are linked on their own; the second row keeps what is not linked
+    #[test]
+    fn one_linked_side_leaves_the_other_sides_second_row() {
+        let v = MixeqView { linked_inputs: true, rows: two_rows(), ..view(false) };
+        let out = page_html(v);
+        assert!(out.contains("class=\"legend\">IN 1 + 2<") && !out.contains(">IN 2<"), "{out}");
+        assert!(out.contains(">OUT 1<") && out.contains(">OUT 2<") && out.contains(">LIMITER 2<"), "{out}");
+        assert_eq!(out.matches("levels-empty").count(), 1, "the place of IN 2: {out}");
+        assert_eq!(out.matches("role=\"slider\"").count(), 3);
+
+        let v = MixeqView { linked_outputs: true, rows: two_rows(), ..view(false) };
+        let out = page_html(v);
+        assert!(out.contains(">IN 1<") && out.contains(">IN 2<"), "{out}");
+        assert!(out.contains(">OUT 1 + 2<") && out.contains(">LIMITER 1 + 2<") && !out.contains(">OUT 2<"));
+        assert_eq!(out.matches("levels-empty").count(), 2, "the places of OUT 2 and LIMITER 2: {out}");
+        assert_eq!(out.matches("role=\"slider\"").count(), 3);
     }
 
     // UX-17: split, Levels has its two rows again, each with one meter per fader
@@ -1079,7 +1097,7 @@ mod tests {
         assert_eq!(out.matches("role=\"slider\"").count(), 4);
         assert_eq!(out.matches("fader-meter mono").count(), 4);
         assert!(!out.contains("gr-bar half") && !out.contains("mute-pair"));
-        assert!(out.contains("⛓ LINK 1 + 2"));
+        assert!(out.contains("⛓ LINK INPUTS") && out.contains("⛓ LINK OUTPUTS"));
     }
 
     // BEH-37, UX-24: the preset bar sits on the page, and an action that mutes asks in a popup naming
@@ -1088,10 +1106,10 @@ mod tests {
     fn the_page_has_the_preset_bar_and_asks() {
         let out = page_html(view(false));
         assert!(out.contains("aria-label=\"Presets\"") && !out.contains("alertdialog"), "{out}");
-        let asking = MixeqView { asking: Some(Ask::Link), ..view(false) };
+        let asking = MixeqView { asking: Some(Ask::Link(Side::Outputs)), ..view(false) };
         let out = page_html(asking);
         assert!(
-            out.contains("role=\"alertdialog\"") && out.contains("Link channels 1 and 2 of FOH?"),
+            out.contains("role=\"alertdialog\"") && out.contains("Link the outputs 1 and 2 of FOH?"),
             "{out}"
         );
     }

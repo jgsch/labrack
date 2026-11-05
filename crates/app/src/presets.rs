@@ -5,6 +5,8 @@
 use std::path::PathBuf;
 
 use dioxus::prelude::*;
+use labgruppen::Channel;
+use labrack_core::Side;
 
 /// What the bar shows for the amp.
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -49,10 +51,42 @@ impl PresetView {
 /// An action that mutes the outputs of an amp, waiting for the user's yes (UX-24).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Ask {
-    Recall { slot: u32, name: String },
-    Store { slot: u32, name: String, replaces: Option<String> },
-    Load { path: PathBuf },
-    Link,
+    Recall {
+        slot: u32,
+        name: String,
+    },
+    Store {
+        slot: u32,
+        name: String,
+        replaces: Option<String>,
+    },
+    Load {
+        path: PathBuf,
+    },
+    /// Link the inputs or the outputs: channel 2 takes the level of channel 1.
+    Link(Side),
+    /// Copy the EQ of the other channel to this one.
+    CopyEq(Channel),
+}
+
+fn side_name(side: Side) -> &'static str {
+    match side {
+        Side::Inputs => "inputs",
+        Side::Outputs => "outputs",
+    }
+}
+
+/// "input 1", "output 2".
+fn channel_name(channel: Channel) -> String {
+    let kind = if channel.is_input() { "input" } else { "output" };
+    format!("{kind} {}", channel.index() + 1)
+}
+
+fn other(channel: Channel) -> Channel {
+    match channel {
+        Channel::Input(n) => Channel::Input(1 - n.min(1)),
+        Channel::Output(n) => Channel::Output(1 - n.min(1)),
+    }
 }
 
 impl Ask {
@@ -67,7 +101,10 @@ impl Ask {
                 let file = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
                 format!("Load the file {file} into {amp}?")
             }
-            Ask::Link => format!("Link channels 1 and 2 of {amp}?"),
+            Ask::Link(side) => format!("Link the {} 1 and 2 of {amp}?", side_name(*side)),
+            Ask::CopyEq(to) => {
+                format!("Copy the EQ of {} to {} on {amp}?", channel_name(other(*to)), channel_name(*to))
+            }
         }
     }
 
@@ -77,9 +114,20 @@ impl Ask {
         let muted = format!("Both outputs of {amp} are muted first and stay muted until you unmute them.");
         match self {
             Ask::Store { replaces: Some(old), .. } => format!("It replaces {old}. {muted}"),
-            Ask::Link => format!(
-                "Channel 2 takes every setting of channel 1, inputs and outputs. Both outputs of {amp} are \
-                 muted while it is done, then put back as they were."
+            Ask::Link(Side::Inputs) => format!(
+                "Input 2 takes the gain of input 1, and both follow each other from then on. Both outputs of \
+                 {amp} are muted while it is done, then put back as they were."
+            ),
+            Ask::Link(Side::Outputs) => format!(
+                "Output 2 takes the gain and the limiter of output 1, and both follow each other from then \
+                 on. Both outputs of {amp} are muted while it is done, then put back as they were."
+            ),
+            Ask::CopyEq(to) => format!(
+                "The bands{} of {} replace those of {}. Both outputs of {amp} are muted while it is done, \
+                 then put back as they were.",
+                if to.is_input() { "" } else { " and the filters" },
+                channel_name(other(*to)),
+                channel_name(*to)
             ),
             _ => muted,
         }
@@ -91,7 +139,8 @@ impl Ask {
             Ask::Recall { .. } => "RECALL",
             Ask::Store { .. } => "STORE",
             Ask::Load { .. } => "LOAD",
-            Ask::Link => "LINK",
+            Ask::Link(_) => "LINK",
+            Ask::CopyEq(_) => "COPY",
         }
     }
 }
@@ -248,7 +297,8 @@ mod tests {
             Ask::Recall { slot: 3, name: "Show".into() },
             Ask::Store { slot: 3, name: "Show".into(), replaces: Some("03 · Old".into()) },
             Ask::Load { path: PathBuf::from("/home/me/show.json") },
-            Ask::Link,
+            Ask::Link(Side::Outputs),
+            Ask::CopyEq(Channel::Output(1)),
         ];
         for ask in &asks {
             assert!(ask.title("FOH").contains("FOH"), "{ask:?}");
@@ -257,11 +307,18 @@ mod tests {
         for ask in &asks[..3] {
             assert!(ask.text("FOH").contains("stay muted until you unmute them"), "{ask:?}");
         }
-        assert!(asks[3].text("FOH").contains("put back as they were"));
+        for ask in &asks[3..] {
+            assert!(ask.text("FOH").contains("put back as they were"), "{ask:?}");
+        }
+        assert_eq!(asks[3].title("FOH"), "Link the outputs 1 and 2 of FOH?");
+        assert_eq!(asks[4].title("FOH"), "Copy the EQ of output 1 to output 2 on FOH?");
+        assert!(asks[3].text("FOH").contains("gain and the limiter"));
+        assert!(asks[4].text("FOH").contains("and the filters"), "outputs have filters");
+        assert!(!Ask::CopyEq(Channel::Input(0)).text("FOH").contains("filters"), "inputs have none");
         assert_eq!(asks[0].title("FOH"), "Recall preset 03 · Show on FOH?");
         assert!(asks[1].text("FOH").starts_with("It replaces 03 · Old."));
         assert_eq!(asks[2].title("FOH"), "Load the file show.json into FOH?");
-        assert_eq!(asks.map(|a| a.confirm()), ["RECALL", "STORE", "LOAD", "LINK"]);
+        assert_eq!(asks.map(|a| a.confirm()), ["RECALL", "STORE", "LOAD", "LINK", "COPY"]);
     }
 
     fn html(page: fn() -> Element) -> String {
