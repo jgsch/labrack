@@ -25,7 +25,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Find amps: IPX broadcasts, IPD announcements, optionally scan a /24 for IPD units
+    /// Find amps: IPX broadcasts, IPD announcements, optionally scan a /24 for IPD and IPX units
     Discover {
         #[arg(long, default_value_t = 5.0)]
         seconds: f64,
