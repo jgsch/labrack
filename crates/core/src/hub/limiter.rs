@@ -34,15 +34,25 @@ impl Hub {
     /// ONLINE, the state is not read yet, or there is no such output.
     pub fn limiter(&self, id: crate::AmpId, output: u8) -> Option<Limiter> {
         let session = self.session(id).ok()?;
-        self.limiter_of(id, output, &session)
+        self.limiter_of(id, output, &session, false)
     }
 
-    fn limiter_of(&self, id: crate::AmpId, output: u8, session: &Session) -> Option<Limiter> {
+    /// The limiter as a view shows it: with a threshold or load the amp has not confirmed yet
+    /// ([`Hub::shown`]).
+    pub fn limiter_shown(&self, id: crate::AmpId, output: u8) -> Option<Limiter> {
+        let session = self.session(id).ok()?;
+        self.limiter_of(id, output, &session, true)
+    }
+
+    fn limiter_of(&self, id: crate::AmpId, output: u8, session: &Session, shown: bool) -> Option<Limiter> {
         if output >= OUTPUTS {
             return None;
         }
         let number = |field: LimiterField| -> Option<f64> {
-            lock(&self.0.shared.live).get(&id)?.values.get(&param(output, field))?.as_f64()
+            let live = lock(&self.0.shared.live);
+            let amp = live.get(&id)?;
+            let key = param(output, field);
+            shown.then(|| amp.pending.get(&key)).flatten().or_else(|| amp.values.get(&key))?.as_f64()
         };
         if session.is_ipx() {
             // the dBu is what the amp's front panel shows and sets: the figures follow it
@@ -80,7 +90,7 @@ impl Hub {
         let ceiling = self.0.shared.store().get(id)?.ceilings.max_limiter_dbu;
         let top = ceiling.map_or(hi, |c| c.min(hi));
         // the load is only needed for watts
-        let ohm = self.limiter_of(id, output, &session).map(|l| l.ohm);
+        let ohm = self.limiter_of(id, output, &session, false).map(|l| l.ohm);
         let at = |dbu: f64| match (unit, ohm) {
             (Unit::Watt, None) => None,
             (_, ohm) => Some(Limiter::from_dbu(dbu, ohm.unwrap_or(0.0)).in_unit(unit)),
@@ -115,7 +125,7 @@ impl Hub {
         let ipx = session.is_ipx();
         let load =
             || self.0.shared.store().get(id).and_then(|a| a.load_ohms.get(usize::from(output)).copied());
-        let current = match self.limiter_of(id, output, &session) {
+        let current = match self.limiter_of(id, output, &session, false) {
             Some(current) => current,
             // an IPD whose threshold is not read yet can still take a new load
             None if !ipx && unit == Ohm => Limiter::from_dbu(0.0, load().ok_or(Error::UnknownAmp)?),
@@ -189,7 +199,12 @@ impl Hub {
                 routed.push((target, value.clone()));
             }
         }
+        // shown before the amp confirms it, as any control (`Hub::shown`)
+        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
+            amp.pending.extend(routed.iter().cloned());
+        }
         session.writer.push_all(routed);
+        self.0.shared.emit(crate::Update::Pending(id, param(output, LimiterField::Threshold)));
         Ok(())
     }
 }

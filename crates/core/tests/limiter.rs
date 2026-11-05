@@ -388,3 +388,14 @@ async fn a_file_cannot_carry_a_limiter_past_the_range_or_the_ceiling() {
     assert!(matches!(&got, Err(Error::Invalid(why)) if why.contains("ceiling")), "{got:?}");
     assert_eq!(fake.writes(), writes);
 }
+
+// UX-21: a threshold the hub took is shown at once in the four boxes, before the amp confirms it
+#[tokio::test]
+async fn a_taken_threshold_is_shown_at_once() {
+    let slow = labrack_core::Timing { write_interval: std::time::Duration::from_millis(600), ..timing() };
+    let (hub, id, _fake) = online_ipx(slow).await;
+    hub.set_limiter(id, 0, Unit::Dbu, 20.0).unwrap();
+    hub.set_limiter(id, 0, Unit::Dbu, 22.0).unwrap(); // waits for its turn
+    let shown = hub.limiter_shown(id, 0).unwrap();
+    assert!((shown.dbu - 22.0).abs() < 1e-9, "{shown:?}");
+}

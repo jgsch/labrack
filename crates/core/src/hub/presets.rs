@@ -193,6 +193,7 @@ impl Hub {
         let _gate = session.gate.lock().await;
         if drop_waiting {
             session.writer.clear();
+            self.0.shared.drop_pending(id);
         }
         let amp = &session.amp;
         let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());

@@ -421,3 +421,59 @@ async fn confirmed_writes_are_announced_as_changes() {
     .expect("the change is announced");
     assert_eq!(got, f(4.0));
 }
+
+// UX-21, UX-22: a value the hub took is shown at once, before the amp confirms it, so a box or a MUTE
+// never falls back to the old value meanwhile; what the amp holds is still `value`
+#[tokio::test]
+async fn a_taken_value_is_shown_until_the_amp_confirms_it() {
+    let slow = Timing { write_interval: Duration::from_millis(600), ..timing() };
+    let (hub, id, fake) = online_ipx(slow).await;
+    hub.set(id, param("out1.gain"), f(1.0)).unwrap();
+    wait_value(&hub, id, "out1.gain", f(1.0)).await;
+    let mut rx = hub.subscribe();
+
+    hub.set(id, param("out1.gain"), f(-7.0)).unwrap(); // waits for its turn
+    assert_eq!(hub.shown(id, &param("out1.gain")), Some(f(-7.0)), "shown at once");
+    assert_eq!(hub.value(id, &param("out1.gain")), Some(f(1.0)), "not yet in the amp");
+    assert!(
+        matches!(rx.try_recv(), Ok(Update::Pending(i, p)) if i == id && p == param("out1.gain")),
+        "the views are told to draw it"
+    );
+
+    wait_value(&hub, id, "out1.gain", f(-7.0)).await;
+    assert_eq!(ipx_value(&fake, "out1.gain"), f(-7.0));
+    assert_eq!(hub.shown(id, &param("out1.gain")), Some(f(-7.0)));
+    assert_eq!(hub.shown(id, &param("out2.gain")), hub.value(id, &param("out2.gain")), "nothing pending");
+}
+
+// a value the amp refuses is not shown any more: the view falls back to what the amp holds
+#[tokio::test]
+async fn a_refused_value_is_not_shown_any_more() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    fake.state().reject_writes.insert(ipx_params::slot(&param("out2.gain")).unwrap().addr);
+    let mut rx = hub.subscribe();
+    hub.set(id, param("out2.gain"), f(-6.0)).unwrap();
+    timeout(Duration::from_secs(10), async {
+        while !matches!(rx.recv().await.unwrap(), Update::WriteFailed(i, ..) if i == id) {}
+    })
+    .await
+    .expect("the failure is reported");
+    assert_eq!(hub.shown(id, &param("out2.gain")), Some(ipx_value(&fake, "out2.gain")));
+}
+
+// SEC-1: a value dropped with the connection is not shown either
+#[tokio::test]
+async fn a_dropped_value_is_not_shown() {
+    let slow = Timing { write_interval: Duration::from_millis(800), ..timing() };
+    let (hub, id, fake) = online_ipx(slow).await;
+    hub.set(id, param("out1.gain"), f(1.0)).unwrap();
+    wait_value(&hub, id, "out1.gain", f(1.0)).await;
+    hub.set(id, param("out1.gain"), f(2.0)).unwrap();
+    let mut rx = hub.subscribe();
+    fake.cmd.send(Cmd::Drop).unwrap();
+    next_status(&mut rx, id, Status::Reconnecting).await;
+    assert_eq!(hub.shown(id, &param("out1.gain")), None, "offline: nothing");
+    next_status(&mut rx, id, Status::Online).await;
+    wait_value(&hub, id, "out1.gain", f(1.0)).await;
+    assert_eq!(hub.shown(id, &param("out1.gain")), Some(f(1.0)));
+}

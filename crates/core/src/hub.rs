@@ -72,6 +72,8 @@ pub enum Update {
     WriteFailed(AmpId, Param, String),
     /// The MODIFIED flag of the amp changed ([`Hub::modified`]).
     Modified(AmpId, bool),
+    /// [`Hub::set`] took a value; it is shown before the amp confirms it ([`Hub::shown`]).
+    Pending(AmpId, Param),
     /// The loaded preset of the amp changed (`Hub::amps`).
     Preset(AmpId),
     /// The user level or the rights of an IPD changed ([`Hub::access`]).
@@ -138,6 +140,9 @@ struct Live {
     access: Option<Access>,
     /// The open connection, while ONLINE and until it ends.
     session: Option<Session>,
+    /// Values [`Hub::set`] took that the amp has not confirmed yet, shown meanwhile ([`Hub::shown`]).
+    /// Gone when the amp confirms or refuses them, or when they are dropped (bulk change, connection).
+    pending: HashMap<Param, Value>,
 }
 
 #[derive(Clone)]
@@ -195,6 +200,7 @@ impl Shared {
                 amp.diverged = [false; 2];
                 amp.access = None;
                 amp.session = None;
+                amp.pending.clear();
             }
             next
         };
@@ -317,6 +323,23 @@ impl Shared {
             amp.values.retain(|param, _| matches!(param, Param::Mute(Channel::Output(_))));
             amp.loaded = false;
             amp.diverged = [false; 2];
+            amp.pending.clear();
+        }
+    }
+
+    /// The values waiting to be written were dropped: they are not shown any more.
+    fn drop_pending(&self, id: AmpId) {
+        if let Some(amp) = lock(&self.live).get_mut(&id) {
+            amp.pending.clear();
+        }
+    }
+
+    /// The amp confirmed or refused `value` for `param`: it is no longer pending, unless a newer value is.
+    fn settle(&self, id: AmpId, param: &Param, value: &Value) {
+        if let Some(amp) = lock(&self.live).get_mut(&id)
+            && amp.pending.get(param) == Some(value)
+        {
+            amp.pending.remove(param);
         }
     }
 
@@ -436,6 +459,14 @@ impl Hub {
         lock(&self.0.shared.live).get(&id).is_some_and(|amp| amp.loaded)
     }
 
+    /// What a view shows for `param`: the value [`Hub::set`] took while the amp has not confirmed it,
+    /// or else [`Hub::value`]. A box, a fader or a MUTE then never falls back to the old value meanwhile.
+    pub fn shown(&self, id: AmpId, param: &Param) -> Option<Value> {
+        let live = lock(&self.0.shared.live);
+        let amp = live.get(&id)?;
+        amp.pending.get(param).or_else(|| amp.values.get(param)).cloned()
+    }
+
     /// The DSP state of the amp; empty when it is not ONLINE.
     pub fn values(&self, id: AmpId) -> HashMap<Param, Value> {
         lock(&self.0.shared.live).get(&id).map(|amp| amp.values.clone()).unwrap_or_default()
@@ -468,7 +499,11 @@ impl Hub {
         let spec = session.amp.spec(&param).ok_or(Error::NotControllable)?;
         let checked = dsp::check(&param, &spec, &value, &ceilings)?;
         let targets = self.route(id, &session, &param)?;
+        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
+            amp.pending.extend(targets.iter().map(|target| (target.clone(), checked.clone())));
+        }
         session.writer.push_all(targets.into_iter().map(|target| (target, checked.clone())));
+        self.0.shared.emit(Update::Pending(id, param));
         Ok(())
     }
 
@@ -660,6 +695,7 @@ impl Hub {
                         diverged: [false; 2],
                         access: None,
                         session: None,
+                        pending: HashMap::new(),
                     };
                     lock(&shared.live).insert(amp.id, live);
                     let (sender, receiver) = watch::channel(target);
@@ -817,6 +853,7 @@ async fn write_loop(
             if !due.is_empty() {
                 let results = amp.set_many(&due).await;
                 for ((param, value), result) in due.into_iter().zip(results) {
+                    shared.settle(id, &param, &value);
                     match result {
                         Ok(()) => shared.observed(id, &param, &value, true),
                         Err(e) => shared.emit(Update::WriteFailed(id, param, e.to_string())),
