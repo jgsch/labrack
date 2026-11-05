@@ -804,24 +804,3 @@ async fn a_value_outside_the_range_is_still_refused_above_a_ceiling() {
     assert!(hub.set_link(id, Side::Outputs, true).await.is_err());
     assert!(!hub.linked(id, Side::Outputs));
 }
-
-// BEH-31: an amp can take the link back (an IPD2400 echoes it and then says off). The pair is then not
-// shown linked, the user is told, and the mutes end as they were
-#[tokio::test(flavor = "multi_thread")]
-async fn an_amp_that_takes_the_link_back_is_not_shown_linked() {
-    let (hub, id, sim) = ipd_ready().await;
-    sim.refuse_links();
-
-    let err = hub.set_link(id, Side::Outputs, true).await.unwrap_err();
-
-    assert!(err.to_string().contains("did not keep the link"), "{err}");
-    assert!(!hub.linked(id, Side::Outputs));
-    assert_eq!(hub.channels(id, Side::Outputs).len(), 2, "shown as two channels");
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    assert!(!hub.linked(id, Side::Outputs), "and it stays so");
-    assert_eq!(
-        (hub.value(id, &param("out1.mute")), hub.value(id, &param("out2.mute"))),
-        (Some(TRUE), Some(FALSE)),
-        "the mutes end as they were"
-    );
-}

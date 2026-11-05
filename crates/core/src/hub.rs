@@ -43,8 +43,6 @@ pub struct Timing {
     pub scan_window: Duration,
     /// A parameter is written at most this often while it is being changed (SEC-4).
     pub write_interval: Duration,
-    /// How long after a link is switched on the amp is asked whether it kept it.
-    pub link_settle: Duration,
 }
 
 impl Default for Timing {
@@ -55,7 +53,6 @@ impl Default for Timing {
             meter_interval: Duration::from_millis(100),
             scan_window: Duration::from_secs(5),
             write_interval: Duration::from_millis(50),
-            link_settle: Duration::from_millis(1500),
         }
     }
 }
