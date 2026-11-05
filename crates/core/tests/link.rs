@@ -780,3 +780,27 @@ async fn an_ipd_found_linked_is_shown_linked_and_never_written_on_channel_2() {
         &sim.writes()[writes..]
     );
 }
+
+// BEH-31: channel 1 may hold a value a hair outside the range (the vendor app stores 36.02 dBu for 69 Vpk,
+// whose 35.99 is the top of the range): linking copies the nearest value in range instead of failing (the
+// amp then copies channel 1 itself when the link goes on, so what it holds is not what is checked)
+#[tokio::test(flavor = "multi_thread")]
+async fn linking_does_not_fail_on_a_value_just_outside_the_range() {
+    let (hub, id, fake) = ipx_ready().await;
+    front_panel(&fake, "out1.limiter.threshold_dbu", f(36.02));
+
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+
+    assert!(hub.linked(id, Side::Outputs));
+}
+
+// the ceilings still refuse: a clamp to the range never gets past the user's ceiling (SEC-3)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_value_outside_the_range_is_still_refused_above_a_ceiling() {
+    let (hub, id, fake) = ipx_ready().await;
+    hub.set_ceilings(id, Ceilings { max_limiter_dbu: Some(30.0), ..Ceilings::default() }).unwrap();
+    front_panel(&fake, "out1.limiter.threshold_dbu", f(36.02));
+
+    assert!(hub.set_link(id, Side::Outputs, true).await.is_err());
+    assert!(!hub.linked(id, Side::Outputs));
+}

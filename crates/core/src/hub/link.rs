@@ -171,6 +171,14 @@ impl Hub {
         for (master, value) in masters.iter().zip(values) {
             let Some(twin) = link::second(master) else { continue };
             let Some(spec) = session.amp.spec(&twin).filter(|spec| spec.writable) else { continue };
+            // channel 1 may hold a hair more than the range (the vendor app stores 36.02 dBu for the
+            // 35.99 dBu of 69 Vpk): copy the nearest value in range. The ceilings still decide below.
+            let value = match (value.as_f64(), &value) {
+                (Some(x), Value::Float(_)) => Value::Float(
+                    x.clamp(spec.min.unwrap_or(f64::NEG_INFINITY), spec.max.unwrap_or(f64::INFINITY)),
+                ),
+                _ => value,
+            };
             let checked = dsp::check(&twin, &spec, &value, &ceilings)
                 .map_err(|e| Error::Invalid(format!("Cannot link: {twin}: {e}")))?;
             copy.push((twin, checked));
