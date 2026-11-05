@@ -738,3 +738,45 @@ async fn a_linked_ipd_never_drifts() {
     wait_value(&hub, id, "out2.gain", f(-3.0)).await;
     assert!(hub.link_drift(id, Side::Outputs).is_empty());
 }
+
+// BEH-32: an IPD cannot differ. A pair it already flags linked while channel 2 still holds other values
+// (linked on the amp, or by another tool) is shown linked with channel 1's values, and LINK writes
+// nothing: writing channel 2 of a linked IPD can leave it unanswering for 3 s
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipd_found_linked_is_shown_linked_and_never_written_on_channel_2() {
+    use labgruppen::amps::ipd::IpdAmp;
+    use labgruppen::amps::ipd::client::Options;
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let other = IpdAmp::connect_with(
+        "127.0.0.1",
+        sim.addr.port(),
+        Options { mk2: None, timeout: Duration::from_secs(5) },
+    )
+    .await
+    .unwrap();
+    for (name, value) in [("out1.gain", f(-3.0)), ("out2.gain", f(-10.0)), ("out1.link", TRUE)] {
+        labgruppen::Amp::set(&other, &param(name), value).await.unwrap();
+    }
+    labgruppen::Amp::close(&other).await;
+    let writes = sim.writes().len();
+
+    let (hub, local) = hub();
+    local.route("10.0.0.1", sim.addr.port());
+    let id = hub.add_manual("Right", labrack_core::Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+
+    assert!(hub.linked(id, Side::Outputs), "shown linked");
+    assert!(!hub.link_diverged(id, Side::Outputs));
+    assert_eq!(hub.value(id, &param("out2.gain")), Some(f(-3.0)), "channel 2 shows channel 1");
+
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    set_and_wait(&hub, id, "out1.gain", f(-4.0)).await;
+    sleep(Duration::from_millis(300)).await;
+    assert!(hub.linked(id, Side::Outputs) && !hub.link_diverged(id, Side::Outputs), "still linked");
+    assert_eq!(sim.link_violations(), []);
+    assert!(
+        sim.writes()[writes..].iter().all(|k| k.channel & 0x7F == 0 || k.struct_id == S_MUTE),
+        "{:?}",
+        &sim.writes()[writes..]
+    );
+}

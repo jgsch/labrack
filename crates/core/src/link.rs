@@ -86,12 +86,41 @@ pub(crate) fn second(param: &Param) -> Option<Param> {
     })
 }
 
+/// The same setting on channel 1, for a setting of channel 2.
+pub(crate) fn first(param: &Param) -> Option<Param> {
+    let to = |c: Channel| match c {
+        Channel::Input(1) => Some(Channel::Input(0)),
+        Channel::Output(1) => Some(Channel::Output(0)),
+        _ => None,
+    };
+    Some(match param.clone() {
+        Param::Gain(c) => Param::Gain(to(c)?),
+        Param::Delay(c) => Param::Delay(to(c)?),
+        Param::Eq { ch, band, field } => Param::Eq { ch: to(ch)?, band, field },
+        Param::Xover { ch, filter, field } => Param::Xover { ch: to(ch)?, filter, field },
+        Param::Limiter { ch, field } => Param::Limiter { ch: to(ch)?, field },
+        _ => return None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn param(s: &str) -> Param {
         s.parse().unwrap()
+    }
+
+    // BEH-32: first and second are each other's way back
+    #[test]
+    fn first_undoes_second() {
+        for name in
+            ["out1.gain", "in1.delay", "out1.eq.3.freq", "out1.xover.hp.freq", "out1.limiter.threshold"]
+        {
+            let one = param(name);
+            assert_eq!(first(&second(&one).unwrap()), Some(one), "{name}");
+        }
+        assert_eq!(first(&param("out1.gain")), None);
     }
 
     // BEH-31

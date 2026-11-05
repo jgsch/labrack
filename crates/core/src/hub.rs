@@ -226,22 +226,41 @@ impl Shared {
         let (changed, flipped, twin, regrouped) = {
             let mut live = lock(&self.live);
             let Some(amp) = live.get_mut(&id).filter(|amp| amp.session.is_some()) else { return };
+            // an IPD mirrors a linked pair by itself and tells nothing of channel 2: the state follows
+            let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
+            let linked = |values: &HashMap<Param, Value>, side: pair::Side| {
+                values.get(&side.flag()) == Some(&Value::Bool(true))
+            };
+            // and it cannot differ (BEH-32): what it reports for channel 2 of a linked pair is channel 1's
+            let value = match pair::follows(param) {
+                Some(side) if ipd && pair::is_second(param) && linked(&amp.values, side) => {
+                    pair::first(param)
+                        .and_then(|first| amp.values.get(&first).cloned())
+                        .unwrap_or_else(|| value.clone())
+                }
+                _ => value.clone(),
+            };
+            let value = &value;
             let old = amp.values.insert(param.clone(), value.clone());
             let changed = old.as_ref() != Some(value);
             let modifies = changed && (old.is_some() || own);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
-            // an IPD mirrors a linked pair by itself and tells nothing of channel 2: the state follows
-            let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
-            let linked = |side: pair::Side| amp.values.get(&side.flag()) == Some(&Value::Bool(true));
             let twin = pair::follows(param)
-                .filter(|side| ipd && !pair::is_second(param) && linked(*side))
+                .filter(|side| ipd && !pair::is_second(param) && linked(&amp.values, *side))
                 .and_then(|_| pair::second(param));
             if let Some(twin) = &twin {
                 amp.values.insert(twin.clone(), value.clone());
             }
+            // an IPD that links a pair by itself makes channel 2 equal at once
+            if ipd
+                && value == &Value::Bool(true)
+                && let Some(side) = pair::flag_side(param)
+            {
+                mirror_ipd(&mut amp.values, side);
+            }
             // what the amp reports about a pair decides whether it is shown linked: the app writes nothing
-            let regrouped = (!own && changed && amp.loaded)
+            let regrouped = (!own && changed && amp.loaded && !ipd)
                 .then(|| pair::follows(param).or_else(|| pair::flag_side(param)))
                 .flatten()
                 .filter(|side| {
@@ -314,10 +333,15 @@ impl Shared {
                 }
             }
             amp.loaded = true;
-            // a pair the amp flags linked while its channels differ is shown as two: connecting only reads
+            let ipd = amp.session.as_ref().is_some_and(|s| !s.is_ipx());
+            // a pair the amp flags linked while its channels differ is shown as two: connecting only reads.
+            // An IPD cannot differ (BEH-32): its channel 2 is shown as channel 1, which the amp mirrors
             for side in [Side::Inputs, Side::Outputs] {
                 let flagged = amp.values.get(&side.flag()) == Some(&Value::Bool(true));
-                let diverged = flagged && !link::side_drift(&amp.values, side).is_empty();
+                if ipd && flagged {
+                    mirror_ipd(&mut amp.values, side);
+                }
+                let diverged = !ipd && flagged && !link::side_drift(&amp.values, side).is_empty();
                 amp.diverged[side as usize] = diverged;
                 if diverged {
                     shown_apart.push(side);
@@ -338,6 +362,16 @@ impl Shared {
         }
         self.emit(Update::Meters(id, meters));
     }
+}
+
+/// Channel 2 of a pair an IPD has linked takes channel 1's values in the state, as in the amp.
+fn mirror_ipd(values: &mut HashMap<Param, Value>, side: Side) {
+    let copies: Vec<(Param, Value)> = values
+        .iter()
+        .filter(|(param, _)| pair::follows(param) == Some(side) && !pair::is_second(param))
+        .filter_map(|(param, value)| pair::second(param).map(|twin| (twin, value.clone())))
+        .collect();
+    values.extend(copies);
 }
 
 struct Inner {
