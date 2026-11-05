@@ -265,7 +265,6 @@ impl Meters {
 impl From<&Meters> for crate::model::Meters {
     fn from(m: &Meters) -> Self {
         let extra = [
-            ("post_input", m.post_input),
             ("output_signal", m.output),
             // the two input signals are what ANALOG 1 and ANALOG 2 bring to the mixer; there is no
             // meter for AES 1 and 2
@@ -274,7 +273,9 @@ impl From<&Meters> for crate::model::Meters {
             ("gain_reduction_b", m.gain_reduction_b),
         ];
         crate::model::Meters {
-            input: m.input.to_vec(),
+            // IN 1 and IN 2 are the DSP channels, after the mixer and the input gain: with analog 2 in
+            // both mixers, both read the signal (the "input signal" pair is the connectors, before them)
+            input: m.post_input.to_vec(),
             // the pair that follows the output gain and the signal on a live IPX 1200; the "output
             // signal" pair (indices 2-3) read -150 dB with the outputs unmuted and the amp playing
             output: m.amp.to_vec(),

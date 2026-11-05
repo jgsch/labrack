@@ -276,9 +276,9 @@ fn meters_and_names() {
     let common: labgruppen::Meters = (&m).into();
     assert_eq!(common.output, m.amp.to_vec(), "the output level is the amp pair (indices 6-7)");
     assert_eq!(common.extra["output_signal"], m.output.to_vec());
-    assert_eq!(common.extra["post_input"], m.post_input.to_vec());
+    assert_eq!(common.input, m.post_input.to_vec(), "IN 1 and 2 are the channels after the mixer");
     assert_eq!(common.extra["raw_input"], m.input.to_vec(), "ANALOG 1 and 2 for the mixer");
-    assert_eq!(common.extra.len(), 5);
+    assert_eq!(common.extra.len(), 4);
 
     let names = parse_preset_names(&fixture("preset_names.bin"));
     assert_eq!(names.len(), 50);
@@ -558,7 +558,7 @@ async fn meters_and_events() {
     assert_eq!(latest, meters);
     assert_eq!(
         latest.extra.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["gain_reduction_a", "gain_reduction_b", "output_signal", "post_input", "raw_input"]
+        ["gain_reduction_a", "gain_reduction_b", "output_signal", "raw_input"]
     );
 
     let push = build_frame(Main::DEVPRMCHAGE, [Env::OUTPUT_LEVEL, 0, 0, 0], &5.5f32.to_le_bytes()).unwrap();
