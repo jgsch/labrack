@@ -501,6 +501,7 @@ fn BandRow(
                     label: "Band {n} gain in decibels",
                     value: value.gain,
                     bounds: bounds.gain,
+                    ask_from: 0.0,
                     on_change: move |db| set(EqField::Gain, Value::Float(db)),
                 }
             } else {

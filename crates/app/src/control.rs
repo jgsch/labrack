@@ -114,9 +114,10 @@ pub fn typed(text: &str, bounds: Bounds, unit: &str) -> Result<f64, NotTaken> {
 /// A typed value that raises a level by more than this asks first (UX-24).
 pub const RAISE_ASK: f64 = 6.0;
 
-/// Whether taking `next` over `current` has to be confirmed: a raise of more than 6 dB.
-pub fn needs_confirmation(current: f64, next: f64) -> bool {
-    next - current > RAISE_ASK
+/// Whether taking `next` over `current` has to be confirmed: a raise of more than 6 dB, counted from
+/// `from` at least. An EQ band counts from flat (0 dB): taking a cut of -12 dB to -1 dB is no boost.
+pub fn needs_confirmation(current: f64, next: f64, from: f64) -> bool {
+    next - current.max(from) > RAISE_ASK
 }
 
 /// A confirmation that takes two clicks on the same control (UX-24, SEC-5).
@@ -352,10 +353,20 @@ mod tests {
     // UX-24: a raise of more than 6 dB by typing asks first
     #[test]
     fn a_big_raise_asks_first() {
-        assert!(!needs_confirmation(-12.0, -6.0), "6 dB exactly");
-        assert!(needs_confirmation(-12.0, -5.9));
-        assert!(!needs_confirmation(-2.0, -8.0), "a cut never asks");
-        assert!(!needs_confirmation(0.0, 0.0));
+        let any = f64::NEG_INFINITY;
+        assert!(!needs_confirmation(-12.0, -6.0, any), "6 dB exactly");
+        assert!(needs_confirmation(-12.0, -5.9, any));
+        assert!(!needs_confirmation(-2.0, -8.0, any), "a cut never asks");
+        assert!(!needs_confirmation(0.0, 0.0, any));
+    }
+
+    // UX-24: an EQ band counts a raise from flat, so easing a cut off does not ask
+    #[test]
+    fn easing_an_eq_cut_off_does_not_ask() {
+        assert!(!needs_confirmation(-12.0, -1.0, 0.0), "still a cut");
+        assert!(!needs_confirmation(-12.0, 6.0, 0.0), "a 6 dB boost");
+        assert!(needs_confirmation(-12.0, 6.1, 0.0));
+        assert!(needs_confirmation(2.0, 8.1, 0.0), "from where it is when that is above flat");
     }
 
     // UX-24, SEC-5: the second click within 3 s confirms, after it the button only arms again

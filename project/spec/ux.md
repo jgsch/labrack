@@ -95,7 +95,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   the amplifier, says that its outputs will be muted and, for recall, store and load, that they
   stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
   same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a
-  confirmation dialog.
+  confirmation dialog. An EQ band's gain counts the raise from 0 dB at least: easing a cut off
+  (-12 to -1 dB) does not ask.
 - **UX-25** Search switches use a toggle with a status line; a disabled SCAN NOW is dimmed.
 - **UX-26** Error text is red and appears beside the control that caused it.
 - **UX-27** Hover brightens buttons and tabs slightly.

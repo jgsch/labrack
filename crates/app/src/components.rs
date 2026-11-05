@@ -143,6 +143,9 @@ pub fn ValueField(
     /// A raise of more than 6 dB asks first (UX-24); a load or a power is not a level.
     #[props(default = true)]
     ask_raise: bool,
+    /// A raise is counted from this level at least: 0 for an EQ band, where a cut eased off is no boost.
+    #[props(default = f64::NEG_INFINITY)]
+    ask_from: f64,
     /// Decimals shown: one for levels, two for a Q.
     #[props(default = 1)]
     digits: usize,
@@ -153,7 +156,8 @@ pub fn ValueField(
     let error = use_signal(String::new);
     let mut asked = use_signal(|| None::<f64>);
     let shown = draft().unwrap_or_else(|| control::number_to(value, digits));
-    let field = Committed { draft, error, asked, value, bounds, unit: unit.clone(), ask_raise, on_change };
+    let field =
+        Committed { draft, error, asked, value, bounds, unit: unit.clone(), ask_raise, ask_from, on_change };
 
     rsx! {
         div { class: "value-field",
@@ -210,6 +214,7 @@ struct Committed {
     bounds: Bounds,
     unit: String,
     ask_raise: bool,
+    ask_from: f64,
     on_change: EventHandler<f64>,
 }
 
@@ -224,7 +229,7 @@ impl Committed {
         match control::typed(&raw, self.bounds, &self.unit) {
             Err(why) => error.set(why.0),
             Ok(next) if next == self.value => error.set(String::new()),
-            Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next) => {
+            Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next, self.ask_from) => {
                 error.set(String::new());
                 asked.set(Some(next));
             }
