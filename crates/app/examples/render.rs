@@ -74,6 +74,8 @@ fn main() {
         ("mixer-demo", mixer_demo),
         ("linked-demo", linked_demo),
         ("ask-demo", ask_demo),
+        ("eq-inputs-demo", eq_inputs_demo),
+        ("eq-outputs-demo", eq_outputs_demo),
     ] {
         let mut dom = VirtualDom::new(page);
         dom.rebuild_in_place();
@@ -219,7 +221,8 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
     let bands = (0..10u8)
         .map(|i| Band { on: on[usize::from(i)], gain: gains[usize::from(i)], ..default_band(i) })
         .collect();
-    let output = tab == labrack_app::MixTab::Out1;
+    let output = matches!(tab, labrack_app::MixTab::Out1 | labrack_app::MixTab::Outputs);
+    let linked = matches!(tab, labrack_app::MixTab::Inputs | labrack_app::MixTab::Outputs);
     let eq = labrack_app::EqView {
         channel: if output { Channel::Output(0) } else { Channel::Input(0) },
         bands,
@@ -244,6 +247,8 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab,
+        linked_inputs: linked,
+        linked_outputs: linked,
         eq: Some(eq),
         presets: demo_presets(),
         ..labrack_app::MixeqView::default()
@@ -263,6 +268,15 @@ fn eq_in_demo() -> Element {
 
 fn eq_out_demo() -> Element {
     eq_demo(labrack_app::MixTab::Out1, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
+}
+
+/// The shared EQ tabs of a linked amp (boards 08 and 09).
+fn eq_inputs_demo() -> Element {
+    eq_demo(labrack_app::MixTab::Inputs, [2.4, -0.8, 0.0, -1.6, 0.0, -2.4, 0.0, 0.0, -0.8, 0.0])
+}
+
+fn eq_outputs_demo() -> Element {
+    eq_demo(labrack_app::MixTab::Outputs, [-0.8, 1.6, 0.0, 0.8, 0.0, 0.0, 2.4, 0.0, 1.6, 0.0])
 }
 
 /// The Mixer with the sources of the mockup's board 02: ANALOG 1 into IN 1, ANALOG 2 into IN 2.

@@ -19,13 +19,13 @@ No spec change; implements:
 
 ## Tasks
 
-- [ ] Amp selector and tab row with link buttons
+- [x] Amp selector and tab row with link buttons
 - [x] Mixer tab
 - [x] Levels tab (IN / OUT / LIMITER rows, same-size dB box and MUTE)
 - [x] EQ tab component (10 bands; outputs add HPF, LPF, delay)
 - [x] Linked layouts
 - [x] Preset actions
-- [ ] Screenshots compared with the Mix & EQ boards
+- [x] Screenshots compared with the Mix & EQ boards
 
 ## Done when
 
@@ -72,6 +72,8 @@ No spec change; implements:
   dioxus-desktop already builds. LINK now asks too (UX-24 lists it; it did not before). Core:
   `Hub::preset_slots`. The preset of an amp on the Amplifiers page now opens Mix & EQ on that amp (it
   kept the amp picked before).
+- **Screenshots**: `mise run app-shot` renders a demo beside each Mix & EQ board, 02 to 05 and 07 to
+  09 (`eq-inputs-demo`, `eq-outputs-demo` for the linked EQ tabs).
 - **Still to do**: the boxes show
   `0` where the boards show `0.0` (`control::number`).
 
