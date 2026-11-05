@@ -275,7 +275,9 @@ async fn the_lan_finder_hears_an_ipx_broadcast() {
 
     match finder.await.unwrap() {
         // the scan of the local networks may find real amps as well (it does when one is on)
-        Ok(found) => assert!(found.contains(&"10.1.2.30".parse::<std::net::Ipv4Addr>().unwrap()), "{found:?}"),
+        Ok(found) => {
+            assert!(found.contains(&"10.1.2.30".parse::<std::net::Ipv4Addr>().unwrap()), "{found:?}")
+        }
         // Port 52350 taken by something else on this machine.
         Err(labgruppen::Error::Io(e)) => eprintln!("skipping the broadcast test: {e}"),
         Err(e) => panic!("{e}"),

@@ -85,7 +85,6 @@ pub fn AmplifierPanel(
     #[props(default)] on_preset: EventHandler<()>,
 ) -> Element {
     let colour = status_colour(view.status);
-    let index = format!("{:02}", view.index + 1);
     let preset = view.preset.clone().unwrap_or_else(|| "—".into());
     let ip_style = if ip_wrong(view.status) { "color: #f38ba8" } else { "" };
     let muted = view.muted;
@@ -94,41 +93,37 @@ pub fn AmplifierPanel(
     rsx! {
         section { class: "amp-panel",
             div { class: "amp-ident",
-                span { class: "amp-index", "{index}" }
-                div { class: "amp-main",
-                    div { class: "amp-name-row",
-                        span { class: "amp-name", "{view.name}" }
-                        button {
-                            class: "small-button",
-                            "aria-label": if view.status == Status::Disconnected { "Connect" } else { "Disconnect" },
-                            onclick: move |_| on_connect.call(view.status == Status::Disconnected),
-                            if view.status == Status::Disconnected { "CONNECT" } else { "DISCONNECT" }
-                        }
-                    }
+                span { class: "amp-name", "{view.name}" }
+                div { class: "amp-status-row",
                     span { class: "status", style: "color: {colour}",
                         span { class: "dot", style: "background: {colour}" }
                         "{view.status.label()}"
                     }
-                    div { class: "ip-row",
-                        span { class: "label", "IP" }
-                        input {
-                            class: "ip-input",
-                            r#type: "text",
-                            inputmode: "decimal",
-                            autocomplete: "off",
-                            "aria-label": "IP address of {view.name}",
-                            value: "{view.ip}",
-                            style: "{ip_style}",
-                            onchange: move |event| on_ip.call(event.value()),
-                        }
+                    span { class: "amp-badge", "{view.protocol}" }
+                    button {
+                        class: "small-button",
+                        "aria-label": if view.status == Status::Disconnected { "Connect" } else { "Disconnect" },
+                        onclick: move |_| on_connect.call(view.status == Status::Disconnected),
+                        if view.status == Status::Disconnected { "CONNECT" } else { "DISCONNECT" }
                     }
-                    div { class: "preset-row",
-                        span { class: "label", "PRESET" }
-                        button { class: "preset-link", onclick: move |_| on_preset.call(()),
-                            span { class: "preset-name", "{preset}" }
-                            if view.modified {
-                                span { class: "modified", "MODIFIED" }
-                            }
+                }
+                div { class: "amp-info",
+                    span { class: "label", "IP" }
+                    input {
+                        class: "ip-input",
+                        r#type: "text",
+                        inputmode: "decimal",
+                        autocomplete: "off",
+                        "aria-label": "IP address of {view.name}",
+                        value: "{view.ip}",
+                        style: "{ip_style}",
+                        onchange: move |event| on_ip.call(event.value()),
+                    }
+                    span { class: "label", "PRESET" }
+                    button { class: "preset-link", onclick: move |_| on_preset.call(()),
+                        span { class: "preset-name", "{preset}" }
+                        if view.modified {
+                            span { class: "modified", "MODIFIED" }
                         }
                     }
                 }
@@ -245,11 +240,12 @@ mod tests {
         panel_html(AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", status))
     }
 
-    // UX-11, BEH-8: the panel shows the index, the name, the status and the address
+    // UX-11, BEH-8: the panel shows the name, the protocol, the status and the address, and no index
     #[test]
     fn a_panel_shows_the_amplifier() {
         let out = panel(Status::Online);
-        assert!(out.contains(">01<"), "the index: {out}");
+        assert!(!out.contains(">01<"), "no index: {out}");
+        assert!(out.contains("class=\"amp-badge\">IPD<"), "the protocol: {out}");
         assert!(out.contains("FOH Main L"));
         assert!(out.contains("ONLINE"));
         assert!(out.contains("192.168.1.21"));

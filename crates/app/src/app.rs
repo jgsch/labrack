@@ -14,7 +14,7 @@ use crate::mixeq::{
     AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixRow, MixTab, MixeqView,
     SOURCE_NAMES, Strip,
 };
-use crate::presets::{Ask, PresetView, slot_text};
+use crate::presets::{Ask, PresetView, loaded_text, slot_text};
 use crate::search::{KnownAmp, SearchView};
 use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
 
@@ -42,8 +42,9 @@ pub fn App() -> Element {
     let mut delays = use_signal(HashMap::<(AmpId, Channel), f64>::new);
     // the presets each amp has stored, read when it goes ONLINE and after a store (BEH-36)
     let preset_lists = use_signal(HashMap::<AmpId, Vec<Preset>>::new);
-    // what the last preset action of an amp did, and whether it failed
+    // why the last action of an amp failed, and what an amp is busy with (the toasts, UX-29)
     let preset_errors: Errors = use_signal(HashMap::new);
+    let busy: Busy = use_signal(HashMap::new);
     // the action that mutes the outputs, waiting for the user's yes (UX-24)
     let mut asking = use_signal(|| None::<(AmpId, Ask)>);
 
@@ -202,7 +203,9 @@ pub fn App() -> Element {
                             view: {
                                 let mut view = mixeq_view(&hub, picked(), tab(), &delays.read());
                                 if let Some(id) = ids.get(picked()).copied() {
-                                    view.presets = preset_view(&hub, id, &preset_lists.read(), &preset_errors.read());
+                                    view.presets = preset_view(&hub, id, &preset_lists.read());
+                                    view.busy = busy.read().get(&id).cloned();
+                                    view.error = preset_errors.read().get(&id).cloned();
                                     view.asking = asking.read().as_ref().filter(|(at, _)| *at == id).map(|(_, ask)| ask.clone());
                                 }
                                 view
@@ -268,8 +271,17 @@ pub fn App() -> Element {
                                 let hub = hub.clone();
                                 move |yes: bool| {
                                     let Some((id, ask)) = asking.take() else { return };
-                                    if yes {
-                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors));
+                                    if yes && !busy.read().contains_key(&id) {
+                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors, busy));
+                                    }
+                                }
+                            },
+                            on_dismiss: {
+                                let ids = ids.clone();
+                                let mut errors = preset_errors;
+                                move |_| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        errors.write().remove(&id);
                                     }
                                 }
                             },
@@ -280,11 +292,14 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(side, linked): (Side, bool)| {
                                     let Some(id) = ids.get(picked()).copied() else { return };
+                                    if busy.read().contains_key(&id) {
+                                        return;
+                                    }
                                     if linked {
                                         // linking mutes the outputs while it runs: it asks first (UX-24)
                                         asking.set(Some((id, Ask::Link(side))));
                                     } else {
-                                        spawn(set_link(hub.clone(), id, side, false, preset_errors));
+                                        spawn(set_link(hub.clone(), id, side, false, preset_errors, busy));
                                     }
                                 }
                             },
@@ -292,7 +307,9 @@ pub fn App() -> Element {
                             on_copy: {
                                 let ids = ids.clone();
                                 move |_| {
-                                    if let (Some(id), Some(ch)) = (ids.get(picked()).copied(), tab().channel()) {
+                                    if let (Some(id), Some(ch)) = (ids.get(picked()).copied(), tab().channel())
+                                        && !busy.read().contains_key(&id)
+                                    {
                                         asking.set(Some((id, Ask::CopyEq(ch))));
                                     }
                                 }
@@ -429,25 +446,74 @@ fn read_presets(hub: Hub, id: AmpId, mut lists: Signal<HashMap<AmpId, Vec<Preset
     });
 }
 
-/// Why the last preset action of each amp failed, said in its preset bar until the next one (UX-28).
+/// Why the last action of each amp failed: a toast until it is clicked or 12 s have passed (UX-29).
 type Errors = Signal<HashMap<AmpId, String>>;
+
+/// What each amp is busy with, for the spinner (UX-29): an IPD takes seconds for a bulk change.
+type Busy = Signal<HashMap<AmpId, String>>;
+
+/// How long an error toast stays.
+const ERROR_TOAST: std::time::Duration = std::time::Duration::from_secs(12);
 
 /// Keep the outcome of an action of an amp: its error, or none after a success.
 fn said(mut errors: Errors, id: AmpId, done: labrack_core::Result<()>) {
     match done {
-        Ok(()) => errors.write().remove(&id),
-        Err(e) => errors.write().insert(id, e.to_string()),
+        Ok(()) => {
+            errors.write().remove(&id);
+        }
+        Err(e) => {
+            let text = e.to_string();
+            errors.write().insert(id, text.clone());
+            spawn(async move {
+                tokio::time::sleep(ERROR_TOAST).await;
+                if errors.read().get(&id) == Some(&text) {
+                    errors.write().remove(&id);
+                }
+            });
+        }
     };
 }
 
-/// Link or split one pair (UX-17).
-async fn set_link(hub: Hub, id: AmpId, side: Side, linked: bool, errors: Errors) {
-    said(errors, id, hub.set_link(id, side, linked).await);
+/// Show `what` as in progress for the amp while `work` runs.
+async fn working<T>(mut busy: Busy, id: AmpId, what: String, work: impl Future<Output = T>) -> T {
+    busy.write().insert(id, what);
+    let done = work.await;
+    busy.write().remove(&id);
+    done
 }
 
-/// Do what the user said yes to (UX-24). What it did shows in the bar itself: the running preset.
-async fn run_ask(hub: Hub, id: AmpId, ask: Ask, lists: Signal<HashMap<AmpId, Vec<Preset>>>, errors: Errors) {
-    let done = match ask {
+/// Link or split one pair (UX-17).
+async fn set_link(hub: Hub, id: AmpId, side: Side, linked: bool, errors: Errors, busy: Busy) {
+    let what = format!(
+        "{} the {}…",
+        if linked { "Linking" } else { "Unlinking" },
+        if side == Side::Inputs { "inputs" } else { "outputs" }
+    );
+    let done = working(busy, id, what, hub.set_link(id, side, linked)).await;
+    said(errors, id, done);
+}
+
+/// Do what the user said yes to (UX-24). What it did shows in the running preset, or in an error toast.
+async fn run_ask(
+    hub: Hub,
+    id: AmpId,
+    ask: Ask,
+    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
+    errors: Errors,
+    busy: Busy,
+) {
+    let what = ask.progress();
+    let done = working(busy, id, what, run_ask_inner(hub.clone(), id, ask, lists)).await;
+    said(errors, id, done);
+}
+
+async fn run_ask_inner(
+    hub: Hub,
+    id: AmpId,
+    ask: Ask,
+    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
+) -> labrack_core::Result<()> {
+    match ask {
         Ask::Link(side) => hub.set_link(id, side, true).await,
         Ask::CopyEq(to) => hub.copy_eq(id, to).await,
         Ask::Recall { slot, .. } => hub.recall_preset(id, slot).await,
@@ -457,17 +523,11 @@ async fn run_ask(hub: Hub, id: AmpId, ask: Ask, lists: Signal<HashMap<AmpId, Vec
             done
         }
         Ask::Load { path } => hub.load_file(id, &path).await.map(|_| ()),
-    };
-    said(errors, id, done);
+    }
 }
 
 /// What the preset bar shows for an amp (BEH-36 to BEH-38).
-fn preset_view(
-    hub: &Hub,
-    id: AmpId,
-    lists: &HashMap<AmpId, Vec<Preset>>,
-    errors: &HashMap<AmpId, String>,
-) -> PresetView {
+fn preset_view(hub: &Hub, id: AmpId, lists: &HashMap<AmpId, Vec<Preset>>) -> PresetView {
     let stored = lists.get(&id);
     let slots = hub
         .preset_slots(id)
@@ -488,7 +548,6 @@ fn preset_view(
             .and_then(|a| a.preset)
             .map(|p| (p.number, p.name)),
         modified: hub.modified(id),
-        error: errors.get(&id).cloned(),
         online: hub.status(id) == Some(labrack_core::Status::Online),
     }
 }
@@ -524,7 +583,7 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
                 view.muted[output] = hub.shown(amp.id, &param) == Some(Value::Bool(true));
             }
             view.amp_muted = hub.amp_muted(amp.id);
-            view.preset = amp.preset.as_ref().map(|p| format!("{:02} · {}", p.number, p.name));
+            view.preset = amp.preset.as_ref().map(|p| loaded_text(p.number, &p.name));
             view.modified = hub.modified(amp.id);
             view
         })
@@ -658,6 +717,8 @@ pub fn mixeq_view(
         eq,
         presets: PresetView::default(),
         asking: None,
+        busy: None,
+        error: None,
     }
 }
 

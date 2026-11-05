@@ -322,6 +322,32 @@ pub fn ErrorText(text: String, #[props(default)] floating: bool) -> Element {
     }
 }
 
+/// What is in progress and the last error, at the bottom right of the window: a spinner while an action of
+/// an amp runs (an IPD takes seconds), and a message that wraps and goes by itself or when clicked (UX-29).
+#[component]
+pub fn Toasts(
+    #[props(default)] busy: Option<String>,
+    #[props(default)] error: Option<String>,
+    #[props(default)] on_dismiss: EventHandler<()>,
+) -> Element {
+    rsx! {
+        div { class: "toasts",
+            if let Some(text) = busy {
+                div { class: "toast busy", role: "status",
+                    span { class: "spinner", "aria-hidden": "true" }
+                    span { "{text}" }
+                }
+            }
+            if let Some(text) = error {
+                div { class: "toast error", role: "alert", onclick: move |_| on_dismiss.call(()),
+                    span { "{text}" }
+                    button { class: "toast-close", "aria-label": "Dismiss", "×" }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // the components draw the values of `control`; the rules are tested there. What is checked here is
@@ -377,6 +403,18 @@ mod tests {
         // the unlit half is covered from the right, and the gain reduction is half of its bar
         assert_eq!(out.matches("width: 50%").count(), 2, "half lit and half reduced: {out}");
         assert!(out.contains("meter-gr-fill"), "{out}");
+    }
+
+    // UX-29: a spinner for what runs, a message for what failed, nothing when there is neither
+    #[test]
+    fn the_toasts_show_what_runs_and_what_failed() {
+        let none = html(|| rsx! { Toasts {} });
+        assert!(!none.contains("toast busy") && !none.contains("toast error"), "{none}");
+        let both = html(|| {
+            rsx! { Toasts { busy: "Copying the EQ…".to_string(), error: "No answer".to_string() } }
+        });
+        assert!(both.contains("class=\"spinner\"") && both.contains("Copying the EQ…"), "{both}");
+        assert!(both.contains("role=\"alert\"") && both.contains("No answer"), "{both}");
     }
 
     // UX-26: the error is announced

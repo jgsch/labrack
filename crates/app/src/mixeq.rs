@@ -8,7 +8,7 @@ use labrack_core::{Limiter, Side, Unit};
 use crate::control::{self, Bounds};
 use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
-use crate::{Fader, ValueField};
+use crate::{Fader, Toasts, ValueField};
 
 /// The six tabs of UX-16. They never change: a link does not merge EQs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,6 +145,9 @@ pub struct MixeqView {
     pub presets: PresetView,
     /// An action that mutes the outputs, waiting for the user's yes (UX-24).
     pub asking: Option<Ask>,
+    /// What runs on the amp now, for the spinner, and why the last action failed (UX-29).
+    pub busy: Option<String>,
+    pub error: Option<String>,
 }
 
 impl Default for MixeqView {
@@ -161,6 +164,8 @@ impl Default for MixeqView {
             eq: None,
             presets: PresetView::default(),
             asking: None,
+            busy: None,
+            error: None,
         }
     }
 }
@@ -211,8 +216,8 @@ pub fn LevelCard(
     rsx! {
         section { class, "aria-label": "{strip.label}",
             span { class: "legend", "{strip.label}" }
-            div { class: if out && both_muted { "card-body dim" } else { "card-body" },
-                div { class: if mixer && muted { "card-fader dim" } else { "card-fader" },
+            div { class: if both_muted { "card-body dim" } else { "card-body" },
+                div { class: "card-fader",
                     Fader {
                         label: "{strip.label}",
                         value: strip.db,
@@ -716,12 +721,23 @@ pub fn MixeqPage(
     /// The answer to [`MixeqView::asking`].
     #[props(default)]
     on_answer: EventHandler<bool>,
+    /// The error toast was clicked away.
+    #[props(default)]
+    on_dismiss: EventHandler<()>,
 ) -> Element {
     let amp_name = view.amps.get(view.selected).map(|a| a.name.clone()).unwrap_or_default();
     let tab = view.tab;
     let side_class = if tab.side() == Side::Inputs { "in" } else { "out" };
+    // the bar starts again for another amp, another loaded preset, or once the names are read
+    let bar_key = format!(
+        "{}-{}-{}",
+        view.selected,
+        view.presets.loaded.as_ref().map_or(0, |(n, _)| *n),
+        view.presets.slots.iter().filter(|(_, name)| name.is_some()).count()
+    );
     rsx! {
         div { class: "mixeq",
+            Toasts { busy: view.busy.clone(), error: view.error.clone(), on_dismiss }
             div { class: "amp-picker",
                 for (index, amp) in view.amps.iter().enumerate() {
                     button {
@@ -746,7 +762,7 @@ pub fn MixeqPage(
             if !view.amps.is_empty() {
                 PresetBar {
                     // the slot picked and the name typed belong to the amp
-                    key: "{view.selected}",
+                    key: "{bar_key}",
                     view: view.presets.clone(),
                     on_recall,
                     on_store,
@@ -1017,7 +1033,7 @@ mod tests {
         assert!(out.contains("aria-valuemax=\"0\""), "the mixer's range: {out}");
         assert_eq!(out.matches(">+12<").count(), 8, "the Levels' ruler, +12 to -48: {out}");
         assert_eq!(out.matches(">\u{2212}48<").count(), 8);
-        assert_eq!(out.matches("card-fader dim").count(), 6, "the muted sources are dimmed");
+        assert_eq!(out.matches("card-body dim").count(), 6, "a muted source is dimmed whole");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
         assert!(!out.contains("link-button"), "no link on the Mixer (UX-17): {out}");
         assert!(out.contains("tab-panel in"));
@@ -1086,6 +1102,25 @@ mod tests {
         assert!(out.contains(">OUT 1 + 2<") && out.contains(">LIMITER 1 + 2<") && !out.contains(">OUT 2<"));
         assert_eq!(out.matches("levels-empty").count(), 2, "the places of OUT 2 and LIMITER 2: {out}");
         assert_eq!(out.matches("role=\"slider\"").count(), 3);
+    }
+
+    // UX-19: a muted channel dims its whole card, an IN as well as an OUT (a linked card, when both are muted)
+    #[test]
+    fn a_muted_channel_dims_its_whole_card() {
+        let mut rows = two_rows();
+        rows[0].input.muted = true;
+        rows[1].output.muted = true;
+        let out = page_html(MixeqView { rows: rows.clone(), ..view(false) });
+        assert_eq!(out.matches("card-body dim").count(), 2, "IN 1 and OUT 2: {out}");
+
+        let mut linked = rows;
+        linked[0].output.muted = true;
+        linked[1].output.muted = false;
+        let out = page_html(MixeqView { linked_outputs: true, rows: linked.clone(), ..view(false) });
+        assert_eq!(out.matches("card-body dim").count(), 1, "only IN 1: one of the two outputs sounds");
+        linked[1].output.muted = true;
+        let out = page_html(MixeqView { linked_outputs: true, rows: linked, ..view(false) });
+        assert_eq!(out.matches("card-body dim").count(), 2, "both outputs muted");
     }
 
     // UX-17: split, Levels has its two rows again, each with one meter per fader

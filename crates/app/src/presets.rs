@@ -16,10 +16,14 @@ pub struct PresetView {
     /// The preset the amp runs, as the app knows it (BEH-11).
     pub loaded: Option<(u32, String)>,
     pub modified: bool,
-    /// Why the last action failed, said beside the running line until the next one.
-    pub error: Option<String>,
     /// The amp is ONLINE: nothing can be done otherwise (BEH-10).
     pub online: bool,
+}
+
+/// The preset an amp runs: `03 · Show`, or only the name while the slot is not known (an IPD can say
+/// the name and no number).
+pub fn loaded_text(slot: u32, name: &str) -> String {
+    if slot == 0 { name.to_string() } else { slot_text(slot, Some(name)) }
 }
 
 /// A slot as the list and the messages write it: `03 · Show`.
@@ -41,8 +45,8 @@ impl PresetView {
     /// The line at the end of the bar: the preset that runs (UX-28).
     pub fn status(&self) -> String {
         match &self.loaded {
-            Some((n, name)) if self.modified => format!("Running: {} · modified", slot_text(*n, Some(name))),
-            Some((n, name)) => format!("Running: {}", slot_text(*n, Some(name))),
+            Some((n, name)) if self.modified => format!("Running: {} · modified", loaded_text(*n, name)),
+            Some((n, name)) => format!("Running: {}", loaded_text(*n, name)),
             None => "Running: no stored preset known".into(),
         }
     }
@@ -133,6 +137,17 @@ impl Ask {
         }
     }
 
+    /// What is going on while it runs, for the spinner.
+    pub fn progress(&self) -> String {
+        match self {
+            Ask::Recall { .. } => "Recalling the preset…".into(),
+            Ask::Store { .. } => "Storing the preset…".into(),
+            Ask::Load { .. } => "Loading the file…".into(),
+            Ask::Link(side) => format!("Linking the {}…", side_name(*side)),
+            Ask::CopyEq(_) => "Copying the EQ…".into(),
+        }
+    }
+
     /// The button that says yes.
     pub fn confirm(&self) -> &'static str {
         match self {
@@ -193,7 +208,8 @@ pub fn PresetBar(
     let mut slot = use_signal(|| first);
     let mut draft = use_signal({
         let name_of = name_of.clone();
-        move || name_of(first).unwrap_or_default()
+        let unnumbered = view.loaded.clone().filter(|(n, _)| *n == 0).map(|(_, name)| name);
+        move || unnumbered.or_else(|| name_of(first)).unwrap_or_default()
     });
     let stored = name_of(slot());
     let online = view.online;
@@ -251,9 +267,6 @@ pub fn PresetBar(
             button { class: "button", disabled: !online, onclick: move |_| on_open.call(()), "OPEN FILE…" }
             button { class: "button", disabled: !online, onclick: move |_| on_save_file.call(()), "SAVE TO COMPUTER…" }
             span { class: "preset-status", role: "status", "aria-live": "polite",
-                if let Some(error) = &view.error {
-                    span { class: "preset-error", role: "alert", "{error}" }
-                }
                 "{view.status()}"
             }
         }
@@ -269,7 +282,6 @@ mod tests {
             slots: vec![(1, Some("Factory default".into())), (2, None), (3, Some("Show".into()))],
             loaded: Some((1, "Factory default".into())),
             modified: false,
-            error: None,
             online: true,
         }
     }
@@ -284,8 +296,8 @@ mod tests {
         v.modified = true;
         assert_eq!(v.option_text(1, Some("Factory default")), "01 · Factory default (loaded, modified)");
         assert_eq!(v.status(), "Running: 01 · Factory default · modified");
-        v.error = Some("Not ONLINE".into());
-        assert_eq!(v.status(), "Running: 01 · Factory default · modified", "the running preset stays");
+        v.loaded = Some((0, "alegra-ext".into()));
+        assert_eq!(v.status(), "Running: alegra-ext · modified", "a preset whose slot is not known yet");
         assert_eq!(PresetView::default().status(), "Running: no stored preset known");
     }
 
@@ -339,10 +351,6 @@ mod tests {
         assert!(out.contains("01 · Factory default (loaded)") && out.contains("02 · Empty"));
         assert!(out.contains("value=\"Factory default\""), "the name of the slot to store under: {out}");
         assert!(!out.contains("disabled=true") && !out.contains("disabled=\"true\""), "{out}");
-
-        let failed =
-            html(|| rsx! { PresetBar { view: PresetView { error: Some("No answer".into()), ..view() } } });
-        assert!(failed.contains("No answer") && failed.contains("Running: 01 · Factory default"), "{failed}");
 
         let off = html(|| rsx! { PresetBar { view: PresetView { online: false, ..view() } } });
         assert!(off.matches("disabled").count() >= 6, "{off}");

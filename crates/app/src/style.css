@@ -47,6 +47,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .value-box input{width:100%;height:44px;box-sizing:border-box;padding:0 20px 0 3px;text-align:right;border-radius:4px;background:var(--panel);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;font-weight:600}
 .value-unit{position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);pointer-events:none}
 .error-text{color:var(--red);font-size:11px;text-align:center;max-width:220px}
+.eq-row > :last-child .error-text.floating,.limiter-box:nth-child(even) .error-text.floating{left:auto;right:0}
 .error-text.floating{position:absolute;top:100%;margin-top:6px;z-index:10;box-sizing:border-box;width:max-content;padding:6px 10px;border-radius:6px;background:var(--panel);border:1px solid var(--red);pointer-events:none}
 .button{min-height:44px;padding:0 16px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .button.confirm-armed{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
@@ -62,15 +63,15 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 /* Amplifiers page (UX-11 to UX-13). */
 .amp-list{display:flex;flex-direction:column;gap:12px}
 .amp-panel{display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 18px}
-.amp-ident{flex:0 0 320px;width:320px;min-width:0;display:flex;align-items:center;gap:14px}
-.amp-index{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:46px;line-height:1;color:var(--lavender);width:54px}
-.amp-main{flex:1 1 0;display:flex;flex-direction:column;gap:6px;min-width:0}
-.amp-name-row{display:flex;align-items:center;gap:8px;min-width:0}
-.amp-name{flex:1 1 0;min-width:0;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-ident{flex:0 0 340px;width:340px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.amp-name{min-width:0;font-size:24px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.amp-status-row{display:flex;align-items:center;gap:10px;min-width:0}
+.amp-badge{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--muted);border:1px solid var(--border-strong);border-radius:3px;padding:1px 6px}
+.amp-status-row .small-button{margin-left:auto}
+.amp-info{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:2px 8px}
 .small-button{flex:0 0 auto;min-height:26px;padding:0 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em}
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}
-.ip-row,.preset-row{display:flex;align-items:center;gap:8px;min-height:28px}
 .label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .ip-input{flex:1 1 0;min-width:0;height:28px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
 .preset-link{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;font-size:12px;color:var(--text);background:none;border:0;padding:0}
@@ -79,7 +80,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .amp-meter{flex:1 1 360px;min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .channel{display:flex;align-items:center;gap:8px}
 .channel .meter{flex:1}
-.channel-text{display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted)}
+.channel-text{flex:0 0 150px;display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap}
 .m-button{flex:0 0 44px;width:44px;height:44px;border-radius:4px;font-size:13px;font-weight:600;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .m-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 .amp-mute{flex:0 0 116px;min-height:48px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.1em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
@@ -239,7 +240,6 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 /* 2 px more at the bottom than the OUT cards' thicker border: the Mixer as tall as the Levels */
 .level-card.mix{padding:22px 10px 14px}
 .level-card.mix .card-body{gap:12px}
-.card-fader.dim{opacity:0.6}
 .mixer-go{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;padding:0 12px;background:transparent;color:var(--sapphire);border:0}
 .mixer-go .arrow{font-size:24px;line-height:1}
 .mixer-go .target{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;letter-spacing:0.06em;line-height:1.1}
@@ -247,11 +247,16 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .preset-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 14px}
 .preset-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:600;letter-spacing:0.08em}
 .preset-bar select{flex:1 1 280px;max-width:360px;width:auto}
-.preset-name{flex:1 1 160px;max-width:220px;min-height:44px;box-sizing:border-box;padding:0 12px;border-radius:4px;background:var(--base);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px}
-.preset-name::placeholder{color:var(--muted)}
+input.preset-name{flex:1 1 160px;max-width:220px;min-height:44px;box-sizing:border-box;padding:0 12px;border-radius:4px;background:var(--base);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px}
+input.preset-name::placeholder{color:var(--muted)}
 .button.preset-load{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .preset-status{margin-left:auto;font-size:12px;color:var(--muted)}
-.preset-error{margin-right:12px;color:var(--red)}
+.toasts{position:fixed;right:20px;bottom:20px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:min(360px,calc(100vw - 40px));pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;box-sizing:border-box;padding:10px 12px;border-radius:6px;background:var(--panel);border:1px solid var(--border-strong);font-size:12px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;box-shadow:0 4px 14px rgba(0,0,0,0.5)}
+.toast.error{border-color:var(--red);color:var(--red);cursor:pointer}
+.toast-close{flex:none;padding:0 4px;background:none;border:0;color:inherit;font-size:16px;line-height:1;cursor:pointer}
+.spinner{flex:none;width:14px;height:14px;box-sizing:border-box;border:2px solid var(--border-strong);border-top-color:var(--lavender);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .modal-backdrop{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(17,17,27,0.72)}
 .modal{max-width:520px;display:flex;flex-direction:column;gap:12px;padding:20px 24px;border-radius:6px;background:var(--panel);border:2px solid var(--maroon)}
 .modal h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;letter-spacing:0.04em}

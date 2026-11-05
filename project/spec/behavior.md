@@ -52,9 +52,14 @@ statement with a `BEH-<n>` ID.
   restart.
 - **BEH-10** The IP can be edited at any time. An amp that is not ONLINE shows no signal; its
   controls stay visible but are disabled (nothing can be written to it, see `SEC-1`).
-- **BEH-11** The preset line shows number and name, plus a MODIFIED flag (see `BEH-38`).
+- **BEH-11** The preset line shows number and name, plus a MODIFIED flag (see `BEH-38`). An IPD can
+  say the name of its preset and a number of 0: it is then shown by its name, and the number is the
+  slot of the one stored preset that has that name, found when the app reads the stored presets
+  (after the amp's state, which an IPD reads slowly).
 - **BEH-12** Level, gain reduction and mute state of both outputs refresh about every 100 ms.
-  The IPX reports mute changes itself; the app asks an IPD for the two output mutes every 100 ms.
+  The IPX reports mute changes itself; the app asks an IPD for the two output mutes every 100 ms,
+  but not before its state is read and never while a bulk change runs: an IPD answers one thing at a
+  time, and the polling made the bulk change time out. Linking and copying an EQ wait for the state.
 - **BEH-42** The app connects to every amp that is not DISCONNECTED when it starts. A failed attempt
   (BUSY, UNREACHABLE) and a lost connection are retried after 1 s, then after twice as long each
   time, up to 15 s; the status shows the outcome of the latest attempt, and a lost connection shows
@@ -107,7 +112,8 @@ statement with a `BEH-<n>` ID.
 
 - **BEH-20** Manual add takes a name (optional, defaults to Amp n, where n is the smallest number
   for which no amp is already named Amp n), a protocol and an IP address. It is the fallback when
-  discovery fails.
+  discovery fails. An amp still named by default takes the name of its model (`IPX 1200`, `IPD2400`,
+  followed by 2, 3… when taken) once it is online; a name the user chose stays.
 - **BEH-21** Validation: the IP must be a valid IPv4 address and must not already be in the list.
   Each error is shown next to the add button. Editing the IP of a known amp (`BEH-10`) accepts text
   that is not a valid IPv4 address (the amp then shows CHECK IP, `BEH-8`), but rejects an address
@@ -128,7 +134,8 @@ statement with a `BEH-<n>` ID.
 ## Mixer, levels and limiter
 
 - **BEH-27** Mixer: each of the 4 sources has a gain and a mute into IN 1 and into IN 2, with a
-  level meter.
+  level meter. The IPD stores it as ON (1 = the source plays), the app shows it as a mute. The meters
+  are the IPD's source meters and, on the IPX, its two input signals (ANALOG 1 and 2; AES has none).
 - **BEH-28** Levels: the routing is fixed, IN n → OUT n. IN n has a fader (input gain), a meter, a
   dB value and a mute; OUT n the same (output gain). Each output has a limiter with its own gain
   reduction meter and linked unit values (Vpk, Ohm, Watt, dBu).

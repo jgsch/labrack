@@ -15,7 +15,7 @@ mod style;
 
 pub use amplifiers::{AmpView, AmplifierPanel, AmplifiersPage, Level};
 pub use app::App;
-pub use components::{ConfirmButton, ErrorText, Fader, Meter, ValueField};
+pub use components::{ConfirmButton, ErrorText, Fader, Meter, Toasts, ValueField};
 pub use header::Header;
 pub use labrack_core::Status;
 pub use mixeq::{

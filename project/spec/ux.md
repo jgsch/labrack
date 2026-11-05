@@ -31,10 +31,10 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 
 ## Amplifiers page
 
-- **UX-11** One panel per amplifier in a vertical list. Left: large index, name with the
-  DISCONNECT / CONNECT button, status line, then IP in gray followed by the address (plain text,
-  no border, editable in place), then PRESET in gray followed by the preset (clicking it opens
-  Mix & EQ).
+- **UX-11** One panel per amplifier in a vertical list. Left: the name, large and without an index;
+  under it the status line (dot and status, the protocol IPD / IPX, and the DISCONNECT / CONNECT
+  button at its right end), then a two-column grid: IP in gray followed by the address (plain text,
+  no border, editable in place), PRESET in gray followed by the preset (clicking it opens Mix & EQ).
 - **UX-12** Centre: one meter per output. Above each meter, the channel name on the left and level
   in dB with gain reduction on the right. The segmented level meter (green, yellow, red) has a
   thinner peach gain reduction bar under it.
@@ -60,7 +60,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
-  scale line under the meters.
+  scale line under the meters. A muted channel dims its whole card (a linked card when both of its
+  channels are muted), on Levels and on the Mixer alike.
 - **UX-20** EQ tabs: one tab per channel, with the ten bands; outputs add HPF, LPF and delay. A
   COPY FROM INPUT 2 / INPUT 1 / OUTPUT 2 / OUTPUT 1 button takes the other channel's EQ (`BEH-33`).
   - Left: the response curve (20 Hz to 20 kHz, ±15 dB) with a numbered handle per band that is on,
@@ -76,8 +77,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-28** The preset bar sits between the amplifier cards and the tab row, on every tab: PRESET,
   the list of the amp's slots (`01 · Name`, `02 · Empty`, the loaded one marked `(loaded)` or
   `(loaded, modified)`), the name to store under (the slot's name when it is picked), LOAD (a stored
-  slot only), SAVE, OPEN FILE… and SAVE TO COMPUTER…, and at the end the line `Running: 01 · Name`,
-  always; when the last action failed, its reason in red before it. LOAD, SAVE, a picked file and LINK ask first
+  slot only), SAVE, OPEN FILE… and SAVE TO COMPUTER…, and at the end the line `Running: 01 · Name`
+  (the name alone while its slot is not known). LOAD, SAVE, a picked file and LINK ask first
   (`UX-24`); SAVE TO COMPUTER… changes nothing on the amp and does not ask. Nothing works while the
   amp is not ONLINE.
 
@@ -100,3 +101,7 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-26** Error text is red and appears beside the control that caused it. The error of a typed
   value floats over the page (it moves nothing) and goes after 3 s.
 - **UX-27** Hover brightens buttons and tabs slightly.
+- **UX-29** Toasts, at the bottom right of the window: a spinner and what runs ("Linking the
+  outputs…", "Copying the EQ…", recall, store, load) while an action on an amp runs, which cannot
+  be started again meanwhile; and the error of an action, in red, wrapped (at most 360 px wide),
+  gone after 12 s or when clicked. Errors are not written in the preset bar.

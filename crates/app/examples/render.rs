@@ -73,6 +73,7 @@ fn main() {
         ("eq-out-demo", eq_out_demo),
         ("mixer-demo", mixer_demo),
         ("linked-demo", linked_demo),
+        ("toasts-demo", toasts_demo),
         ("inputs-linked-demo", inputs_linked_demo),
         ("outputs-linked-demo", outputs_linked_demo),
         ("ask-demo", ask_demo),
@@ -169,6 +170,25 @@ fn levels_demo() -> Element {
 /// The Levels tab linked, as on the mockup's board 07: one row, two meters per fader.
 fn linked_demo() -> Element {
     levels_page(true, true)
+}
+
+/// The toasts: a spinner for what runs and a long error that wraps, bottom right.
+fn toasts_demo() -> Element {
+    let view = labrack_app::MixeqView {
+        busy: Some("Copying the EQ…".into()),
+        error: Some(
+            "timeout: reading the output mutes. The outputs that were muted for it stay muted.".into(),
+        ),
+        presets: demo_presets(),
+        ..labrack_app::MixeqView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame",
+            Header { page: Page::MixEq, all_muted: false }
+            main { labrack_app::MixeqPage { view } }
+        }
+    }
 }
 
 /// Only the inputs linked: IN 1 + 2 in the first row, the outputs of channel 2 below.
@@ -317,7 +337,6 @@ fn demo_presets() -> labrack_app::presets::PresetView {
         slots,
         loaded: Some((1, "Factory default".into())),
         modified: false,
-        error: None,
         online: true,
     }
 }
