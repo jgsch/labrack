@@ -77,8 +77,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-28** The preset bar sits between the amplifier cards and the tab row, on every tab: PRESET,
   the list of the amp's slots (`01 · Name`, `02 · Empty`, the loaded one marked `(loaded)` or
   `(loaded, modified)`), the name to store under (the slot's name when it is picked), LOAD (a stored
-  slot only), SAVE, OPEN FILE… and SAVE TO COMPUTER…, and at the end the line `Running: 01 · Name`, or
-  what the last action did (red when it failed). LOAD, SAVE, a picked file and LINK ask first
+  slot only), SAVE, OPEN FILE… and SAVE TO COMPUTER…, and at the end the line `Running: 01 · Name`,
+  always; when the last action failed, its reason in red before it. LOAD, SAVE, a picked file and LINK ask first
   (`UX-24`); SAVE TO COMPUTER… changes nothing on the amp and does not ask. Nothing works while the
   amp is not ONLINE.
 
