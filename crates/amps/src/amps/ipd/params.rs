@@ -13,6 +13,8 @@ use crate::model::*;
 #[derive(Clone, Copy, Debug)]
 pub enum Ty {
     Bool,
+    /// A flag the amp stores the other way round: the mixer's MUTE is the member ON.
+    NotBool,
     Int,
     Float,
     Enum(&'static [&'static str], &'static [u8]),
@@ -86,8 +88,9 @@ pub fn slot(p: &Param) -> Option<Slot> {
                 return None;
             }
             match field {
-                // The skin names this control "mute_a1".."mute_b4"; polarity (1 = muted) is unverified.
-                MixerField::Mute => (S_MIXER, M_ON, src, Ty::Bool),
+                // The skin names this control "mute_a1".."mute_b4", but the member is ON: 1 = the source is
+                // on (an IPD2400 that plays ANALOG 1 has ON = 1 there and its input meter follows it)
+                MixerField::Mute => (S_MIXER, M_ON, src, Ty::NotBool),
                 MixerField::Level => (S_MIXER, M_GAIN, src, Ty::Float),
             }
         }
@@ -187,6 +190,7 @@ pub fn to_wire(slot: &Slot, v: &Value) -> Result<Raw> {
     let bad = || Error::InvalidValue(format!("{v} does not fit key {}", slot.key));
     Ok(match slot.ty {
         Ty::Bool => Raw::Int(v.as_bool().ok_or_else(bad)? as i64),
+        Ty::NotBool => Raw::Int(!v.as_bool().ok_or_else(bad)? as i64),
         Ty::Int => Raw::Int(v.as_i64().ok_or_else(bad)?),
         Ty::Float => Raw::Int(to_raw(slot.key.member_id, v.as_f64().ok_or_else(bad)?)),
         Ty::Enum(labels, codes) => {
@@ -201,6 +205,7 @@ pub fn to_wire(slot: &Slot, v: &Value) -> Result<Raw> {
 pub fn from_wire(slot: &Slot, raw: &Raw) -> Value {
     match (slot.ty, raw) {
         (Ty::Bool, Raw::Int(i)) => Value::Bool(*i != 0),
+        (Ty::NotBool, Raw::Int(i)) => Value::Bool(*i == 0),
         (Ty::Int, Raw::Int(i)) => Value::Int(*i),
         (Ty::Float, Raw::Int(i)) => Value::Float(from_raw(slot.key.member_id, *i)),
         (Ty::Enum(labels, codes), Raw::Int(i)) => match codes.iter().position(|c| *c as i64 == *i) {
@@ -215,6 +220,20 @@ pub fn from_wire(slot: &Slot, raw: &Raw) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // the mixer's MUTE is the amp's ON the other way round: ON = 1 is not muted
+    #[test]
+    fn a_mixer_mute_is_the_member_on_the_other_way_round() {
+        let slot = slot(&"in1.mixer.analog1.mute".parse().unwrap()).unwrap();
+        assert_eq!(slot.key, Key::new(S_MIXER, M_ON, 0, 0));
+        assert_eq!(from_wire(&slot, &Raw::Int(1)), Value::Bool(false), "ON: not muted");
+        assert_eq!(from_wire(&slot, &Raw::Int(0)), Value::Bool(true));
+        assert_eq!(to_wire(&slot, &Value::Bool(true)).unwrap(), Raw::Int(0));
+        assert_eq!(to_wire(&slot, &Value::Bool(false)).unwrap(), Raw::Int(1));
+        // an EQ band's flag is not inverted
+        let eq = super::slot(&"in1.eq.0.enabled".parse().unwrap()).unwrap();
+        assert_eq!(from_wire(&eq, &Raw::Int(1)), Value::Bool(true));
+    }
 
     #[test]
     fn mapping_matches_python_keys() {
