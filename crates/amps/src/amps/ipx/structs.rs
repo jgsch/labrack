@@ -266,13 +266,15 @@ impl From<&Meters> for crate::model::Meters {
     fn from(m: &Meters) -> Self {
         let extra = [
             ("post_input", m.post_input),
-            ("amp", m.amp),
+            ("output_signal", m.output),
             ("gain_reduction_a", m.gain_reduction_a),
             ("gain_reduction_b", m.gain_reduction_b),
         ];
         crate::model::Meters {
             input: m.input.to_vec(),
-            output: m.output.to_vec(),
+            // the pair that follows the output gain and the signal on a live IPX 1200; the "output
+            // signal" pair (indices 2-3) read -150 dB with the outputs unmuted and the amp playing
+            output: m.amp.to_vec(),
             extra: extra.into_iter().map(|(k, v)| (k.to_string(), v.to_vec())).collect(),
         }
     }

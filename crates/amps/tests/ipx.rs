@@ -274,7 +274,8 @@ fn meters_and_names() {
     assert!(Meters::parse(&[0; 47]).is_none());
 
     let common: labgruppen::Meters = (&m).into();
-    assert_eq!(common.output, vec![-150.0, -150.0]);
+    assert_eq!(common.output, m.amp.to_vec(), "the output level is the amp pair (indices 6-7)");
+    assert_eq!(common.extra["output_signal"], m.output.to_vec());
     assert_eq!(common.extra["post_input"], m.post_input.to_vec());
     assert_eq!(common.extra.len(), 4);
 
@@ -550,13 +551,13 @@ async fn meters_and_events() {
     let mut events = amp.subscribe();
 
     let meters = next_event(&mut events, |e| if let AmpEvent::Meters(m) = e { Some(m) } else { None }).await;
-    assert_eq!(meters.output, [-150.0, -150.0]);
+    assert_eq!(meters.output, [-94.99, -94.99]);
     assert_eq!(meters.input.len(), 2);
     let latest = amp.meters();
     assert_eq!(latest, meters);
     assert_eq!(
         latest.extra.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["amp", "gain_reduction_a", "gain_reduction_b", "post_input"]
+        ["gain_reduction_a", "gain_reduction_b", "output_signal", "post_input"]
     );
 
     let push = build_frame(Main::DEVPRMCHAGE, [Env::OUTPUT_LEVEL, 0, 0, 0], &5.5f32.to_le_bytes()).unwrap();

@@ -377,8 +377,8 @@ async fn meters_are_forwarded_at_about_10_hz() {
     })
     .await;
     assert!((14..=22).contains(&seen.len()), "{} updates in 2 s", seen.len());
-    assert_eq!(seen[0].output, [-150.0, -150.0]);
-    assert_eq!(hub.meters(id).map(|m| m.output), Some(vec![-150.0, -150.0]));
+    assert_eq!(seen[0].output, [-94.99, -94.99]);
+    assert_eq!(hub.meters(id).map(|m| m.output), Some(vec![-94.99, -94.99]));
 }
 
 // BEH-10: an amp that is not ONLINE shows no signal and no preset
