@@ -526,6 +526,12 @@ async fn run_ask_inner(
     }
 }
 
+/// The level a source's meter shows in the Mixer: its signal at the mixer's gain. A muted source keeps
+/// its meter, to see which channel has sound (UX-18); one without a meter (AES on an IPX) shows none.
+fn source_level(signal_db: Option<f64>, gain_db: f64) -> f64 {
+    signal_db.map_or(-120.0, |signal| signal + gain_db)
+}
+
 /// What the preset bar shows for an amp (BEH-36 to BEH-38).
 fn preset_view(hub: &Hub, id: AmpId, lists: &HashMap<AmpId, Vec<Preset>>) -> PresetView {
     let stored = lists.get(&id);
@@ -686,10 +692,7 @@ pub fn mixeq_view(
                     let db = hub.shown(id, &param(MixerField::Level)).and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let muted =
                         hub.shown(id, &param(MixerField::Mute)).and_then(|v| v.as_bool()).unwrap_or(false);
-                    let level_db = match sources.get(src) {
-                        Some(level) if !muted => level + db,
-                        _ => -120.0,
-                    };
+                    let level_db = source_level(sources.get(src).copied(), db);
                     Strip { label: (*name).into(), db, level_db, muted }
                 })
                 .collect(),
@@ -786,7 +789,15 @@ pub fn corrected_zoom(dpr: f64, scale: f64) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::corrected_zoom;
+    use super::{corrected_zoom, source_level};
+
+    // UX-18: a muted source keeps its meter (the caller does not even pass the mute); no meter, no level
+    #[test]
+    fn a_source_meter_is_its_signal_at_the_mixer_gain() {
+        assert_eq!(source_level(Some(-28.0), -6.0), -34.0);
+        assert_eq!(source_level(Some(-28.0), 0.0), -28.0);
+        assert_eq!(source_level(None, 0.0), -120.0, "AES on an IPX has no meter");
+    }
 
     // PERF-1: a page whose scale is right is left alone, whatever the screen
     #[test]

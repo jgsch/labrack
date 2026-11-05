@@ -128,7 +128,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .known-remove{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:transparent;color:var(--muted);border:1px solid var(--border-strong)}
 /* Mix & EQ (UX-16, UX-17, UX-19). Inputs are sapphire, outputs lavender (UX-7). */
 .button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
-.mixeq{display:flex;flex-direction:column;gap:16px}
+.mixeq{position:relative;display:flex;flex-direction:column;gap:16px}
 /* the cards keep their width, whatever the number of amps: a list, not a bar */
 .amp-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),360px));gap:10px}
 .picker-card{display:flex;flex-direction:column;gap:8px;text-align:left;min-height:60px;padding:8px 12px;box-sizing:border-box;border-radius:4px;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
@@ -251,11 +251,12 @@ input.preset-name{flex:1 1 160px;max-width:220px;min-height:44px;box-sizing:bord
 input.preset-name::placeholder{color:var(--muted)}
 .button.preset-load{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .preset-status{margin-left:auto;font-size:12px;color:var(--muted)}
-.toasts{position:fixed;right:20px;bottom:20px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:min(360px,calc(100vw - 40px));pointer-events:none}
-.toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;box-sizing:border-box;padding:10px 12px;border-radius:6px;background:var(--panel);border:1px solid var(--border-strong);font-size:12px;line-height:1.4;white-space:normal;overflow-wrap:anywhere;box-shadow:0 4px 14px rgba(0,0,0,0.5)}
+.busy-shield{position:absolute;inset:0;z-index:150;cursor:progress}
+.toasts{position:fixed;right:24px;bottom:24px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:min(460px,calc(100vw - 48px));pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:14px;box-sizing:border-box;padding:16px 20px;border-radius:8px;background:var(--panel);border:1px solid var(--border-strong);font-size:15px;font-weight:600;line-height:1.45;white-space:normal;overflow-wrap:anywhere;box-shadow:0 6px 20px rgba(0,0,0,0.6)}
 .toast.error{border-color:var(--red);color:var(--red);cursor:pointer}
-.toast-close{flex:none;padding:0 4px;background:none;border:0;color:inherit;font-size:16px;line-height:1;cursor:pointer}
-.spinner{flex:none;width:14px;height:14px;box-sizing:border-box;border:2px solid var(--border-strong);border-top-color:var(--lavender);border-radius:50%;animation:spin 0.8s linear infinite}
+.toast-close{flex:none;padding:0 4px;background:none;border:0;color:inherit;font-size:22px;line-height:1;cursor:pointer}
+.spinner{flex:none;width:24px;height:24px;box-sizing:border-box;border:2px solid var(--border-strong);border-top-color:var(--lavender);border-radius:50%;animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .modal-backdrop{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(17,17,27,0.72)}
 .modal{max-width:520px;display:flex;flex-direction:column;gap:12px;padding:20px 24px;border-radius:6px;background:var(--panel);border:2px solid var(--maroon)}

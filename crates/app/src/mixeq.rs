@@ -735,8 +735,14 @@ pub fn MixeqPage(
         view.presets.loaded.as_ref().map_or(0, |(n, _)| *n),
         view.presets.slots.iter().filter(|(_, name)| name.is_some()).count()
     );
+    let busy = view.busy.is_some();
     rsx! {
         div { class: "mixeq",
+            // while an action runs on the amp nothing of the page can be clicked, so that it is not started
+            // twice (UX-29); the header, with MUTE ALL, is outside it
+            if busy {
+                div { class: "busy-shield", "aria-hidden": "true" }
+            }
             Toasts { busy: view.busy.clone(), error: view.error.clone(), on_dismiss }
             div { class: "amp-picker",
                 for (index, amp) in view.amps.iter().enumerate() {
@@ -873,6 +879,15 @@ mod tests {
     fn page_html(v: MixeqView) -> String {
         VIEW.with(|s| *s.borrow_mut() = v);
         html(Probe)
+    }
+
+    // UX-29: while an action runs a shield lies over the page, which is otherwise free
+    #[test]
+    fn a_shield_covers_the_page_while_an_action_runs() {
+        let out = page_html(view(false));
+        assert!(!out.contains("busy-shield"), "{out}");
+        let out = page_html(MixeqView { busy: Some("Linking the inputs…".into()), ..view(false) });
+        assert!(out.contains("busy-shield") && out.contains("Linking the inputs…"), "{out}");
     }
 
     // UX-16, UX-17: the six tabs stay whatever is linked; the links are on Levels, one per side

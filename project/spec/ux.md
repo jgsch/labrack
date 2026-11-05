@@ -56,7 +56,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   OUTPUTS, each linked (pressed) or split. The Mixer and the EQ tabs have no link button, and the six
   tabs never change. A linked pair is one card in Levels (`BEH-34`).
 - **UX-18** Mixer: two rows (IN 1, IN 2). Each row shows the four sources as bordered cards with
-  their fader, meter, gain and mute, and a line showing where they go (→ IN 1, → IN 2).
+  their fader, meter, gain and mute, and a line showing where they go (→ IN 1, → IN 2). A muted
+  source keeps its meter, to see which channel has sound.
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
@@ -104,4 +105,6 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-29** Toasts, at the bottom right of the window: a spinner and what runs ("Linking the
   outputs…", "Copying the EQ…", recall, store, load) while an action on an amp runs, which cannot
   be started again meanwhile; and the error of an action, in red, wrapped (at most 360 px wide),
-  gone after 12 s or when clicked. Errors are not written in the preset bar.
+  gone after 12 s or when clicked. Errors are not written in the preset bar. They are large enough
+  to be read from a distance. While an action runs, the Mix & EQ page cannot be clicked (the header,
+  with MUTE ALL, can).
