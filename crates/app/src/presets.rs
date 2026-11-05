@@ -14,8 +14,8 @@ pub struct PresetView {
     /// The preset the amp runs, as the app knows it (BEH-11).
     pub loaded: Option<(u32, String)>,
     pub modified: bool,
-    /// What the last action did, and whether it failed.
-    pub message: Option<(String, bool)>,
+    /// Why the last action failed, said beside the running line until the next one.
+    pub error: Option<String>,
     /// The amp is ONLINE: nothing can be done otherwise (BEH-10).
     pub online: bool,
 }
@@ -36,11 +36,8 @@ impl PresetView {
         }
     }
 
-    /// The line at the end of the bar: what the last action did, or what runs.
+    /// The line at the end of the bar: the preset that runs (UX-28).
     pub fn status(&self) -> String {
-        if let Some((text, _)) = &self.message {
-            return text.clone();
-        }
         match &self.loaded {
             Some((n, name)) if self.modified => format!("Running: {} · modified", slot_text(*n, Some(name))),
             Some((n, name)) => format!("Running: {}", slot_text(*n, Some(name))),
@@ -152,7 +149,6 @@ pub fn PresetBar(
     let stored = name_of(slot());
     let online = view.online;
     let can_store = online && !draft().trim().is_empty();
-    let failed = matches!(view.message, Some((_, true)));
     rsx! {
         section { class: "preset-bar", "aria-label": "Presets",
             label { class: "preset-title", r#for: "preset-slot", "PRESET" }
@@ -205,10 +201,10 @@ pub fn PresetBar(
             }
             button { class: "button", disabled: !online, onclick: move |_| on_open.call(()), "OPEN FILE…" }
             button { class: "button", disabled: !online, onclick: move |_| on_save_file.call(()), "SAVE TO COMPUTER…" }
-            span {
-                class: if failed { "preset-status failed" } else { "preset-status" },
-                role: "status",
-                "aria-live": "polite",
+            span { class: "preset-status", role: "status", "aria-live": "polite",
+                if let Some(error) = &view.error {
+                    span { class: "preset-error", role: "alert", "{error}" }
+                }
                 "{view.status()}"
             }
         }
@@ -224,7 +220,7 @@ mod tests {
             slots: vec![(1, Some("Factory default".into())), (2, None), (3, Some("Show".into()))],
             loaded: Some((1, "Factory default".into())),
             modified: false,
-            message: None,
+            error: None,
             online: true,
         }
     }
@@ -239,8 +235,8 @@ mod tests {
         v.modified = true;
         assert_eq!(v.option_text(1, Some("Factory default")), "01 · Factory default (loaded, modified)");
         assert_eq!(v.status(), "Running: 01 · Factory default · modified");
-        v.message = Some(("Stored as 03 · Show".into(), false));
-        assert_eq!(v.status(), "Stored as 03 · Show");
+        v.error = Some("Not ONLINE".into());
+        assert_eq!(v.status(), "Running: 01 · Factory default · modified", "the running preset stays");
         assert_eq!(PresetView::default().status(), "Running: no stored preset known");
     }
 
@@ -286,6 +282,10 @@ mod tests {
         assert!(out.contains("01 · Factory default (loaded)") && out.contains("02 · Empty"));
         assert!(out.contains("value=\"Factory default\""), "the name of the slot to store under: {out}");
         assert!(!out.contains("disabled=true") && !out.contains("disabled=\"true\""), "{out}");
+
+        let failed =
+            html(|| rsx! { PresetBar { view: PresetView { error: Some("No answer".into()), ..view() } } });
+        assert!(failed.contains("No answer") && failed.contains("Running: 01 · Factory default"), "{failed}");
 
         let off = html(|| rsx! { PresetBar { view: PresetView { online: false, ..view() } } });
         assert!(off.matches("disabled").count() >= 6, "{off}");

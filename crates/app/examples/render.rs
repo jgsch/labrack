@@ -319,7 +319,7 @@ fn demo_presets() -> labrack_app::presets::PresetView {
         slots,
         loaded: Some((1, "Factory default".into())),
         modified: false,
-        message: None,
+        error: None,
         online: true,
     }
 }

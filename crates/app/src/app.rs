@@ -42,7 +42,7 @@ pub fn App() -> Element {
     // the presets each amp has stored, read when it goes ONLINE and after a store (BEH-36)
     let preset_lists = use_signal(HashMap::<AmpId, Vec<Preset>>::new);
     // what the last preset action of an amp did, and whether it failed
-    let mut preset_message = use_signal(|| None::<(AmpId, String, bool)>);
+    let preset_errors: Errors = use_signal(HashMap::new);
     // the action that mutes the outputs, waiting for the user's yes (UX-24)
     let mut asking = use_signal(|| None::<(AmpId, Ask)>);
 
@@ -188,7 +188,7 @@ pub fn App() -> Element {
                             view: {
                                 let mut view = mixeq_view(&hub, picked(), tab(), &delays.read());
                                 if let Some(id) = ids.get(picked()).copied() {
-                                    view.presets = preset_view(&hub, id, &preset_lists.read(), &preset_message.read());
+                                    view.presets = preset_view(&hub, id, &preset_lists.read(), &preset_errors.read());
                                     view.asking = asking.read().as_ref().filter(|(at, _)| *at == id).map(|(_, ask)| ask.clone());
                                 }
                                 view
@@ -246,11 +246,7 @@ pub fn App() -> Element {
                                             .await;
                                         let Some(file) = file else { return };
                                         let path = file.path().to_path_buf();
-                                        let said = match hub.save_file(id, &path).await {
-                                            Ok(()) => (format!("Saved to {}", path.display()), false),
-                                            Err(e) => (e.to_string(), true),
-                                        };
-                                        preset_message.set(Some((id, said.0, said.1)));
+                                        said(preset_errors, id, hub.save_file(id, &path).await);
                                     });
                                 }
                             },
@@ -259,7 +255,7 @@ pub fn App() -> Element {
                                 move |yes: bool| {
                                     let Some((id, ask)) = asking.take() else { return };
                                     if yes {
-                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_message));
+                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors));
                                     }
                                 }
                             },
@@ -274,7 +270,7 @@ pub fn App() -> Element {
                                         // linking mutes the outputs while it runs: it asks first (UX-24)
                                         asking.set(Some((id, Ask::Link)));
                                     } else {
-                                        spawn(set_links(hub.clone(), id, false, preset_message));
+                                        spawn(set_links(hub.clone(), id, false, preset_errors));
                                     }
                                 }
                             },
@@ -410,52 +406,42 @@ fn read_presets(hub: Hub, id: AmpId, mut lists: Signal<HashMap<AmpId, Vec<Preset
     });
 }
 
+/// Why the last preset action of each amp failed, said in its preset bar until the next one (UX-28).
+type Errors = Signal<HashMap<AmpId, String>>;
+
+/// Keep the outcome of an action of an amp: its error, or none after a success.
+fn said(mut errors: Errors, id: AmpId, done: labrack_core::Result<()>) {
+    match done {
+        Ok(()) => errors.write().remove(&id),
+        Err(e) => errors.write().insert(id, e.to_string()),
+    };
+}
+
 /// Link or split both pairs (UX-17): each one not yet as asked.
-async fn set_links(hub: Hub, id: AmpId, linked: bool, mut message: Signal<Option<(AmpId, String, bool)>>) {
+async fn set_links(hub: Hub, id: AmpId, linked: bool, errors: Errors) {
     for side in [Side::Inputs, Side::Outputs] {
         if hub.linked(id, side) != linked
             && let Err(e) = hub.set_link(id, side, linked).await
         {
-            message.set(Some((id, e.to_string(), true)));
-            return;
+            return said(errors, id, Err(e));
         }
     }
-    let done = if linked { "Linked channels 1 and 2" } else { "Split channels 1 and 2" };
-    message.set(Some((id, done.into(), false)));
+    said(errors, id, Ok(()));
 }
 
-/// Do what the user said yes to (UX-24), and say how it went in the preset bar.
-async fn run_ask(
-    hub: Hub,
-    id: AmpId,
-    ask: Ask,
-    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
-    mut message: Signal<Option<(AmpId, String, bool)>>,
-) {
-    let said = match ask {
-        Ask::Link => return set_links(hub, id, true, message).await,
-        Ask::Recall { slot, name } => hub
-            .recall_preset(id, slot)
-            .await
-            .map(|()| format!("Recalled {} · outputs muted", slot_text(slot, Some(&name)))),
+/// Do what the user said yes to (UX-24). What it did shows in the bar itself: the running preset.
+async fn run_ask(hub: Hub, id: AmpId, ask: Ask, lists: Signal<HashMap<AmpId, Vec<Preset>>>, errors: Errors) {
+    let done = match ask {
+        Ask::Link => return set_links(hub, id, true, errors).await,
+        Ask::Recall { slot, .. } => hub.recall_preset(id, slot).await,
         Ask::Store { slot, name, .. } => {
             let done = hub.store_preset(id, slot, &name).await;
             read_presets(hub.clone(), id, lists);
-            done.map(|()| format!("Stored as {} · outputs muted", slot_text(slot, Some(&name))))
+            done
         }
-        Ask::Load { path } => hub.load_file(id, &path).await.map(|report| {
-            let file = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            let skipped = match report.skipped.len() {
-                0 => String::new(),
-                n => format!(", {n} skipped"),
-            };
-            format!("Loaded {file}: {} settings{skipped} · outputs muted", report.applied)
-        }),
+        Ask::Load { path } => hub.load_file(id, &path).await.map(|_| ()),
     };
-    message.set(Some(match said {
-        Ok(text) => (id, text, false),
-        Err(e) => (id, e.to_string(), true),
-    }));
+    said(errors, id, done);
 }
 
 /// What the preset bar shows for an amp (BEH-36 to BEH-38).
@@ -463,7 +449,7 @@ fn preset_view(
     hub: &Hub,
     id: AmpId,
     lists: &HashMap<AmpId, Vec<Preset>>,
-    message: &Option<(AmpId, String, bool)>,
+    errors: &HashMap<AmpId, String>,
 ) -> PresetView {
     let stored = lists.get(&id);
     let slots = hub
@@ -485,10 +471,7 @@ fn preset_view(
             .and_then(|a| a.preset)
             .map(|p| (p.number, p.name)),
         modified: hub.modified(id),
-        message: message
-            .as_ref()
-            .filter(|(at, ..)| *at == id)
-            .map(|(_, text, failed)| (text.clone(), *failed)),
+        error: errors.get(&id).cloned(),
         online: hub.status(id) == Some(labrack_core::Status::Online),
     }
 }
@@ -521,7 +504,7 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             }
             for output in 0..2 {
                 let param = Param::Mute(Channel::Output(output as u8));
-                view.muted[output] = hub.value(amp.id, &param) == Some(Value::Bool(true));
+                view.muted[output] = hub.shown(amp.id, &param) == Some(Value::Bool(true));
             }
             view.amp_muted = hub.amp_muted(amp.id);
             view.preset = amp.preset.as_ref().map(|p| format!("{:02} · {}", p.number, p.name));
@@ -573,8 +556,8 @@ pub fn mixeq_view(
         return MixeqView { tab, ..MixeqView::default() };
     };
     let id = amp.id;
-    let gain = |ch: Channel| hub.value(id, &Param::Gain(ch)).and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let mute = |ch: Channel| hub.value(id, &Param::Mute(ch)) == Some(Value::Bool(true));
+    let gain = |ch: Channel| hub.shown(id, &Param::Gain(ch)).and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let mute = |ch: Channel| hub.shown(id, &Param::Mute(ch)) == Some(Value::Bool(true));
     let meters = hub.meters(id).unwrap_or_default();
     let at = |list: &[f64], i: usize, none: f64| list.get(i).copied().unwrap_or(none);
     let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
@@ -596,7 +579,7 @@ pub fn mixeq_view(
                 limiter: LimiterStrip {
                     label: format!("LIMITER {}", n + 1),
                     gr_db: at(&gr, n, 0.0),
-                    figures: hub.limiter(id, i),
+                    figures: hub.limiter_shown(id, i),
                     bounds,
                 },
             }
@@ -624,9 +607,9 @@ pub fn mixeq_view(
                 .enumerate()
                 .map(|(src, name)| {
                     let param = |field| Param::Mixer { ch: Channel::Input(i), src: src as u8, field };
-                    let db = hub.value(id, &param(MixerField::Level)).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let db = hub.shown(id, &param(MixerField::Level)).and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let muted =
-                        hub.value(id, &param(MixerField::Mute)).and_then(|v| v.as_bool()).unwrap_or(false);
+                        hub.shown(id, &param(MixerField::Mute)).and_then(|v| v.as_bool()).unwrap_or(false);
                     let level_db = match sources.get(src) {
                         Some(level) if !muted => level + db,
                         _ => -120.0,
@@ -664,7 +647,7 @@ pub fn mixeq_view(
 
 /// What an EQ tab draws for one channel (UX-20); what is not read yet shows the default band.
 fn eq_view(hub: &Hub, id: AmpId, ch: Channel) -> EqView {
-    let value = |param: &Param| hub.value(id, param);
+    let value = |param: &Param| hub.shown(id, param);
     let number = |param: Param, none: f64| value(&param).and_then(|v| v.as_f64()).unwrap_or(none);
     let on = |param: Param| value(&param).and_then(|v| v.as_bool()).unwrap_or(false);
     let text = |param: Param, none: &str| {
