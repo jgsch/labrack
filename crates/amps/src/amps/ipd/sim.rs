@@ -107,6 +107,8 @@ pub struct SimAmp {
     presets: HashMap<i64, HashMap<Key, Raw>>,
     /// Writes to channel 2 of a linked pair.
     link_violations: Vec<Key>,
+    /// Echo a link and then keep it off, as an IPD2400 does.
+    refuse_links: bool,
     /// Key of every GET item the amp answered, oldest first.
     reads: Vec<Key>,
     /// The access rights a successful login gives.
@@ -187,6 +189,7 @@ impl SimAmp {
             writes: Vec::new(),
             presets: HashMap::new(),
             link_violations: Vec::new(),
+            refuse_links: false,
             reads: Vec::new(),
             login_rights: 0xFFFF_FFFF,
         }
@@ -329,6 +332,8 @@ impl SimAmp {
                                 .insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(self.login_rights as i64));
                         }
                     }
+                } else if self.refuse_links && key.struct_id == S_LINK {
+                    echo = Some(v);
                 } else if is_shared(key.struct_id) && key.channel & 0x7F == 1 && self.linked(key.channel) {
                     // like the real firmware: echoed, but channel 2 keeps channel 1's value
                     self.link_violations.push(*key);
@@ -411,6 +416,11 @@ impl SimServer {
     /// Writes to channel 2 of a linked pair so far: the real amp ignores them and may stop answering.
     pub fn link_violations(&self) -> Vec<Key> {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).link_violations.clone()
+    }
+
+    /// From now on the amp echoes a link and keeps it off, as a real IPD2400 does.
+    pub fn refuse_links(&self) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).refuse_links = true;
     }
 
     /// Key of every SET the simulated amp processed so far, oldest first. Reads are not listed.

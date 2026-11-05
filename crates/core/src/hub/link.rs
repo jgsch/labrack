@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use labgruppen::{Channel, Param, Value};
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 use super::presets::End;
 use super::{Hub, Session, lock};
@@ -142,6 +142,13 @@ impl Hub {
             amp.set(&switch, Value::Bool(true)).await
         })
         .await?;
+
+        // an amp can echo the link and take it back (an IPD2400 does): ask again before saying linked
+        sleep(shared.timing.link_settle).await;
+        if session.amp.get(&flag).await? != Value::Bool(true) {
+            shared.observed(id, &flag, &Value::Bool(false), true);
+            return Err(Error::LinkRefused);
+        }
 
         // the state for the views: channel 2 first, while the pair is not yet linked in it
         for (param, value) in &copy {

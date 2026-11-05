@@ -71,6 +71,7 @@ pub fn timing() -> Timing {
     Timing {
         retry_first: Duration::from_millis(30),
         retry_max: Duration::from_millis(100),
+        link_settle: Duration::from_millis(100),
         ..Timing::default()
     }
 }
