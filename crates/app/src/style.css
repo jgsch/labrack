@@ -204,7 +204,7 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-extra{display:flex;flex-direction:column;gap:2px;background:var(--base);border:1px solid #7f849c;border-radius:4px;padding:8px 14px}
 .eq-extra.in{border-color:#3f6a85}
 .eq-extra-row{display:grid;grid-template-columns:84px 116px minmax(0,1fr);gap:8px;align-items:center}
-.eq-extra-row.off{opacity:0.65}
+.eq-extra-row.off > :not(.value-field),.eq-extra-row.off .value-box{opacity:0.65}
 .eq-extra-name{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:15px;font-weight:600}
 .eq-extra-name.plain{cursor:default}
 .eq-extra-name input,.eq-on input{width:22px;height:22px;margin:0 10px 0 0;accent-color:var(--c)}
@@ -219,7 +219,8 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-actions{display:flex;gap:8px}
 .button.eq-action{padding:0 14px;font-size:12px;letter-spacing:0}
 .eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
-.eq-row.off{opacity:0.65}
+/* dim the controls, not the row: a floating error of the row must stay solid and on top */
+.eq-row.off > :not(.value-field),.eq-row.off .value-box{opacity:0.65}
 .eq-row.eq-columns{padding:4px 0;border-bottom:2px solid var(--c);font-size:11px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}
 .eq-columns .center{text-align:center}
 .eq-columns .right{text-align:right}
