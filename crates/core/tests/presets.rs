@@ -469,6 +469,16 @@ async fn a_recall_needs_a_valid_slot_and_an_online_amp() {
     assert!(matches!(hub.recall_preset(id, 7).await, Err(Error::UnknownAmp)));
 }
 
+// BEH-6, BEH-36: the slots the views list are the amp's own, 1 to 50; none when it is not ONLINE
+#[tokio::test]
+async fn the_preset_slots_are_the_amp_s() {
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    assert_eq!(hub.preset_slots(id), Some(1..=50));
+    hub.disconnect(id).unwrap();
+    wait_status(&hub, id, Status::Disconnected).await;
+    assert_eq!(hub.preset_slots(id), None);
+}
+
 // the fader value waiting for its turn is not sent after the recall over the recalled settings
 #[tokio::test]
 async fn a_value_waiting_for_its_turn_does_not_outlive_a_recall() {

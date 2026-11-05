@@ -24,13 +24,13 @@ No spec change; implements:
 - [x] Levels tab (IN / OUT / LIMITER rows, same-size dB box and MUTE)
 - [x] EQ tab component (10 bands; outputs add HPF, LPF, delay)
 - [x] Linked layouts
-- [ ] Preset actions
+- [x] Preset actions
 - [ ] Screenshots compared with the Mix & EQ boards
 
 ## Done when
 
 - [ ] The pages match the mockup boards, linked and unlinked
-- [ ] Clicking a preset on the Amplifiers page opens this page for that amp
+- [x] Clicking a preset on the Amplifiers page opens this page for that amp
 
 ## Notes
 
@@ -66,11 +66,15 @@ No spec change; implements:
   one row (BEH-34): channel 1's fader with both meters, LIMITER 1 + 2 with both gain reductions, and
   MUTE 1 / MUTE 2 in each card. `linked-demo` is rendered beside board 07. The linked EQ tabs were
   already one shared tab editing channel 1.
-- **Still to do**: the preset bar; the boxes show
+- **Preset bar** (2026-11-05): `presets.rs` (`PresetBar`, `Ask` and its texts, `ConfirmDialog`),
+  placed and described in UX-28. `App` reads the list on ONLINE and on `Update::Preset`, runs the
+  confirmed action and keeps its message per amp. The file dialogs are `rfd`, the version and backend
+  dioxus-desktop already builds. LINK now asks too (UX-24 lists it; it did not before). Core:
+  `Hub::preset_slots`. The preset of an amp on the Amplifiers page now opens Mix & EQ on that amp (it
+  kept the amp picked before).
+- **Still to do**: the boxes show
   `0` where the boards show `0.0` (`control::number`).
 
 - Depends on `core-dsp-control`, `core-limiter`, `core-link`, `core-mute-presets` and
   `app-controls`.
 - The mockup shows a fixed list of three amps; the app uses the real list.
-- Where preset actions sit is not in the spec or confirmed from the mockup; check the boards
-  and record it in `project/spec/ux.md`.

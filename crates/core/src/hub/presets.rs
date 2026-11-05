@@ -10,6 +10,7 @@
 //! says so: a muted output is never the dangerous state.
 
 use std::future::Future;
+use std::ops::RangeInclusive;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -64,6 +65,11 @@ impl Hub {
         let session = self.session(id)?;
         let list = session.amp.presets().await?;
         Ok(list.into_iter().map(|p| Preset { number: p.index, name: p.name }).collect())
+    }
+
+    /// The slots of the amp's presets (BEH-6), for a view to list; `None` when it is not ONLINE.
+    pub fn preset_slots(&self, id: AmpId) -> Option<RangeInclusive<u32>> {
+        self.session(id).ok().map(|session| session.amp.preset_slots())
     }
 
     /// Recall a stored preset (BEH-37). The outputs are muted first and put back after; an output

@@ -7,6 +7,7 @@ use labrack_core::{Limiter, Side, Unit};
 
 use crate::control::{self, Bounds};
 use crate::eq::{self, Band, Filter};
+use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
 use crate::{Fader, ValueField};
 
 /// The six tabs of UX-16, plus the shared ones a linked pair shows instead of two.
@@ -174,6 +175,9 @@ pub struct MixeqView {
     pub mixer_bounds: Bounds,
     /// The open EQ tab's, when one is open.
     pub eq: Option<EqView>,
+    pub presets: PresetView,
+    /// An action that mutes the outputs, waiting for the user's yes (UX-24).
+    pub asking: Option<Ask>,
 }
 
 impl Default for MixeqView {
@@ -188,6 +192,8 @@ impl Default for MixeqView {
             mixer: Vec::new(),
             mixer_bounds: Bounds { min: -48.0, max: 0.0 },
             eq: None,
+            presets: PresetView::default(),
+            asking: None,
         }
     }
 }
@@ -705,7 +711,15 @@ pub fn MixeqPage(
     #[props(default)] on_limiter: EventHandler<(usize, Unit, f64)>,
     #[props(default)] on_set: EventHandler<Vec<(Param, Value)>>,
     #[props(default)] on_delay: EventHandler<(Channel, bool, f64)>,
+    #[props(default)] on_recall: EventHandler<(u32, String)>,
+    #[props(default)] on_store: EventHandler<(u32, String)>,
+    #[props(default)] on_open: EventHandler<()>,
+    #[props(default)] on_save_file: EventHandler<()>,
+    /// The answer to [`MixeqView::asking`].
+    #[props(default)]
+    on_answer: EventHandler<bool>,
 ) -> Element {
+    let amp_name = view.amps.get(view.selected).map(|a| a.name.clone()).unwrap_or_default();
     let tabs = MixTab::row(view.linked_inputs, view.linked_outputs);
     let tab = view.tab.visible(view.linked_inputs, view.linked_outputs).unwrap_or(MixTab::Levels);
     let side_class = if tab.side() == Side::Inputs { "in" } else { "out" };
@@ -732,6 +746,25 @@ pub fn MixeqPage(
                             }
                         }
                     }
+                }
+            }
+            if !view.amps.is_empty() {
+                PresetBar {
+                    // the slot picked and the name typed belong to the amp
+                    key: "{view.selected}",
+                    view: view.presets.clone(),
+                    on_recall,
+                    on_store,
+                    on_open,
+                    on_save_file,
+                }
+            }
+            if let Some(ask) = view.asking.clone() {
+                ConfirmDialog {
+                    amp: amp_name.clone(),
+                    ask,
+                    on_confirm: move |_| on_answer.call(true),
+                    on_cancel: move |_| on_answer.call(false),
                 }
             }
             div { class: "tab-row", role: "group", "aria-label": "Sections",
@@ -1046,6 +1079,20 @@ mod tests {
         assert_eq!(out.matches("fader-meter mono").count(), 4);
         assert!(!out.contains("gr-bar half") && !out.contains("mute-pair"));
         assert!(out.contains("⛓ LINK 1 + 2"));
+    }
+
+    // BEH-37, UX-24: the preset bar sits on the page, and an action that mutes asks in a popup naming
+    // the amp
+    #[test]
+    fn the_page_has_the_preset_bar_and_asks() {
+        let out = page_html(view(false));
+        assert!(out.contains("aria-label=\"Presets\"") && !out.contains("alertdialog"), "{out}");
+        let asking = MixeqView { asking: Some(Ask::Link), ..view(false) };
+        let out = page_html(asking);
+        assert!(
+            out.contains("role=\"alertdialog\"") && out.contains("Link channels 1 and 2 of FOH?"),
+            "{out}"
+        );
     }
 
     // UX-19: the three cards of a row, each named once, with a meter in the fader, the box and MUTE

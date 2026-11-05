@@ -18,6 +18,8 @@ base64 = "0.22"
 dioxus = { version = "0.7", features = ["desktop"] }
 labgruppen = { package = "amps", path = "../amps" }
 labrack-core = { path = "../core" }
+# the file dialogs of OPEN FILE… and SAVE TO COMPUTER…; the version and backend dioxus-desktop builds
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 tokio = { version = "1", features = ["rt", "time"] }
 
 [dev-dependencies]

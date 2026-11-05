@@ -73,6 +73,7 @@ fn main() {
         ("eq-out-demo", eq_out_demo),
         ("mixer-demo", mixer_demo),
         ("linked-demo", linked_demo),
+        ("ask-demo", ask_demo),
     ] {
         let mut dom = VirtualDom::new(page);
         dom.rebuild_in_place();
@@ -184,6 +185,7 @@ fn levels_page(linked: bool) -> Element {
     let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
+        presets: demo_presets(),
         rows: vec![
             labrack_app::LevelRow {
                 input: strip("IN 1", -24.0),
@@ -243,6 +245,7 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab,
         eq: Some(eq),
+        presets: demo_presets(),
         ..labrack_app::MixeqView::default()
     };
     rsx! {
@@ -281,7 +284,39 @@ fn mixer_demo() -> Element {
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab: labrack_app::MixTab::Mixer,
+        presets: demo_presets(),
         mixer: vec![row(1, 0, -27.0), row(2, 1, -3.0)],
+        ..labrack_app::MixeqView::default()
+    };
+    rsx! {
+        Style {}
+        div { class: "frame",
+            Header { page: Page::MixEq, all_muted: false }
+            main { labrack_app::MixeqPage { view } }
+        }
+    }
+}
+
+/// The presets of the mockup's boards: the factory default in slot 1, loaded.
+fn demo_presets() -> labrack_app::presets::PresetView {
+    let mut slots: Vec<(u32, Option<String>)> = (1..=50).map(|n| (n, None)).collect();
+    slots[0].1 = Some("Factory default".into());
+    labrack_app::presets::PresetView {
+        slots,
+        loaded: Some((1, "Factory default".into())),
+        modified: false,
+        message: None,
+        online: true,
+    }
+}
+
+/// The popup of a recall, over the Levels tab, for the visual check of UX-24.
+fn ask_demo() -> Element {
+    let card = |name: &str| labrack_app::AmpCard { name: name.into(), level_db: -30.0, gr_db: 0.0 };
+    let view = labrack_app::MixeqView {
+        amps: vec![card("FOH Main L")],
+        presets: demo_presets(),
+        asking: Some(labrack_app::presets::Ask::Recall { slot: 1, name: "Factory default".into() }),
         ..labrack_app::MixeqView::default()
     };
     rsx! {

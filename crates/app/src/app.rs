@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use labgruppen::{Channel, EqField, MixerField, Param, Value, XoverField};
-use labrack_core::{AmpId, Hub, Lan, Network, Scan, Side, Store, Timing, Unit, Update};
+use labrack_core::{AmpId, Hub, Lan, Network, Preset, Scan, Side, Store, Timing, Unit, Update};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::amplifiers::{AmpView, Level};
@@ -13,6 +13,7 @@ use crate::mixeq::{
     AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixRow, MixTab, MixeqView,
     SOURCE_NAMES, Strip,
 };
+use crate::presets::{Ask, PresetView, slot_text};
 use crate::search::{KnownAmp, SearchView};
 use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
 
@@ -38,6 +39,12 @@ pub fn App() -> Element {
     let mut tab = use_signal(|| MixTab::Levels);
     // the delay each channel had when its DELAY was unticked, so ticking it restores it (UX-20)
     let mut delays = use_signal(HashMap::<(AmpId, Channel), f64>::new);
+    // the presets each amp has stored, read when it goes ONLINE and after a store (BEH-36)
+    let preset_lists = use_signal(HashMap::<AmpId, Vec<Preset>>::new);
+    // what the last preset action of an amp did, and whether it failed
+    let mut preset_message = use_signal(|| None::<(AmpId, String, bool)>);
+    // the action that mutes the outputs, waiting for the user's yes (UX-24)
+    let mut asking = use_signal(|| None::<(AmpId, Ask)>);
 
     // WebKitGTK can be told a scale that is not the screen's, and everything shrinks to a fraction of
     // its size (seen on niri at a fractional scale: a device pixel ratio of -2/96). The page reports
@@ -72,6 +79,7 @@ pub fn App() -> Element {
         let hub = hub.clone();
         move || {
             let mut updates = hub.subscribe();
+            let hub = hub.clone();
             async move {
                 loop {
                     match updates.recv().await {
@@ -90,6 +98,10 @@ pub fn App() -> Element {
                             } else {
                                 format!("Found {} new", added.len())
                             });
+                            changes += 1;
+                        }
+                        Ok(Update::Status(id, labrack_core::Status::Online) | Update::Preset(id)) => {
+                            read_presets(hub.clone(), id, preset_lists);
                             changes += 1;
                         }
                         Ok(_) | Err(RecvError::Lagged(_)) => changes += 1,
@@ -164,28 +176,105 @@ pub fn App() -> Element {
                                     }
                                 }
                             },
-                            on_preset: move |_| page.set(Page::MixEq),
+                            // the preset of an amp opens Mix & EQ on that amp
+                            on_preset: move |index: usize| {
+                                picked.set(index);
+                                page.set(Page::MixEq);
+                            },
                         }
                     },
                     Page::MixEq => rsx! {
                         MixeqPage {
-                            view: mixeq_view(&hub, picked(), tab(), &delays.read()),
+                            view: {
+                                let mut view = mixeq_view(&hub, picked(), tab(), &delays.read());
+                                if let Some(id) = ids.get(picked()).copied() {
+                                    view.presets = preset_view(&hub, id, &preset_lists.read(), &preset_message.read());
+                                    view.asking = asking.read().as_ref().filter(|(at, _)| *at == id).map(|(_, ask)| ask.clone());
+                                }
+                                view
+                            },
+                            on_recall: {
+                                let ids = ids.clone();
+                                move |(slot, name): (u32, String)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        asking.set(Some((id, Ask::Recall { slot, name })));
+                                    }
+                                }
+                            },
+                            on_store: {
+                                let ids = ids.clone();
+                                move |(slot, name): (u32, String)| {
+                                    if let Some(id) = ids.get(picked()).copied() {
+                                        let replaces = preset_lists
+                                            .read()
+                                            .get(&id)
+                                            .and_then(|list| list.iter().find(|p| p.number == slot))
+                                            .map(|p| slot_text(slot, Some(&p.name)));
+                                        asking.set(Some((id, Ask::Store { slot, name, replaces })));
+                                    }
+                                }
+                            },
+                            on_open: {
+                                let ids = ids.clone();
+                                move |_| {
+                                    let Some(id) = ids.get(picked()).copied() else { return };
+                                    spawn(async move {
+                                        let file = rfd::AsyncFileDialog::new()
+                                            .set_title("Open a settings file")
+                                            .add_filter("Settings file", &["json"])
+                                            .pick_file()
+                                            .await;
+                                        if let Some(file) = file {
+                                            asking.set(Some((id, Ask::Load { path: file.path().to_path_buf() })));
+                                        }
+                                    });
+                                }
+                            },
+                            on_save_file: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |_| {
+                                    let Some(id) = ids.get(picked()).copied() else { return };
+                                    let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_default();
+                                    let hub = hub.clone();
+                                    spawn(async move {
+                                        let file = rfd::AsyncFileDialog::new()
+                                            .set_title("Save the settings to a file")
+                                            .add_filter("Settings file", &["json"])
+                                            .set_file_name(format!("{name}.json"))
+                                            .save_file()
+                                            .await;
+                                        let Some(file) = file else { return };
+                                        let path = file.path().to_path_buf();
+                                        let said = match hub.save_file(id, &path).await {
+                                            Ok(()) => (format!("Saved to {}", path.display()), false),
+                                            Err(e) => (e.to_string(), true),
+                                        };
+                                        preset_message.set(Some((id, said.0, said.1)));
+                                    });
+                                }
+                            },
+                            on_answer: {
+                                let hub = hub.clone();
+                                move |yes: bool| {
+                                    let Some((id, ask)) = asking.take() else { return };
+                                    if yes {
+                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_message));
+                                    }
+                                }
+                            },
                             on_pick: move |index| picked.set(index),
                             on_tab: move |next| tab.set(next),
                             on_link: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
                                 move |linked: bool| {
-                                    if let Some(id) = ids.get(picked()).copied() {
-                                        let hub = hub.clone();
-                                        // one link for everything (UX-17): each pair not yet as asked
-                                        spawn(async move {
-                                            for side in [Side::Inputs, Side::Outputs] {
-                                                if hub.linked(id, side) != linked {
-                                                    let _ = hub.set_link(id, side, linked).await;
-                                                }
-                                            }
-                                        });
+                                    let Some(id) = ids.get(picked()).copied() else { return };
+                                    if linked {
+                                        // linking mutes the outputs while it runs: it asks first (UX-24)
+                                        asking.set(Some((id, Ask::Link)));
+                                    } else {
+                                        spawn(set_links(hub.clone(), id, false, preset_message));
                                     }
                                 }
                             },
@@ -309,6 +398,98 @@ pub fn App() -> Element {
                 }
             }
         }
+    }
+}
+
+/// Read the presets an amp has stored, for the preset bar.
+fn read_presets(hub: Hub, id: AmpId, mut lists: Signal<HashMap<AmpId, Vec<Preset>>>) {
+    spawn(async move {
+        if let Ok(list) = hub.presets(id).await {
+            lists.write().insert(id, list);
+        }
+    });
+}
+
+/// Link or split both pairs (UX-17): each one not yet as asked.
+async fn set_links(hub: Hub, id: AmpId, linked: bool, mut message: Signal<Option<(AmpId, String, bool)>>) {
+    for side in [Side::Inputs, Side::Outputs] {
+        if hub.linked(id, side) != linked
+            && let Err(e) = hub.set_link(id, side, linked).await
+        {
+            message.set(Some((id, e.to_string(), true)));
+            return;
+        }
+    }
+    let done = if linked { "Linked channels 1 and 2" } else { "Split channels 1 and 2" };
+    message.set(Some((id, done.into(), false)));
+}
+
+/// Do what the user said yes to (UX-24), and say how it went in the preset bar.
+async fn run_ask(
+    hub: Hub,
+    id: AmpId,
+    ask: Ask,
+    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
+    mut message: Signal<Option<(AmpId, String, bool)>>,
+) {
+    let said = match ask {
+        Ask::Link => return set_links(hub, id, true, message).await,
+        Ask::Recall { slot, name } => hub
+            .recall_preset(id, slot)
+            .await
+            .map(|()| format!("Recalled {} · outputs muted", slot_text(slot, Some(&name)))),
+        Ask::Store { slot, name, .. } => {
+            let done = hub.store_preset(id, slot, &name).await;
+            read_presets(hub.clone(), id, lists);
+            done.map(|()| format!("Stored as {} · outputs muted", slot_text(slot, Some(&name))))
+        }
+        Ask::Load { path } => hub.load_file(id, &path).await.map(|report| {
+            let file = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let skipped = match report.skipped.len() {
+                0 => String::new(),
+                n => format!(", {n} skipped"),
+            };
+            format!("Loaded {file}: {} settings{skipped} · outputs muted", report.applied)
+        }),
+    };
+    message.set(Some(match said {
+        Ok(text) => (id, text, false),
+        Err(e) => (id, e.to_string(), true),
+    }));
+}
+
+/// What the preset bar shows for an amp (BEH-36 to BEH-38).
+fn preset_view(
+    hub: &Hub,
+    id: AmpId,
+    lists: &HashMap<AmpId, Vec<Preset>>,
+    message: &Option<(AmpId, String, bool)>,
+) -> PresetView {
+    let stored = lists.get(&id);
+    let slots = hub
+        .preset_slots(id)
+        .map(|slots| {
+            slots
+                .map(|n| {
+                    (n, stored.and_then(|list| list.iter().find(|p| p.number == n)).map(|p| p.name.clone()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    PresetView {
+        slots,
+        loaded: hub
+            .amps()
+            .into_iter()
+            .find(|a| a.id == id)
+            .and_then(|a| a.preset)
+            .map(|p| (p.number, p.name)),
+        modified: hub.modified(id),
+        message: message
+            .as_ref()
+            .filter(|(at, ..)| *at == id)
+            .map(|(_, text, failed)| (text.clone(), *failed)),
+        online: hub.status(id) == Some(labrack_core::Status::Online),
     }
 }
 
@@ -466,7 +647,19 @@ pub fn mixeq_view(
         .visible(linked_inputs, linked_outputs)
         .and_then(MixTab::channel)
         .map(|ch| EqView { delay_restore: delays.get(&(id, ch)).copied(), ..eq_view(hub, id, ch) });
-    MixeqView { amps: cards, selected, tab, linked_inputs, linked_outputs, rows, mixer, mixer_bounds, eq }
+    MixeqView {
+        amps: cards,
+        selected,
+        tab,
+        linked_inputs,
+        linked_outputs,
+        rows,
+        mixer,
+        mixer_bounds,
+        eq,
+        presets: PresetView::default(),
+        asking: None,
+    }
 }
 
 /// What an EQ tab draws for one channel (UX-20); what is not read yet shows the default band.
