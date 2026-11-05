@@ -47,6 +47,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .value-box input{width:100%;height:44px;box-sizing:border-box;padding:0 20px 0 3px;text-align:right;border-radius:4px;background:var(--panel);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;font-weight:600}
 .value-unit{position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--muted);pointer-events:none}
 .error-text{color:var(--red);font-size:11px;text-align:center;max-width:220px}
+.error-text.floating{position:absolute;top:100%;margin-top:6px;z-index:10;box-sizing:border-box;width:max-content;padding:6px 10px;border-radius:6px;background:var(--panel);border:1px solid var(--red);pointer-events:none}
 .button{min-height:44px;padding:0 16px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .button.confirm-armed{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 .confirm-dialog{position:absolute;top:100%;margin-top:6px;z-index:10;display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:6px;background:var(--panel);border:1px solid var(--border-strong);font-size:12px;white-space:nowrap}

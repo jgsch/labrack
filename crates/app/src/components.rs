@@ -197,11 +197,14 @@ pub fn ValueField(
                 }
             }
             if !error().is_empty() {
-                ErrorText { text: error() }
+                ErrorText { text: error(), floating: true }
             }
         }
     }
 }
+
+/// How long the error of a typed value stays.
+const ERROR_SHOWN: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// What takes a typed value into the amp or refuses it; the pieces of a [`ValueField`].
 #[derive(Clone)]
@@ -226,7 +229,17 @@ impl Committed {
         let Some(raw) = draft() else { return };
         draft.set(None);
         match control::typed(&raw, self.bounds, &self.unit) {
-            Err(why) => error.set(why.0),
+            Err(why) => {
+                let text = why.0;
+                error.set(text.clone());
+                // it fades after a moment (UX-26)
+                spawn(async move {
+                    tokio::time::sleep(ERROR_SHOWN).await;
+                    if error() == text {
+                        error.set(String::new());
+                    }
+                });
+            }
             Ok(next) if next == self.value => error.set(String::new()),
             Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next, self.ask_from) => {
                 error.set(String::new());
@@ -301,11 +314,11 @@ pub fn Meter(level_db: f64, #[props(default = 0.0)] gain_reduction_db: f64) -> E
 }
 
 /// A message in red, beside the control that caused it (UX-26). It is a live region, so a screen
-/// reader says it when it appears.
+/// reader says it when it appears. A `floating` one lies over the page instead of moving it.
 #[component]
-pub fn ErrorText(text: String) -> Element {
+pub fn ErrorText(text: String, #[props(default)] floating: bool) -> Element {
     rsx! {
-        span { class: "error-text", role: "alert", "{text}" }
+        span { class: if floating { "error-text floating" } else { "error-text" }, role: "alert", "{text}" }
     }
 }
 
@@ -372,5 +385,13 @@ mod tests {
         let out = html(|| rsx! { ErrorText { text: "outside -48 to 12 dB" } });
         assert!(out.contains("role=\"alert\""), "{out}");
         assert!(out.contains("error-text"));
+        assert!(!out.contains("floating"), "beside the control by default");
+    }
+
+    // UX-26: the error of a typed value lies over the page, so that it moves nothing
+    #[test]
+    fn a_floating_error_does_not_take_room() {
+        let out = html(|| rsx! { ErrorText { text: "outside -48 to 12 dB", floating: true } });
+        assert!(out.contains("error-text floating"), "{out}");
     }
 }
