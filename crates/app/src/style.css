@@ -62,12 +62,12 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .meter-gr-fill{position:absolute;top:0;bottom:0;right:0;background:var(--peach);transition:width 0.09s linear}
 /* Amplifiers page (UX-11 to UX-13). */
 .amp-list{display:flex;flex-direction:column;gap:12px}
-.amp-panel{display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 18px 18px}
-.amp-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px 24px}
-.amp-ident{min-width:0;display:flex;flex-direction:column;gap:6px}
+.amp-panel{position:relative;display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 18px 18px}
+.amp-head{min-height:62px}
+.amp-ident{min-width:0;box-sizing:border-box;padding-right:280px;display:flex;flex-direction:column;gap:6px}
 .amp-name{min-width:0;font-size:28px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .amp-status-row{display:flex;align-items:center;gap:10px;min-width:0}
-.amp-actions{flex:0 0 auto;display:flex;align-items:center;gap:12px}
+.amp-actions{position:absolute;top:14px;right:18px;height:62px;display:flex;align-items:center;gap:12px}
 .amp-actions .small-button{min-height:36px;padding:0 14px}
 .amp-body{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px 24px}
 .amp-badge{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--muted);border:1px solid var(--border-strong);border-radius:3px;padding:1px 6px}
@@ -82,8 +82,8 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}
 .label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .ip-input{flex:0 1 112px;min-width:0;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
-.preset-link{font-size:12px}
-.preset-name{flex:0 1 auto;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preset-link{font-size:9.6px}
+.preset-name{flex:0 1 auto;min-width:0;font-size:9.6px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modified{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--lavender)}
 .amp-meter{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:8px}
 .channel{display:flex;align-items:center;gap:14px;height:40px}
