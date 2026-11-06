@@ -34,15 +34,38 @@ async fn ipd_mode(sim: &labgruppen::amps::ipd::sim::SimServer) -> i64 {
     raw
 }
 
-// BEH-44: the mode the amp holds is shown once the state is read; an IPX has none
+// BEH-44: the mode the amp holds is shown once the state is read, on an IPD and on an IPX
 #[tokio::test(flavor = "multi_thread")]
-async fn the_device_mode_is_shown_and_an_ipx_has_none() {
+async fn the_device_mode_is_shown() {
     let (hub, id, _sim) = online_ipd().await;
     assert_eq!(hub.device_mode(id).as_deref(), Some("stereo"));
 
     let (hub, id, _fake) = online_ipx(timing()).await;
-    assert_eq!(hub.device_mode(id), None);
-    assert!(matches!(hub.set_device_mode(id, "stereo").await, Err(Error::NotControllable)));
+    assert_eq!(hub.device_mode(id).as_deref(), Some("stereo"));
+}
+
+// BEH-44: an IPX changes its mode like an IPD does, and a change on its front panel is seen
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipx_changes_its_mode_and_shows_a_change_on_the_front_panel() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let mode_dword = labgruppen::amps::ipx::structs::DeviceState::AUDIO_OFFSET;
+    let held = || i32::from_le_bytes(fake.state().sync[mode_dword..mode_dword + 4].try_into().unwrap());
+
+    hub.set_device_mode(id, "two_way").await.unwrap();
+    assert_eq!((held(), hub.device_mode(id).as_deref()), (0, Some("two_way")));
+    hub.set_device_mode(id, "stereo").await.unwrap();
+    assert_eq!((held(), hub.device_mode(id).as_deref()), (1, Some("stereo")));
+
+    fake.state().sync[mode_dword..mode_dword + 4].copy_from_slice(&0i32.to_le_bytes());
+    let mut seen = None;
+    for _ in 0..30 {
+        seen = hub.device_mode(id);
+        if seen.as_deref() == Some("two_way") {
+            break;
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(seen.as_deref(), Some("two_way"), "the hub asks for the mode now and then");
 }
 
 // BEH-44, SEC-6, SEC-7: changing the mode mutes the outputs around it and puts them back as they were; the

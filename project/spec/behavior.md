@@ -52,7 +52,7 @@ statement with a `BEH-<n>` ID.
   restart.
 - **BEH-10** The IP can be edited at any time. An amp that is not ONLINE shows no signal; its
   controls stay visible but are disabled (nothing can be written to it, see `SEC-1`).
-- **BEH-11** The preset line shows number and name, plus a MODIFIED flag (see `BEH-38`). An IPD can
+- **BEH-11** The preset line shows number and name, plus a MODIFIED flag, drawn as a dot (see `BEH-38`). An IPD can
   say the name of its preset and a number of 0: it is then shown by its name, and the number is the
   slot of the one stored preset that has that name, found when the app reads the stored presets
   (after the amp's state, which an IPD reads slowly).
@@ -185,13 +185,14 @@ statement with a `BEH-<n>` ID.
   stay per channel. The sides are independent: with only one side linked, the second row shows the
   other side's channel 2 alone.
 - **BEH-35** Unlinking restores separate channels and keeps the current values.
-- **BEH-44** Device mode. An IPD has a mode, `stereo` or `two_way` ("2 ways" on its front panel), that
-  decides which inputs feed which outputs: in stereo input n feeds output n, in two ways an IPD2400
-  feeds both outputs from input A (seen on hardware). The mode is bit 0x1000 of a number the amp
-  also uses for other things, so a change keeps the other bits. The app reads it with the state and
+- **BEH-44** Device mode. An IPD and an IPX each have a mode, `stereo` or `two_way` ("2 ways" on its
+  front panel), that decides which inputs feed which outputs: in stereo input n feeds output n, in two
+  ways an IPD2400 feeds both outputs from input A (seen on hardware). On an IPD the mode is bit 0x1000
+  of a number the amp also uses for other things, so a change keeps the other bits. The app reads it with the state and
   asks for it again about once a second, so a change made on the front panel shows. Changing it from
   the app asks first, mutes the outputs while it is done and puts them back as they were (`SEC-6`,
-  `SEC-7`). A settings file never sets it. An amp without a mode (the IPX) shows none.
+  `SEC-7`). A settings file never sets it. The IPX keeps it as a number of its own (MODEAES, field 0: 1 stereo,
+  0 2 ways); it is asked for about once a second too.
 
 ## Presets
 

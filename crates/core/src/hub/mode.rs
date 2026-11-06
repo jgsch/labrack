@@ -1,5 +1,5 @@
-//! The device mode of an amp (BEH-44): which inputs feed which outputs. An IPD has one (stereo, two
-//! ways); it is set on the front panel or here, and shown as the amp holds it, however it was changed.
+//! The device mode of an amp (BEH-44): which inputs feed which outputs. An IPD and an IPX have one (stereo,
+//! two ways); it is set on the front panel or here, and shown as the amp holds it, however it was changed.
 
 use labgruppen::{DEVICE_MODES, Param, Value};
 
@@ -9,8 +9,8 @@ use crate::store::AmpId;
 use crate::{Error, Result};
 
 impl Hub {
-    /// The device mode the amp holds (`stereo`, `two_way`); `None` for an amp without one (the IPX), when
-    /// it is not ONLINE, and until the state is read.
+    /// The device mode the amp holds (`stereo`, `two_way`); `None` for an amp that is not ONLINE and until
+    /// the state is read.
     pub fn device_mode(&self, id: AmpId) -> Option<String> {
         match self.value(id, &Param::Mode)? {
             Value::Text(mode) => Some(mode),

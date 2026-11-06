@@ -855,30 +855,32 @@ async fn load_state(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp
 }
 
 /// The IPD tells nothing of a mute made on its front panel, so the output mutes are asked for about
-/// as often as the meters arrive (BEH-12). The IPX tells by itself.
+/// as often as the meters arrive (BEH-12). The IPX tells by itself, but not its device mode, which both
+/// are asked for about once a second (BEH-44).
 async fn poll_mutes(
     shared: Arc<Shared>,
     id: AmpId,
     amp: Arc<dyn labgruppen::Amp>,
     gate: Arc<tokio::sync::Mutex<()>>,
 ) {
-    if amp.info().driver != "ipd" {
+    let ipd = amp.info().driver == "ipd";
+    let with_mode = amp.params().contains(&Param::Mode);
+    if !ipd && !with_mode {
         return;
     }
     // an IPD answers one thing at a time: the polling waits until the state is read, and never runs during
     // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
     wait_loaded(&shared, id).await;
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
-    // the device mode is changed on the front panel now and then: asked for once a second, with the mutes
-    let with_mode = amp.params().contains(&Param::Mode);
-    let mode_every =
-        (Duration::from_secs(1).as_millis() / shared.timing.mute_poll_interval.as_millis().max(1)).max(1);
-    let mut tick = interval(shared.timing.mute_poll_interval);
+    // the device mode is changed on the front panel now and then: asked for once a second
+    let period = if ipd { shared.timing.mute_poll_interval } else { Duration::from_secs(1) };
+    let mode_every = (Duration::from_secs(1).as_millis() / period.as_millis().max(1)).max(1);
+    let mut tick = interval(period);
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut round = 0u128;
     loop {
         tick.tick().await;
-        let mut asked = outputs.to_vec();
+        let mut asked = if ipd { outputs.to_vec() } else { Vec::new() };
         if with_mode && round.is_multiple_of(mode_every) {
             asked.push(Param::Mode);
         }
