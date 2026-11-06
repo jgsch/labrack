@@ -122,6 +122,10 @@ impl Slot {
     }
 }
 
+/// The device mode of an IPX, by its number: 0 is "2 ways" and 1 is "stereo" (the front panel showed 2 ways
+/// after a write of 0, stereo with 1; no other number was tried).
+const IPX_MODES: &[&str] = &["two_way", "stereo"];
+
 /// Address and encoding of `param`, `None` when the IPX does not have it.
 pub fn slot(param: &Param) -> Option<Slot> {
     let ch = param.channel();
@@ -137,8 +141,7 @@ pub fn slot(param: &Param) -> Option<Slot> {
         Param::Mute(_) => s(level_env, 0, 1, Ty::Bool),
         Param::Polarity(_) if !input => s(level_env, 0, 2, Ty::Bool),
         Param::Polarity(_) => return None,
-        // no device mode is known on the IPX
-        Param::Mode => return None,
+        Param::Mode => s(Env::MODEAES, 0, 0, Ty::Enum(IPX_MODES)),
         Param::Link(_) => s(level_env, 0, if input { 2 } else { 3 }, Ty::Bool),
         Param::Name(_) => s(level_env, 0, if input { 3 } else { 4 }, Ty::Text).read_only(),
         Param::Delay(_) => {
@@ -254,6 +257,7 @@ fn build_all() -> Vec<Param> {
             candidates.extend(MixerField::ALL.iter().map(|&field| Param::Mixer { ch, src, field }));
         }
     }
+    candidates.push(Param::Mode);
     candidates.retain(|p| slot(p).is_some());
     candidates
 }

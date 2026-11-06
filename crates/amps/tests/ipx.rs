@@ -131,7 +131,7 @@ fn value_codec() {
 #[test]
 fn parameter_table() {
     let all = params::all();
-    assert_eq!(all.len(), 288);
+    assert_eq!(all.len(), 289, "288 per-channel settings and the device mode");
     assert_eq!(all.iter().collect::<HashSet<_>>().len(), all.len());
     assert_eq!(all[0], param("in1.gain"));
     assert_eq!(all[71], param("in2.gain"));
@@ -400,7 +400,7 @@ async fn snapshot_matches_single_reads_and_restores() {
     let amp = fake.connect().await;
     let snap = amp.snapshot().await.unwrap();
     assert_eq!((snap.driver.as_str(), snap.model.as_str()), ("ipx", "IPX 1200"));
-    assert_eq!(snap.params.len(), 288);
+    assert_eq!(snap.params.len(), 289);
     for p in amp.params() {
         assert_eq!(snap.params[&p.to_string()], amp.get(&p).await.unwrap(), "{p}");
     }
@@ -416,9 +416,9 @@ async fn snapshot_matches_single_reads_and_restores() {
 
     let report = amp.restore(&snap, false).await.unwrap();
     assert!(report.failed.is_empty(), "{:?}", report.failed);
-    // everything but the four names: the limiter's watts and dBu are written too (BEH-5)
+    // everything but the four names and the device mode: the limiter's watts and dBu are written too (BEH-5)
     assert_eq!(report.applied, 284);
-    assert_eq!(report.skipped.len(), 4);
+    assert_eq!(report.skipped.len(), 5);
     assert_eq!(amp.snapshot().await.unwrap().params, snap.params);
 }
 
@@ -812,4 +812,28 @@ async fn a_scan_finds_an_ipx_on_its_port_and_nothing_else() {
     });
     let found = labgruppen::amps::ipx::scan_port("127.0.0", port, Duration::from_secs(2)).await;
     assert!(found.is_empty(), "{found:?}");
+}
+
+/// BEH-44: the device mode of an IPX is env 5 field 0 (1 = stereo, 0 = 2 ways, seen on an IPX 1200); a
+/// settings file never sets it.
+#[tokio::test]
+async fn the_device_mode_is_read_and_written() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let mode = Address::new(Env::MODEAES, 0, 0, 0);
+    amp.set(&Param::Mode, text("stereo")).await.unwrap();
+    assert_eq!(amp.get_raw(mode).await.unwrap(), 1i32.to_le_bytes());
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("stereo"));
+
+    amp.set(&Param::Mode, text("two_way")).await.unwrap();
+    assert_eq!(amp.get_raw(mode).await.unwrap(), 0i32.to_le_bytes());
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("two_way"));
+    assert_eq!(amp.snapshot().await.unwrap().params["mode"], text("two_way"));
+    assert!(amp.set(&Param::Mode, text("bridge")).await.is_err());
+
+    let mut snap = amp.snapshot().await.unwrap();
+    snap.params.insert("mode".into(), text("stereo"));
+    let report = amp.restore(&snap, false).await.unwrap();
+    assert!(report.skipped.contains(&"mode".to_string()), "{:?}", report.skipped);
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("two_way"));
 }

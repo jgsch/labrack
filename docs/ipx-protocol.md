@@ -146,7 +146,7 @@ Crossover type: 0 Butterworth 6, 1 Bessel 6, 2 Butterworth 12, 3 Bessel 12, 4 Li
 
 | Dword | Content | Size |
 |---|---|---|
-| 0x00 | operating mode | 1 |
+| 0x00 | operating mode (see below) | 1 |
 | 0x01 | AES-to-analog | 1 |
 | 0x02 + c*0x18 | mixer: 4 sources x {level, mute, name[16]} (6 dwords each) | 0x18 |
 | 0x32 + c*7 | input level {level, mute, link, name[16]} | 7 |
@@ -160,6 +160,8 @@ Crossover type: 0 Butterworth 6, 1 Bessel 6, 2 Butterworth 12, 3 Bessel 12, 4 Li
 | 0x138 + c*2 | output delay | 2 |
 | 0x13C + c*6 | output compressor | 6 |
 | 0x148 + c*5 | output limiter {Vpk, ohms, watts, dBu, release} | 5 |
+
+Operating mode (IPX 1200, 2026-11-06): GETPRM/SETPRM env 5 (MODEAES), channel 0, item 0, field 0 is this dword. 1 = "stereo", 0 = "2 ways" (the front panel showed stereo when it read 1, and 2 ways after a write of 0, checked with the user at the amp). The write holds and changes nothing else in the audio config. Other numbers were not tried and may be other modes. No signal was available to check the routing.
 
 Total 0x152 dwords = 0x548 bytes. The same audio config appears in a GETPRESET reply.
 

@@ -43,6 +43,8 @@ pub fn audio_dword(addr: Address) -> Option<usize> {
     }
     // (base of channel 0, stride per channel, items, stride per item, fields per item)
     let (base, chan, items, item_stride, fields) = match addr.env {
+        // the operating mode (dword 0) and AES-to-analog (dword 1): one set for the unit
+        Env::MODEAES => (0x00, 0, 1, 0, 2),
         Env::INPUT_MIXER => (0x02, 0x18, 4, 6, 6),
         Env::INPUT_LEVEL => (0x32, 7, 1, 0, 7),
         Env::INPUT_EQ => (0x40, 0x32, 10, 5, 5),
