@@ -231,7 +231,12 @@ impl Hub {
             Err(e) => return Err(left_muted(e)),
         };
 
-        let after = read_mutes(amp).await.map_err(left_muted)?;
+        // a change that is no preset or file leaves the mutes as this function set them: no need to ask the
+        // amp again, which an IPD answers in seconds
+        let after = match end {
+            End::AsBefore => [true, true],
+            End::Muted => read_mutes(amp).await.map_err(left_muted)?,
+        };
         let want: [bool; 2] = match end {
             End::AsBefore => before,
             End::Muted => [true, true],

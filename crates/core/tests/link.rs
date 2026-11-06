@@ -815,6 +815,7 @@ async fn an_ipd_found_linked_is_shown_linked_and_never_written_on_channel_2() {
 async fn linking_does_not_fail_on_a_value_just_outside_the_range() {
     let (hub, id, fake) = ipx_ready().await;
     front_panel(&fake, "out1.limiter.threshold_dbu", f(36.02));
+    wait_value(&hub, id, "out1.limiter.threshold_dbu", f(36.02)).await;
 
     hub.set_link(id, Side::Outputs, true).await.unwrap();
 
@@ -827,6 +828,7 @@ async fn a_value_outside_the_range_is_still_refused_above_a_ceiling() {
     let (hub, id, fake) = ipx_ready().await;
     hub.set_ceilings(id, Ceilings { max_limiter_dbu: Some(30.0), ..Ceilings::default() }).unwrap();
     front_panel(&fake, "out1.limiter.threshold_dbu", f(36.02));
+    wait_value(&hub, id, "out1.limiter.threshold_dbu", f(36.02)).await;
 
     assert!(hub.set_link(id, Side::Outputs, true).await.is_err());
     assert!(!hub.linked(id, Side::Outputs));
@@ -972,4 +974,36 @@ async fn copying_an_eq_needs_an_online_amp() {
     hub.disconnect(id).unwrap();
     wait_status(&hub, id, labrack_core::Status::Disconnected).await;
     assert!(matches!(hub.copy_eq(id, Channel::Output(1)).await, Err(Error::NotOnline)));
+}
+
+// BEH-12: an IPD answers a read in seconds at times, so linking and the mutes around it do not read what the
+// app holds already: channel 1 comes from the state, and the mutes are asked for once, not twice
+#[tokio::test(flavor = "multi_thread")]
+async fn linking_an_ipd_reads_little_from_the_amp() {
+    let (hub, id, sim) = ipd_ready().await;
+    sleep(Duration::from_millis(300)).await;
+    let before = sim.reads().len();
+
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+
+    let reads = sim.reads()[before..].to_vec();
+    let polled = reads.iter().filter(|k| k.struct_id == S_MUTE).count();
+    assert!(reads.len() == polled, "only mutes are read: {reads:?}");
+    assert!(polled <= 4, "{polled} reads of the mutes (one asking before, the rest the polling)");
+}
+
+// BEH-35: unlinking the app's own link of an IPD writes nothing and does not wait for the amp
+#[tokio::test(flavor = "multi_thread")]
+async fn unlinking_an_ipd_pair_does_not_wait_for_the_amp() {
+    let (hub, id, sim) = ipd_ready().await;
+    hub.set_link(id, Side::Outputs, true).await.unwrap();
+    let writes = sim.writes().len();
+    sim.set_latency(Duration::from_millis(500));
+
+    let started = std::time::Instant::now();
+    hub.set_link(id, Side::Outputs, false).await.unwrap();
+
+    assert!(started.elapsed() < Duration::from_millis(200), "{:?}", started.elapsed());
+    assert!(!hub.linked(id, Side::Outputs));
+    assert_eq!(sim.writes().len(), writes, "nothing written");
 }

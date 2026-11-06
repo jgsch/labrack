@@ -107,6 +107,8 @@ pub struct SimAmp {
     presets: HashMap<i64, HashMap<Key, Raw>>,
     /// Writes to channel 2 of a linked pair.
     link_violations: Vec<Key>,
+    /// How long the amp takes to answer, as a real IPD does at times.
+    latency: std::time::Duration,
     /// Key of every GET item the amp answered, oldest first.
     reads: Vec<Key>,
     /// The access rights a successful login gives.
@@ -187,6 +189,7 @@ impl SimAmp {
             writes: Vec::new(),
             presets: HashMap::new(),
             link_violations: Vec::new(),
+            latency: std::time::Duration::ZERO,
             reads: Vec::new(),
             login_rights: 0xFFFF_FFFF,
         }
@@ -431,6 +434,11 @@ impl SimServer {
         amp.values.insert(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text(name.into()));
     }
 
+    /// From now on every answer takes `latency`.
+    pub fn set_latency(&self, latency: std::time::Duration) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).latency = latency;
+    }
+
     /// Put the amp at user level `level` (index in `USERS`) with these access rights, as if someone
     /// had logged in or out at the front panel.
     pub fn set_access(&self, level: i64, rights: u32) {
@@ -465,7 +473,13 @@ async fn serve(amp: Arc<Mutex<SimAmp>>, mut conn: TcpStream, mut stopped: watch:
         if buf[..n].starts_with(b"DDRESET") {
             return;
         }
-        let reply = amp.lock().unwrap_or_else(|e| e.into_inner()).handle(&buf[..n]);
+        let (reply, latency) = {
+            let mut amp = amp.lock().unwrap_or_else(|e| e.into_inner());
+            (amp.handle(&buf[..n]), amp.latency)
+        };
+        if !latency.is_zero() {
+            tokio::time::sleep(latency).await;
+        }
         if let Some(r) = reply
             && conn.write_all(&r).await.is_err()
         {

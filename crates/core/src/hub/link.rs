@@ -13,10 +13,8 @@
 //! The same machinery copies the EQ of a channel to the other one ([`Hub::copy_eq`], BEH-33).
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use labgruppen::{Channel, Param, Value};
-use tokio::time::timeout;
 
 use super::presets::End;
 use super::{Hub, Session, lock};
@@ -140,9 +138,11 @@ impl Hub {
         let ipx = session.is_ipx();
 
         if !linked {
-            let _gate = session.gate.lock().await;
-            // an IPD whose own flag is on (front panel, another tool) gets it switched off: the user asks
+            // an IPD whose own flag is on (front panel, another tool) gets it switched off: the user asks.
+            // The app's own link writes nothing, so it does not wait for the amp (the mute polling holds it
+            // for as long as an IPD takes to answer)
             if ipx || self.amp_keeps_equal(id, side) {
+                let _gate = session.gate.lock().await;
                 session.amp.set(&flag, Value::Bool(false)).await?;
                 shared.observed(id, &flag, &Value::Bool(false), true);
             }
@@ -243,15 +243,16 @@ impl Hub {
 
     /// The writes that make channel 2 equal to channel 1, all checked.
     async fn plan_copy(&self, id: AmpId, session: &Session, side: Side) -> Result<Vec<(Param, Value)>> {
-        let masters: Vec<Param> = session
+        // channel 1 is read from the state the app holds, which is complete (the state is read) and kept
+        // current by the amp's own reports: asking an IPD again takes seconds
+        let state = self.values(id);
+        let (masters, values): (Vec<Param>, Vec<Value>) = session
             .amp
             .params()
             .into_iter()
             .filter(|param| link::follows(param) == Some(side) && !link::is_second(param))
-            .collect();
-        let values = timeout(Duration::from_secs(30), session.amp.get_many(&masters))
-            .await
-            .map_err(|_| labgruppen::Error::Timeout("reading channel 1".into()))??;
+            .filter_map(|param| state.get(&param).cloned().map(|value| (param, value)))
+            .unzip();
         let ceilings = self.0.shared.store().get(id).ok_or(Error::UnknownAmp)?.ceilings;
 
         let mut copy = Vec::new();
