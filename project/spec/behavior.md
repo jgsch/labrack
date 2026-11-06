@@ -122,6 +122,9 @@ statement with a `BEH-<n>` ID.
 - **BEH-22** Manually added amps have source MANUAL.
 - **BEH-23** Every known amplifier can be renamed (empty names are rejected and the old name
   returns) and removed.
+- **BEH-45** Every known amplifier can be moved up or down in the list. There is one list: the
+  Amplifiers page and the Mix & EQ amp picker show the amps in that order, and the order is saved with
+  the list (`BEH-40`). New amps are added at the end. The amp picked on Mix & EQ stays picked.
 
 ## Mute
 

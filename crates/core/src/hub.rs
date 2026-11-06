@@ -87,6 +87,8 @@ pub enum Update {
     /// Whether a pair is shown linked changed: the amp flags it linked and its channels now differ, or
     /// are equal again, or the link was switched ([`Hub::linked`], [`Hub::link_diverged`]).
     LinkChanged(AmpId, Side),
+    /// The order of the known amplifiers changed ([`Hub::move_amp`]).
+    Listed,
     Scan(Scan),
 }
 
@@ -563,6 +565,13 @@ impl Hub {
 
     pub fn rename(&self, id: AmpId, name: &str) -> Result<()> {
         self.0.shared.store().rename(id, name)
+    }
+
+    /// Put the amp at `position` (0-based) in the list every view shows (BEH-45).
+    pub fn move_amp(&self, id: AmpId, position: usize) -> Result<()> {
+        self.0.shared.store().move_to(id, position)?;
+        self.0.shared.emit(Update::Listed);
+        Ok(())
     }
 
     pub fn remove(&self, id: AmpId) -> Result<()> {

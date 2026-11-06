@@ -285,3 +285,35 @@ fn amp_ids_are_not_reused() {
 fn a_new_store_has_no_amps() {
     assert!(Store::in_memory().amps().is_empty());
 }
+
+// BEH-45
+#[test]
+fn move_puts_the_amp_at_a_position_and_keeps_the_order_of_the_others() {
+    let mut store = Store::in_memory();
+    let a = store.add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+    let b = store.add_manual("B", Protocol::Ipx, "10.0.0.2").unwrap();
+    let c = store.add_manual("C", Protocol::Ipd, "10.0.0.3").unwrap();
+    let d = store.add_manual("D", Protocol::Ipd, "10.0.0.4").unwrap();
+
+    store.move_to(c, 0).unwrap();
+    assert_eq!(names(&store), ["C", "A", "B", "D"]);
+    store.move_to(c, 2).unwrap();
+    assert_eq!(names(&store), ["A", "B", "C", "D"]);
+    store.move_to(a, 99).unwrap();
+    assert_eq!(names(&store), ["B", "C", "D", "A"], "past the end is the end");
+    store.move_to(d, 2).unwrap();
+    assert_eq!(names(&store), ["B", "C", "D", "A"], "where it is already");
+    assert_eq!([a, b, c, d].map(|id| store.index(id)), [Some(4), Some(1), Some(2), Some(3)]);
+    assert_eq!(store.get(a).unwrap().ip, "10.0.0.1", "nothing else of the amp changes");
+}
+
+// BEH-45
+#[test]
+fn move_of_an_unknown_amp_fails_and_changes_nothing() {
+    let mut store = Store::in_memory();
+    let a = store.add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+    store.add_manual("B", Protocol::Ipx, "10.0.0.2").unwrap();
+    store.remove(a).unwrap();
+    assert!(matches!(store.move_to(a, 0).unwrap_err(), Error::UnknownAmp));
+    assert_eq!(names(&store), ["B"]);
+}

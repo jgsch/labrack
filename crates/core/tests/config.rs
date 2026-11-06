@@ -263,3 +263,20 @@ fn the_file_holds_no_password_and_no_dsp_setting() {
     assert!(extra.is_empty(), "keys outside the allowed list: {extra:?}");
     assert!(found.contains("amp.ceilings.max_limiter_dbu"));
 }
+
+// BEH-45, BEH-40: the order the user gave is the order of the file, so it survives a restart
+#[test]
+fn the_order_of_the_amps_survives_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("labrack/config.toml");
+    {
+        let mut store = Store::open(&path).unwrap();
+        store.add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+        store.add_manual("B", Protocol::Ipx, "10.0.0.2").unwrap();
+        let c = store.add_manual("C", Protocol::Ipd, "10.0.0.3").unwrap();
+        store.move_to(c, 0).unwrap();
+    }
+    let store = Store::open(&path).unwrap();
+    let names: Vec<_> = store.amps().iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["C", "A", "B"]);
+}

@@ -205,6 +205,14 @@ impl Store {
         self.save()
     }
 
+    /// Put the amp at `position` (0-based, past the end is the end); the others keep their order.
+    pub fn move_to(&mut self, id: AmpId, position: usize) -> Result<()> {
+        let at = self.amps.iter().position(|a| a.id == id).ok_or(Error::UnknownAmp)?;
+        let amp = self.amps.remove(at);
+        self.amps.insert(position.min(self.amps.len()), amp);
+        self.save()
+    }
+
     pub fn remove(&mut self, id: AmpId) -> Result<()> {
         let at = self.amps.iter().position(|a| a.id == id).ok_or(Error::UnknownAmp)?;
         self.amps.remove(at);
