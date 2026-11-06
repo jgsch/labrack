@@ -443,3 +443,17 @@ async fn snapshot_and_restore() {
     assert_eq!(amp.get(&param("out2.delay")).await.unwrap(), Value::Float(1.5));
     amp.close().await;
 }
+
+// an amp that applies a write but echoes the old value first is confirmed by reading the value back soon,
+// not by sending the write again after 500 ms
+#[tokio::test(flavor = "multi_thread")]
+async fn a_write_that_is_echoed_late_is_confirmed_by_reading_it_back() {
+    let (srv, amp) = connect(true).await;
+    srv.echo_old_values();
+    for gain in [-3.0, -4.0, -5.0] {
+        let started = std::time::Instant::now();
+        amp.set(&param("out1.gain"), Value::Float(gain)).await.unwrap();
+        assert!(started.elapsed() < Duration::from_millis(400), "{:?} for {gain}", started.elapsed());
+    }
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), Value::Float(-5.0));
+}

@@ -36,6 +36,15 @@ fn get_replace(key: Key) -> Key {
 
 const SET_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 const SET_MAX_TRIES: u32 = 50;
+/// Passwords and PINs are never read, not even to confirm a write of them.
+fn is_secret(member: u8) -> bool {
+    matches!(member, M_SET_PASSWORD | M_CHECK_PASSWORD | M_PIN | M_CHECK_PIN)
+}
+
+/// Between two sends of a write, its value is asked for this often.
+/// A read that has no answer is asked again after this long.
+const GET_RETRY_INTERVAL: Duration = Duration::from_millis(200);
+const READ_BACK_INTERVAL: Duration = Duration::from_millis(150);
 const POLL_IDLE: Duration = Duration::from_millis(100);
 const POLL_BUSY: Duration = Duration::from_millis(20);
 /// A NACK means "busy"; resending at once with the NACK's packet id works (waiting 0.5 s does too, slowly).
@@ -81,6 +90,8 @@ struct PendingSet {
     max_tries: u32,
     /// Any echo confirms (commands: the firmware may reset the value to 0).
     any_echo: bool,
+    /// When the value was last asked for, between two sends (the amp can apply a write and echo it late).
+    read_back: Option<Instant>,
     done: Option<oneshot::Sender<bool>>,
 }
 
@@ -308,6 +319,7 @@ impl Client {
             last: None,
             max_tries: SET_MAX_TRIES,
             any_echo: false,
+            read_back: None,
             done: Some(tx),
         };
         self.shared.lock().sets.insert(key, ps);
@@ -328,7 +340,15 @@ impl Client {
         let key = Key::new(S_COMMAND, M_COMMAND, 0, cmd);
         self.submit(
             key,
-            PendingSet { raw: Raw::Int(1), tries: 0, last: None, max_tries: 3, any_echo: true, done: None },
+            PendingSet {
+                raw: Raw::Int(1),
+                tries: 0,
+                last: None,
+                max_tries: 3,
+                any_echo: true,
+                read_back: None,
+                done: None,
+            },
             None,
         )
         .await
@@ -362,6 +382,7 @@ impl Client {
             last: None,
             max_tries: SET_MAX_TRIES,
             any_echo: false,
+            read_back: None,
             done: None,
         };
         self.shared.lock().sets.insert(key, ps);
@@ -407,7 +428,17 @@ fn next_items(shared: &Shared) -> Items {
             st.sets.remove(&key);
             continue;
         }
-        if ps.last.is_some_and(|t| now.duration_since(t) < SET_RETRY_INTERVAL) {
+        if let Some(last) = ps.last
+            && now.duration_since(last) < SET_RETRY_INTERVAL
+        {
+            // between two sends: ask for the value, which confirms the write as soon as the amp has it
+            let due = now.duration_since(last) >= READ_BACK_INTERVAL
+                && ps.read_back.is_none_or(|t| now.duration_since(t) >= READ_BACK_INTERVAL);
+            if due && !ps.any_echo && !is_secret(key.member_id) && size < budget {
+                ps.read_back = Some(now);
+                items.push((key, None));
+                size += 7;
+            }
             continue;
         }
         if size >= budget {
@@ -423,7 +454,7 @@ fn next_items(shared: &Shared) -> Items {
         if size >= budget {
             break;
         }
-        if last.is_some_and(|t| now.duration_since(t) < SET_RETRY_INTERVAL) {
+        if last.is_some_and(|t| now.duration_since(t) < GET_RETRY_INTERVAL) {
             continue;
         }
         *last = Some(now);

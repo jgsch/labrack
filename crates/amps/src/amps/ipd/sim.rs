@@ -107,6 +107,8 @@ pub struct SimAmp {
     presets: HashMap<i64, HashMap<Key, Raw>>,
     /// Writes to channel 2 of a linked pair.
     link_violations: Vec<Key>,
+    /// A write is applied but echoed with the old value first, as an amp that is slow to apply it may do.
+    stale_echo: bool,
     /// How long the amp takes to answer, as a real IPD does at times.
     latency: std::time::Duration,
     /// Key of every GET item the amp answered, oldest first.
@@ -189,6 +191,7 @@ impl SimAmp {
             writes: Vec::new(),
             presets: HashMap::new(),
             link_violations: Vec::new(),
+            stale_echo: false,
             latency: std::time::Duration::ZERO,
             reads: Vec::new(),
             login_rights: 0xFFFF_FFFF,
@@ -341,6 +344,9 @@ impl SimAmp {
                         let second = Key::new(key.struct_id, key.member_id, key.channel + 1, key.num);
                         self.values.insert(second, v.clone());
                     }
+                    if self.stale_echo && !self.linked(key.channel) {
+                        echo = self.values.get(key).cloned();
+                    }
                     self.values.insert(*key, v);
                 }
             }
@@ -437,6 +443,11 @@ impl SimServer {
     /// From now on every answer takes `latency`.
     pub fn set_latency(&self, latency: std::time::Duration) {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).latency = latency;
+    }
+
+    /// From now on a write is echoed with the value it had before, though the amp applies it.
+    pub fn echo_old_values(&self) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).stale_echo = true;
     }
 
     /// Put the amp at user level `level` (index in `USERS`) with these access rights, as if someone
