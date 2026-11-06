@@ -27,7 +27,10 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   for everything else. Both fonts ship with the app (no network needed, see `PERF-4`): the Latin
   WOFF2 files are in `project/mockup/mockup/assets/` (Barlow Condensed 500, 600, 700; IBM Plex Mono
   400, 500, 600) and their licences (SIL OFL 1.1) in `project/mockup/mockup/licenses.txt`.
-- **UX-10** Layout: 1200 px wide boards, 40 px side padding, 12 to 20 px gaps.
+- **UX-10** Layout: 1200 px wide boards, 40 px side padding, 12 to 20 px gaps. The Amplifiers and Search
+  pages follow the width of the window, whatever it is, and keep the side padding (the header puts its tabs
+  on a second line below 880 px). The Mix & EQ page needs 900 px (its faders overlap below that) and
+  scrolls sideways in a narrower window; the labels of the tabs and of MUTE ALL stay on one line.
 
 ## Amplifiers page
 
