@@ -39,6 +39,8 @@ pub struct Timing {
     pub retry_max: Duration,
     /// Meters are passed on at most this often.
     pub meter_interval: Duration,
+    /// An IPD is asked for its output mutes this often: it answers one thing at a time and slowly.
+    pub mute_poll_interval: Duration,
     /// How long a scan searches. Over Wi-Fi an IPD can need a few seconds to answer a probe.
     pub scan_window: Duration,
     /// A parameter is written at most this often while it is being changed (SEC-4).
@@ -51,6 +53,7 @@ impl Default for Timing {
             retry_first: Duration::from_secs(1),
             retry_max: Duration::from_secs(15),
             meter_interval: Duration::from_millis(100),
+            mute_poll_interval: Duration::from_millis(200),
             scan_window: Duration::from_secs(5),
             write_interval: Duration::from_millis(50),
         }
@@ -865,7 +868,7 @@ async fn poll_mutes(
     // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
     wait_loaded(&shared, id).await;
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
-    let mut tick = interval(shared.timing.meter_interval);
+    let mut tick = interval(shared.timing.mute_poll_interval);
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         tick.tick().await;

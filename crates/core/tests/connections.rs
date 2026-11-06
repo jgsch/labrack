@@ -497,3 +497,23 @@ async fn an_ipd_that_says_no_preset_number_is_resolved_by_the_name() {
     hub.presets(id).await.unwrap();
     assert_eq!(hub.amps()[1].preset, Some(Preset { number: 0, name: "Unsaved".into() }));
 }
+
+// BEH-12: an IPD is asked for its output mutes 5 times a second (it answers slowly), not 10
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipd_is_asked_for_its_mutes_five_times_a_second() {
+    use labgruppen::amps::ipd::protocol::S_MUTE;
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let (hub, local) = hub();
+    local.route("10.0.0.1", sim.addr.port());
+    let id = hub.add_manual("A", Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+    sleep(Duration::from_millis(300)).await;
+    let count = || sim.reads().iter().filter(|k| k.struct_id == S_MUTE && k.channel & 0x80 != 0).count();
+    let before = count();
+
+    sleep(Duration::from_millis(2000)).await;
+
+    // two keys per round: about 10 rounds in 2 s, where 10 per second would be 40 reads
+    let reads = count() - before;
+    assert!((14..=26).contains(&reads), "{reads} reads of the output mutes in 2 s");
+}

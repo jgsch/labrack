@@ -56,8 +56,8 @@ statement with a `BEH-<n>` ID.
   say the name of its preset and a number of 0: it is then shown by its name, and the number is the
   slot of the one stored preset that has that name, found when the app reads the stored presets
   (after the amp's state, which an IPD reads slowly).
-- **BEH-12** Level, gain reduction and mute state of both outputs refresh about every 100 ms.
-  The IPX reports mute changes itself; the app asks an IPD for the two output mutes every 100 ms,
+- **BEH-12** Level and gain reduction of both outputs refresh about every 100 ms, their mute state too.
+  The IPX reports mute changes itself; the app asks an IPD for the two output mutes 5 times a second,
   but not before its state is read and never while a bulk change runs: an IPD answers one thing at a
   time, and the polling made the bulk change time out. Linking and copying an EQ wait for the state, take channel 1 from the state the app holds, and ask the
   amp for the output mutes once; unlinking the app's own link does not wait for the amp.
