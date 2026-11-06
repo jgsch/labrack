@@ -99,7 +99,11 @@ pub fn SearchPage(
     #[props(default)] on_add: EventHandler<(String, bool, String)>,
     #[props(default)] on_rename: EventHandler<(usize, String)>,
     #[props(default)] on_remove: EventHandler<usize>,
+    /// The amp at the first index goes to the second one (BEH-45).
+    #[props(default)]
+    on_move: EventHandler<(usize, usize)>,
 ) -> Element {
+    let count = view.amps.len();
     let mut name = use_signal(String::new);
     let mut ip = use_signal(String::new);
     let mut ipd_form = use_signal(|| true);
@@ -190,6 +194,20 @@ pub fn SearchPage(
                 for amp in view.amps {
                     div { class: "known-row", key: "{amp.index}",
                         span { class: "known-index", "{amp.index + 1:02}" }
+                        div { class: "known-move", role: "group", "aria-label": "Order of amplifier {amp.index + 1}",
+                            button {
+                                class: "known-move-button up",
+                                "aria-label": "Move amplifier {amp.index + 1} up",
+                                disabled: amp.index == 0,
+                                onclick: move |_| on_move.call((amp.index, amp.index.saturating_sub(1))),
+                            }
+                            button {
+                                class: "known-move-button down",
+                                "aria-label": "Move amplifier {amp.index + 1} down",
+                                disabled: amp.index + 1 >= count,
+                                onclick: move |_| on_move.call((amp.index, amp.index + 1)),
+                            }
+                        }
                         input {
                             class: "known-name",
                             r#type: "text",
@@ -298,6 +316,26 @@ mod tests {
         assert!(out.contains("AUTO") && out.contains("MANUAL"));
         assert_eq!(out.matches("REMOVE").count(), 2);
         assert!(out.contains("value=\"Amp 1\""), "the name is editable: {out}");
+    }
+
+    // UX-15, BEH-45: a row can go up or down, the first cannot go up and the last cannot go down
+    #[test]
+    fn known_amplifiers_can_be_moved() {
+        let view = SearchView {
+            amps: vec![known(0, "IPD", "AUTO"), known(1, "IPX", "MANUAL"), known(2, "IPX", "AUTO")],
+            ..SearchView::default()
+        };
+        let out = page_html(view, "");
+        assert_eq!(out.matches("Move amplifier").count(), 6, "{out}");
+        assert!(out.contains("Move amplifier 2 up") && out.contains("Move amplifier 2 down"));
+        assert_eq!(out.matches("disabled").count(), 2, "the first up and the last down: {out}");
+        let first_up = out.find("Move amplifier 1 up").unwrap();
+        assert!(out[first_up..first_up + 120].contains("disabled"), "{out}");
+        let last_down = out.find("Move amplifier 3 down").unwrap();
+        assert!(out[last_down..last_down + 120].contains("disabled"), "{out}");
+
+        let one = SearchView { amps: vec![known(0, "IPD", "AUTO")], ..SearchView::default() };
+        assert_eq!(page_html(one, "").matches("disabled").count(), 2, "alone, it cannot move");
     }
 
     // BEH-20 to BEH-22: the form has its three fields, and the error sits beside them

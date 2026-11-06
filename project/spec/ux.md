@@ -54,7 +54,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-14** Two panels side by side: the IPD / IPX switches with SCAN NOW, and the manual add form
   (name, protocol, IP, ADD AMP).
 - **UX-15** Below, Known amplifiers: one row per amp with index, an editable name field, a protocol
-  badge (IPD mauve, IPX sapphire), IP, source (AUTO / MANUAL) and REMOVE.
+  badge (IPD mauve, IPX sapphire), IP, source (AUTO / MANUAL) and REMOVE. After the index, an up and a
+  down arrow move the row (`BEH-45`); the first row cannot go up and the last cannot go down.
 
 ## Mix & EQ pages
 

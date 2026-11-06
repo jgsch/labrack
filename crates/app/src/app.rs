@@ -430,6 +430,22 @@ pub fn App() -> Element {
                                     }
                                 }
                             },
+                            // the order of the list is the order of the Amplifiers page and of Mix & EQ (BEH-45);
+                            // the amp that is picked on Mix & EQ stays the one that is picked
+                            on_move: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, to): (usize, usize)| {
+                                    let Some(id) = ids.get(index).copied() else { return };
+                                    if hub.move_amp(id, to).is_ok() {
+                                        if picked() == index {
+                                            picked.set(to);
+                                        } else if picked() == to {
+                                            picked.set(index);
+                                        }
+                                    }
+                                }
+                            },
                             on_remove: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
