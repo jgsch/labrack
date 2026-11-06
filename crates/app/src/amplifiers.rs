@@ -93,7 +93,9 @@ pub fn AmplifierPanel(
 ) -> Element {
     let colour = status_colour(view.status);
     let preset = view.preset.clone().unwrap_or_else(|| "—".into());
-    let ip_style = if ip_wrong(view.status) { "color: #f38ba8" } else { "" };
+    let ip_colour = if ip_wrong(view.status) { "color: #f38ba8; " } else { "" };
+    // as wide as the address, so the gaps to the protocol and to the status are the same
+    let ip_style = format!("{ip_colour}width: {}ch", view.ip.chars().count().max(7));
     let muted = view.muted;
     let level_muted = view.muted;
     let online = view.online;
@@ -388,6 +390,14 @@ mod tests {
         let css = crate::style::stylesheet();
         let rule = css.lines().find(|l| l.starts_with(".amp-mute{")).expect("the rule");
         assert!(rule.contains(";width:118px;"), "{rule}");
+    }
+
+    // UX-11: the address box is as wide as the address, so the gaps in the status line are equal
+    #[test]
+    fn the_address_box_is_as_wide_as_the_address() {
+        assert!(panel(Status::Online).contains("width: 12ch"), "192.168.1.21 has 12 characters");
+        let out = panel_html(AmpView::new(0, "FOH", "IPD", "192.168.1.183", Status::CheckIp));
+        assert!(out.contains("color: #f38ba8; width: 13ch"), "{out}");
     }
 
     // UX-11: an amp without a preset shows a dash

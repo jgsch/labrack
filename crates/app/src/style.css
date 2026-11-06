@@ -71,9 +71,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .amp-actions .small-button{min-height:36px;padding:0 14px}
 .amp-body{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px 24px}
 .amp-badge{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--muted);border:1px solid var(--border-strong);border-radius:3px;padding:1px 6px}
-.amp-info{flex:0 0 280px;width:280px;display:flex;flex-direction:column;gap:8px}
-.amp-box{display:flex;align-items:center;gap:12px;box-sizing:border-box;height:40px;min-width:0;padding:0 12px;border-radius:4px;background:var(--inset);border:0;color:var(--text);text-align:left}
-.amp-box .label{flex:0 0 48px}
+.amp-info{flex:0 0 224px;width:224px;display:flex;flex-direction:column;gap:8px}
+.amp-box{display:flex;align-items:center;gap:8px;box-sizing:border-box;height:40px;min-width:0;padding:0 12px;border-radius:4px;background:var(--inset);border:0;color:var(--text);text-align:left}
+.amp-box .label{flex:0 0 44px}
 .mode-choice{display:flex;gap:6px;align-items:center}
 .mode-button{white-space:nowrap;min-height:26px;padding:0 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.06em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .mode-button.on{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
@@ -81,7 +81,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em}
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}
 .label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
-.ip-input{flex:0 1 112px;min-width:0;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
+.ip-input{flex:0 1 auto;min-width:0;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
 .preset-link{font-size:9.6px}
 .preset-name{flex:0 1 auto;min-width:0;font-size:9.6px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modified{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--lavender)}
