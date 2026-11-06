@@ -380,6 +380,16 @@ mod tests {
         assert!(panel_html(view).contains("disabled"), "no change while an action runs");
     }
 
+    // UX-11: WebKitGTK sizes the box of the DISCONNECT and MUTE buttons from the text of MUTE and ignores
+    // its flex-basis, so the button overflowed the panel by the difference (measured in the real window):
+    // a button needs a width of its own
+    #[test]
+    fn the_mute_button_has_a_width_of_its_own() {
+        let css = crate::style::stylesheet();
+        let rule = css.lines().find(|l| l.starts_with(".amp-mute{")).expect("the rule");
+        assert!(rule.contains(";width:118px;"), "{rule}");
+    }
+
     // UX-11: an amp without a preset shows a dash
     #[test]
     fn no_preset_is_a_dash() {
