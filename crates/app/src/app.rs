@@ -142,7 +142,7 @@ pub fn App() -> Element {
 
     rsx! {
         Style {}
-        div { class: if page() == Page::MixEq { "frame wide" } else { "frame" },
+        div { class: "frame",
             Header {
                 page: page(),
                 all_muted: hub.all_muted(),

@@ -8,8 +8,7 @@ button{font-family:inherit;cursor:pointer}
 button:hover,a.tab:hover{filter:brightness(1.18)}
 button:disabled{cursor:not-allowed;filter:none;opacity:0.4}
 button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2px}
-.frame.wide{min-width:900px}
-.frame{min-width:0;min-height:900px;box-sizing:border-box;background:var(--base);color:var(--text);font-family:'IBM Plex Mono',ui-monospace,monospace;padding:28px 40px 40px;display:flex;flex-direction:column;gap:20px}
+.frame{min-width:640px;min-height:900px;box-sizing:border-box;background:var(--base);color:var(--text);font-family:'IBM Plex Mono',ui-monospace,monospace;padding:28px 40px 40px;display:flex;flex-direction:column;gap:20px}
 .header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:18px 32px;min-height:60px}
 @media (max-width:880px){.header{grid-template-columns:minmax(0,1fr) auto}.tabs{grid-column:1/-1;grid-row:2}}
 .brand{display:flex;flex-direction:column;gap:2px;width:max-content}
@@ -275,3 +274,7 @@ input.preset-name::placeholder{color:var(--muted)}
 .modal p{margin:0;font-size:13px;line-height:1.5;color:var(--text)}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px}
 .button.confirm-yes{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
+/* narrow windows (UX-10): what needs more room than the window has goes on a second line */
+@media (max-width:1100px){.levels-row{grid-template-columns:repeat(2,minmax(0,1fr))}.levels-row .level-card.limiter{grid-column:1/-1}}
+@media (max-width:1230px){.mixer-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:740px){.mixer-row{flex-wrap:wrap}.mixer-cards{flex:1 1 100%}.mixer-go{flex:1 1 100%;padding:0}}

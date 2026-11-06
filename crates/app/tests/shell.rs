@@ -134,9 +134,9 @@ fn the_style_of_the_mockup() {
     assert!(css.contains("'IBM Plex Mono'") && css.contains("'Barlow Condensed'"));
 }
 
-// UX-10: a window narrower than the boards keeps its side padding: the page follows the window, except
-// Mix & EQ, which scrolls; the labels of the tabs and of MUTE ALL stay on one line (seen in a window of a
-// tiling desktop narrower than 900 px)
+// UX-10: a window narrower than the boards keeps its side padding: every page follows the window down to
+// 640 px, with what does not fit on a second line; the labels of the tabs and of MUTE ALL stay on one
+// line (seen in windows of a tiling desktop narrower than 900 px)
 #[test]
 fn a_narrow_window_scrolls_instead_of_overlapping() {
     let css = stylesheet();
@@ -144,9 +144,10 @@ fn a_narrow_window_scrolls_instead_of_overlapping() {
         let at = css.find(&format!("\n{selector}{{")).unwrap_or_else(|| panic!("no rule for {selector}"));
         &css[at..css[at..].find('}').map(|n| at + n).unwrap()]
     };
-    assert!(rule(".frame").contains("min-width:0"));
-    assert!(rule(".frame.wide").contains("min-width:900px"));
-    assert!(css.contains("@media (max-width:880px){.header{"), "the header makes room in a narrow window");
+    assert!(rule(".frame").contains("min-width:640px"));
+    for media in ["880px){.header{", "1100px){.levels-row{", "1230px){.mixer-cards{", "740px){.mixer-row{"] {
+        assert!(css.contains(&format!("@media (max-width:{media}")), "no narrow layout for {media}");
+    }
     assert!(rule(".tab").contains("white-space:nowrap"));
     assert!(rule(".mute-all").contains("white-space:nowrap"));
 }
@@ -187,5 +188,5 @@ fn the_page_carries_its_stylesheet() {
     };
     assert!(html.contains("@font-face"), "no font faces");
     assert_eq!(html.matches("data:font/woff2;base64,").count(), 6, "six fonts");
-    assert!(html.contains(".frame{min-width:0;"), "no rules");
+    assert!(html.contains(".frame{min-width:640px;"), "no rules");
 }

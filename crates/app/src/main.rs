@@ -12,7 +12,7 @@ fn main() {
     let window = WindowBuilder::new()
         .with_title("LAB.RACK")
         .with_inner_size(LogicalSize::new(1200.0, 900.0))
-        .with_min_inner_size(LogicalSize::new(900.0, 600.0));
+        .with_min_inner_size(LogicalSize::new(640.0, 600.0));
     let config = Config::new().with_window(window).with_menu(None).with_background_color((17, 17, 27, 255));
     dioxus::LaunchBuilder::desktop().with_cfg(config).launch(App);
 }
