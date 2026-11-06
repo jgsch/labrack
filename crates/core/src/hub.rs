@@ -879,7 +879,7 @@ async fn poll_mutes(
     loop {
         tick.tick().await;
         let mut asked = outputs.to_vec();
-        if with_mode && round % mode_every == 0 {
+        if with_mode && round.is_multiple_of(mode_every) {
             asked.push(Param::Mode);
         }
         round += 1;

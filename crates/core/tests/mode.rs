@@ -90,10 +90,10 @@ async fn a_change_on_the_front_panel_is_seen() {
 
     let seen = async {
         loop {
-            if let Update::Changed(i, labgruppen::Param::Mode, Value::Text(mode)) = rx.recv().await.unwrap() {
-                if i == id {
-                    return mode;
-                }
+            if let Update::Changed(i, labgruppen::Param::Mode, Value::Text(mode)) = rx.recv().await.unwrap()
+                && i == id
+            {
+                return mode;
             }
         }
     };
