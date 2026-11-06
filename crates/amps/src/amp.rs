@@ -128,7 +128,8 @@ pub trait Amp: Send + Sync {
                 report.skipped.push(name.clone());
                 continue;
             };
-            let Some(spec) = self.spec(&param).filter(|s| s.writable) else {
+            // a file must not silently re-route the unit
+            let Some(spec) = self.spec(&param).filter(|s| s.writable && param != Param::Mode) else {
                 report.skipped.push(name.clone());
                 continue;
             };

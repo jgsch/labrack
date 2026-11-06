@@ -70,6 +70,9 @@ pub const M_SW_VERSION: u8 = 33;
 pub const M_STANDBY_DELAY: u8 = 34;
 pub const M_HARDWARE_STATUS: u8 = 35;
 pub const M_CONFIGURATION: u8 = 36;
+/// The device mode is a bit of this member of the preset struct (9, 36): clear = stereo, set = two ways.
+pub const M_DEVICE_MODE: u8 = 36;
+pub const DEVICE_MODE_BIT: i64 = 0x1000;
 pub const M_AMP_READINGS: u8 = 37;
 pub const M_CURRENT_USER: u8 = 38;
 pub const M_AMP_READINGS_2: u8 = 39;

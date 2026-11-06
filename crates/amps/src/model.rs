@@ -135,6 +135,9 @@ pub enum Param {
         ch: Channel,
         field: LimiterField,
     },
+    /// The device mode of the unit (`stereo`, `two_way`): which inputs feed which outputs. It belongs to
+    /// the unit, not to a channel.
+    Mode,
     /// Input matrix: how much of source `src` feeds DSP input channel `ch`.
     Mixer {
         ch: Channel,
@@ -143,9 +146,16 @@ pub enum Param {
     },
 }
 
+/// The labels of [`Param::Mode`]: `stereo` (input n feeds output n) and `two_way` (an IPD2400 then feeds
+/// both outputs from input A).
+pub const DEVICE_MODES: &[&str] = &["stereo", "two_way"];
+
 impl Param {
+    /// The channel a setting belongs to; the unit-wide [`Param::Mode`] is given input 1, which is not
+    /// where it lives.
     pub fn channel(&self) -> Channel {
         match *self {
+            Param::Mode => Channel::Input(0),
             Param::Gain(c)
             | Param::Mute(c)
             | Param::Polarity(c)
@@ -170,6 +180,7 @@ impl fmt::Display for Param {
             Param::Delay(c) => write!(f, "{c}.delay"),
             Param::Name(c) => write!(f, "{c}.name"),
             Param::Link(c) => write!(f, "{c}.link"),
+            Param::Mode => write!(f, "mode"),
             Param::Eq { ch, band, field } => write!(f, "{ch}.eq.{band}.{field}"),
             Param::Xover { ch, filter, field } => write!(f, "{ch}.xover.{filter}.{field}"),
             Param::Compressor { ch, field } => write!(f, "{ch}.comp.{field}"),
@@ -185,6 +196,9 @@ impl FromStr for Param {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         let bad = || Error::Parse(format!("unknown parameter {s:?} (see `labgruppen params`)"));
+        if s == "mode" {
+            return Ok(Param::Mode);
+        }
         let parts: Vec<&str> = s.split('.').collect();
         let ch: Channel = parts.first().ok_or_else(bad)?.parse()?;
         let p = match parts[1..] {

@@ -137,6 +137,8 @@ pub fn slot(param: &Param) -> Option<Slot> {
         Param::Mute(_) => s(level_env, 0, 1, Ty::Bool),
         Param::Polarity(_) if !input => s(level_env, 0, 2, Ty::Bool),
         Param::Polarity(_) => return None,
+        // no device mode is known on the IPX
+        Param::Mode => return None,
         Param::Link(_) => s(level_env, 0, if input { 2 } else { 3 }, Ty::Bool),
         Param::Name(_) => s(level_env, 0, if input { 3 } else { 4 }, Ty::Text).read_only(),
         Param::Delay(_) => {

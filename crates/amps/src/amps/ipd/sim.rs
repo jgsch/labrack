@@ -179,6 +179,8 @@ impl SimAmp {
         }
         set(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text("Default".into()));
         set(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(1));
+        // stereo, with other bits set as on a real IPD2400 (35)
+        set(Key::new(S_PRESET, M_DEVICE_MODE, 0, 0), Raw::Int(35));
         SimAmp {
             mk2,
             nack_every_other: !mk2,
@@ -438,6 +440,13 @@ impl SimServer {
         let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
         amp.values.insert(Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0), Raw::Int(index));
         amp.values.insert(Key::new(S_PRESET, M_SHORT_NAME, 0, 0), Raw::Text(name.into()));
+    }
+
+    /// The number the amp holds for its device mode (bit 0x1000 set = two ways), as a change on the front
+    /// panel would leave it.
+    pub fn set_device_mode_number(&self, number: i64) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        amp.values.insert(Key::new(S_PRESET, M_DEVICE_MODE, 0, 0), Raw::Int(number));
     }
 
     /// From now on every answer takes `latency`.

@@ -19,7 +19,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::timeout;
 
 use self::client::{Client, ClientEvent, Options, RawMeters};
-use self::params::{Slot, from_wire, slot, to_wire};
+use self::params::{Slot, Ty, from_wire, merge_bit, slot, to_wire};
 use self::protocol::*;
 use crate::amp::{Amp, check_preset_name};
 use crate::error::{Error, Result};
@@ -104,6 +104,18 @@ impl IpdAmp {
 
     fn slot_of(&self, p: &Param) -> Result<Slot> {
         slot(p).ok_or_else(|| Error::Unsupported(format!("{p} on the IPD")))
+    }
+
+    /// What to write for `raw`: for one bit of a number the amp holds, that number with the bit changed,
+    /// read from the amp just now; any other setting is written as it is.
+    async fn merged(&self, slot: &Slot, raw: Raw) -> Result<Raw> {
+        if !matches!(slot.ty, Ty::Bit(..)) {
+            return Ok(raw);
+        }
+        let current = self.client.get_raw(slot.key, None).await?;
+        let current =
+            current.int().ok_or_else(|| Error::Protocol(format!("key {} is not a number", slot.key)))?;
+        Ok(merge_bit(slot, current, &raw))
     }
 }
 
@@ -204,21 +216,24 @@ impl Amp for IpdAmp {
         }
         let value = spec.check(p, &value)?;
         let s = self.slot_of(p)?;
-        self.client.set_raw(s.key, to_wire(&s, &value)?, None).await
+        let raw = self.merged(&s, to_wire(&s, &value)?).await?;
+        self.client.set_raw(s.key, raw, None).await
     }
 
     async fn set_many(&self, items: &[(Param, Value)]) -> Vec<Result<()>> {
         let mut out: Vec<Option<Result<()>>> = items.iter().map(|_| None).collect();
         let mut batch = Vec::new();
         for (i, (p, v)) in items.iter().enumerate() {
-            let prepared = (|| {
+            let prepared = async {
                 let spec = self
                     .spec(p)
                     .filter(|s| s.writable)
                     .ok_or_else(|| Error::Unsupported(format!("{p} is not writable on the IPD")))?;
                 let s = self.slot_of(p)?;
-                Ok::<_, Error>((s.key, to_wire(&s, &spec.check(p, v)?)?))
-            })();
+                let raw = self.merged(&s, to_wire(&s, &spec.check(p, v)?)?).await?;
+                Ok::<_, Error>((s.key, raw))
+            }
+            .await;
             match prepared {
                 Ok(item) => batch.push((i, item)),
                 Err(e) => out[i] = Some(Err(e)),

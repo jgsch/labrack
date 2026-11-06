@@ -13,6 +13,9 @@ use crate::model::*;
 #[derive(Clone, Copy, Debug)]
 pub enum Ty {
     Bool,
+    /// One bit of a number the amp holds, as one of two labels: set = the second one. The other bits are
+    /// not ours, a write keeps them ([`merge_bit`]).
+    Bit(i64, &'static [&'static str]),
     /// A flag the amp stores the other way round: the mixer's MUTE is the member ON.
     NotBool,
     Int,
@@ -45,6 +48,7 @@ pub fn slot(p: &Param) -> Option<Slot> {
         Param::Name(_) => (S_CHANNEL, M_SHORT_NAME, 0, Ty::Text),
         Param::Link(c) if c.index() == 0 => (S_LINK, M_LINK, 2, Ty::Bool),
         Param::Link(_) => return None,
+        Param::Mode => (S_PRESET, M_DEVICE_MODE, 0, Ty::Bit(DEVICE_MODE_BIT, DEVICE_MODES)),
         Param::Eq { band, field, .. } => {
             let (m, ty) = match field {
                 EqField::Enabled => (M_ON, Ty::Bool),
@@ -119,6 +123,7 @@ pub fn spec(p: &Param, model: &str) -> Option<ParamSpec> {
         Param::Mute(_) | Param::Polarity(_) | Param::Link(_) => ParamSpec::new(Kind::Bool),
         Param::Delay(_) => f().range(0.0, 2000.0).unit("ms"),
         Param::Name(_) => ParamSpec::new(Kind::Text),
+        Param::Mode => ParamSpec::new(Kind::Enum(DEVICE_MODES)),
         Param::Eq { field, .. } => match field {
             EqField::Enabled => ParamSpec::new(Kind::Bool),
             EqField::Type => ParamSpec::new(Kind::Enum(EQ_TYPES)),
@@ -178,6 +183,7 @@ pub fn all_params() -> Vec<Param> {
             }
         }
     }
+    v.push(Param::Mode);
     v
 }
 
@@ -191,6 +197,11 @@ pub fn to_wire(slot: &Slot, v: &Value) -> Result<Raw> {
     Ok(match slot.ty {
         Ty::Bool => Raw::Int(v.as_bool().ok_or_else(bad)? as i64),
         Ty::NotBool => Raw::Int(!v.as_bool().ok_or_else(bad)? as i64),
+        Ty::Bit(mask, labels) => {
+            let label = v.as_str().ok_or_else(bad)?;
+            let set = labels.iter().position(|l| l.eq_ignore_ascii_case(label)).ok_or_else(bad)? == 1;
+            Raw::Int(if set { mask } else { 0 })
+        }
         Ty::Int => Raw::Int(v.as_i64().ok_or_else(bad)?),
         Ty::Float => Raw::Int(to_raw(slot.key.member_id, v.as_f64().ok_or_else(bad)?)),
         Ty::Enum(labels, codes) => {
@@ -202,10 +213,20 @@ pub fn to_wire(slot: &Slot, v: &Value) -> Result<Raw> {
     })
 }
 
+/// The number to write for a [`Ty::Bit`] setting: `current` with the one bit set as `wanted` says, which
+/// is what [`to_wire`] gives for it (the mask or 0).
+pub fn merge_bit(slot: &Slot, current: i64, wanted: &Raw) -> Raw {
+    match (slot.ty, wanted) {
+        (Ty::Bit(mask, _), Raw::Int(w)) => Raw::Int((current & !mask) | (w & mask)),
+        _ => wanted.clone(),
+    }
+}
+
 pub fn from_wire(slot: &Slot, raw: &Raw) -> Value {
     match (slot.ty, raw) {
         (Ty::Bool, Raw::Int(i)) => Value::Bool(*i != 0),
         (Ty::NotBool, Raw::Int(i)) => Value::Bool(*i == 0),
+        (Ty::Bit(mask, labels), Raw::Int(i)) => Value::Text(labels[usize::from(*i & mask != 0)].to_string()),
         (Ty::Int, Raw::Int(i)) => Value::Int(*i),
         (Ty::Float, Raw::Int(i)) => Value::Float(from_raw(slot.key.member_id, *i)),
         (Ty::Enum(labels, codes), Raw::Int(i)) => match codes.iter().position(|c| *c as i64 == *i) {
@@ -235,6 +256,22 @@ mod tests {
         assert_eq!(from_wire(&eq, &Raw::Int(1)), Value::Bool(true));
     }
 
+    // the device mode is one bit of (9, 36): a write changes that bit and nothing else
+    #[test]
+    fn the_device_mode_is_one_bit_of_the_preset_struct() {
+        let mode = slot(&Param::Mode).unwrap();
+        assert_eq!(mode.key, Key::new(S_PRESET, 36, 0, 0));
+        assert_eq!(from_wire(&mode, &Raw::Int(35)), Value::Text("stereo".into()), "seen on an IPD2400");
+        assert_eq!(from_wire(&mode, &Raw::Int(4131)), Value::Text("two_way".into()));
+        let wanted = |label: &str| to_wire(&mode, &Value::Text(label.into())).unwrap();
+        assert_eq!(merge_bit(&mode, 4131, &wanted("stereo")), Raw::Int(35));
+        assert_eq!(merge_bit(&mode, 35, &wanted("two_way")), Raw::Int(4131));
+        assert_eq!(merge_bit(&mode, 35, &wanted("stereo")), Raw::Int(35), "already so");
+        assert!(to_wire(&mode, &Value::Text("bridge".into())).is_err());
+        assert_eq!("mode".parse::<Param>().unwrap(), Param::Mode);
+        assert_eq!(Param::Mode.to_string(), "mode");
+    }
+
     #[test]
     fn mapping_matches_python_keys() {
         let k = |s: &str| slot(&s.parse().unwrap()).unwrap().key;
@@ -246,7 +283,8 @@ mod tests {
         assert_eq!(k("out1.link"), Key::new(10, 25, 0x80, 2));
         assert!(slot(&"out2.link".parse().unwrap()).is_none());
         assert!(slot(&"out1.mixer.aes1.level".parse().unwrap()).is_none());
-        assert_eq!(all_params().len(), 4 * (5 + 50 + 6 + 6 + 2) + 2 + 16);
+        // and the device mode of the unit
+        assert_eq!(all_params().len(), 4 * (5 + 50 + 6 + 6 + 2) + 2 + 16 + 1);
         assert_eq!(reverse_map().len(), all_params().len());
     }
 

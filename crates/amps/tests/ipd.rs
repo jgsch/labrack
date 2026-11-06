@@ -457,3 +457,41 @@ async fn a_write_that_is_echoed_late_is_confirmed_by_reading_it_back() {
     }
     assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), Value::Float(-5.0));
 }
+
+// the device mode is one bit of (9, 36): reading gives its label, and a write changes that bit only
+#[tokio::test(flavor = "multi_thread")]
+async fn the_device_mode_is_read_and_written_as_one_bit() {
+    let (srv, amp) = connect(true).await;
+    let key = Key::new(S_PRESET, M_DEVICE_MODE, 0, 0);
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), Value::Text("stereo".into()));
+
+    amp.set(&Param::Mode, Value::Text("two_way".into())).await.unwrap();
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), Value::Text("two_way".into()));
+    assert_eq!(amp.client().get_raw(key, None).await.unwrap(), Raw::Int(4131), "the other bits stay");
+
+    amp.set(&Param::Mode, Value::Text("stereo".into())).await.unwrap();
+    assert_eq!(amp.client().get_raw(key, None).await.unwrap(), Raw::Int(35));
+    assert!(amp.set(&Param::Mode, Value::Text("bridge".into())).await.is_err());
+
+    // a change on the front panel: the number the amp holds changes, with other bits as they are
+    srv.set_device_mode_number(0x1000 | 0x40 | 35);
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), Value::Text("two_way".into()));
+    amp.set(&Param::Mode, Value::Text("stereo".into())).await.unwrap();
+    assert_eq!(amp.client().get_raw(key, None).await.unwrap(), Raw::Int(0x40 | 35), "bit 0x40 is not ours");
+}
+
+// the settings of an amp include its mode, but a file never sets it: it would re-route the unit
+#[tokio::test(flavor = "multi_thread")]
+async fn a_settings_file_never_sets_the_device_mode() {
+    let (srv, amp) = connect(true).await;
+    let mut snap = amp.snapshot().await.unwrap();
+    assert_eq!(snap.params.get("mode"), Some(&Value::Text("stereo".into())));
+    snap.params.insert("mode".into(), Value::Text("two_way".into()));
+    let before = srv.writes().len();
+
+    let report = amp.restore(&snap, false).await.unwrap();
+
+    assert!(report.skipped.contains(&"mode".to_string()), "{:?}", report.skipped);
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), Value::Text("stereo".into()));
+    assert!(!srv.writes()[before..].contains(&Key::new(S_PRESET, M_DEVICE_MODE, 0, 0)));
+}
