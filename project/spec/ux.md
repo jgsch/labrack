@@ -32,8 +32,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 ## Amplifiers page
 
 - **UX-11** One panel per amplifier in a vertical list. At the top left the name, large and without an
-  index; under it the status line: dot and status, the protocol IPD / IPX, and the address (plain text,
-  no border, editable in place). At the top right the DISCONNECT / CONNECT button and the amp-level
+  index; under it the status line: the address (plain text, no border, editable in place), the protocol
+  IPD / IPX, and the dot and status. At the top right the DISCONNECT / CONNECT button and the amp-level
   MUTE / UNMUTE. Below, on the left, two boxes of the same height: MODE in gray followed by the device
   modes as two buttons (STEREO, 2 WAYS), the one the amp holds pressed (`BEH-44`), and PRESET in gray
   followed by the preset name (cut with an ellipsis when long; clicking it opens Mix & EQ), with a dot

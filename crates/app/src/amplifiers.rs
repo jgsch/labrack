@@ -104,11 +104,6 @@ pub fn AmplifierPanel(
                 div { class: "amp-ident",
                     span { class: "amp-name", "{view.name}" }
                     div { class: "amp-status-row",
-                        span { class: "status", style: "color: {colour}",
-                            span { class: "dot", style: "background: {colour}" }
-                            "{view.status.label()}"
-                        }
-                        span { class: "amp-badge", "{view.protocol}" }
                         input {
                             class: "ip-input",
                             r#type: "text",
@@ -118,6 +113,11 @@ pub fn AmplifierPanel(
                             value: "{view.ip}",
                             style: "{ip_style}",
                             onchange: move |event| on_ip.call(event.value()),
+                        }
+                        span { class: "amp-badge", "{view.protocol}" }
+                        span { class: "status", style: "color: {colour}",
+                            span { class: "dot", style: "background: {colour}" }
+                            "{view.status.label()}"
                         }
                     }
                 }
