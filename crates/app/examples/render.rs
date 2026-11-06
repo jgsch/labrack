@@ -107,22 +107,33 @@ fn controls() -> Element {
     }
 }
 
-/// Three amplifiers of the mockup's Amplifiers board, for the visual check of the panels.
+/// Four amplifiers, as the Amplifiers page of the app is laid out, for the visual check of the panels.
 fn amplifiers_demo() -> Element {
-    let mut a = AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", Status::Online);
-    a.levels[0] = Level { label: "OUT 1".into(), db: -18.0, gr: 0.0 };
-    a.levels[1] = Level { label: "OUT 2".into(), db: -24.5, gr: 3.0 };
-    a.preset = Some("02 · Show".into());
+    let mut a = AmpView::new(0, "IPD 2400", "IPD", "192.168.1.183", Status::Online);
+    a.levels[0] = Level { label: "OUT 1".into(), db: -37.0, gr: 0.0 };
+    a.levels[1] = Level { label: "OUT 2".into(), db: -26.0, gr: 0.0 };
+    a.preset = Some("alegra-ext".into());
     a.modified = true;
-    a.mode = Some("two_way".into());
-    let b = AmpView::new(1, "Subs", "IPX", "192.168.1.31", Status::Busy);
-    let mut c = AmpView::new(2, "Delays", "IPD", "192.168.1.24", Status::Disconnected);
-    c.preset = Some("05 · Subs cardioid end-fire".into());
-    c.amp_muted = true;
-    c.muted = [true, true];
+    a.mode = Some("stereo".into());
+    let mut b = AmpView::new(1, "FOH Main R", "IPD", "192.168.1.22", Status::Online);
+    b.preset = Some("Show".into());
+    b.mode = Some("stereo".into());
+    b.amp_muted = true;
+    b.muted = [true, true];
+    let mut c = AmpView::new(2, "Subs", "IPX", "192.168.1.31", Status::Online);
+    c.levels[0] = Level { label: "OUT 1".into(), db: -12.0, gr: 3.0 };
+    c.levels[1] = Level { label: "OUT 2".into(), db: -15.0, gr: 0.0 };
+    c.preset = Some("Subs cardioid end-fire".into());
+    c.mode = Some("two_way".into());
+    let mut d = AmpView::new(3, "Delays", "IPX", "192.168.1.33", Status::Online);
+    d.levels[0] = Level { label: "OUT 1".into(), db: -40.0, gr: 0.0 };
+    d.levels[1] = Level { label: "OUT 2".into(), db: -36.0, gr: 0.0 };
+    d.preset = Some("Factory default".into());
+    d.mode = Some("stereo".into());
+    let e = AmpView::new(4, "Spare", "IPD", "192.168.1.24", Status::Disconnected);
     rsx! {
         Style {}
-        div { class: "frame", AmplifiersPage { amps: vec![a, b, c] } }
+        div { class: "frame", AmplifiersPage { amps: vec![a, b, c, d, e] } }
     }
 }
 

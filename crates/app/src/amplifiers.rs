@@ -34,7 +34,7 @@ pub struct AmpView {
     /// The loaded preset, and whether the app saw a change since (BEH-11, BEH-38).
     pub preset: Option<String>,
     pub modified: bool,
-    /// The device mode the amp holds (`stereo`, `two_way`); `None` for an amp without one (BEH-44).
+    /// The device mode the amp holds (`stereo`, `two_way`); `None` until it is read (BEH-44).
     pub mode: Option<String>,
     /// An action runs on the amp: its mode cannot be changed meanwhile.
     pub busy: bool,
@@ -97,96 +97,102 @@ pub fn AmplifierPanel(
     let muted = view.muted;
     let level_muted = view.muted;
     let online = view.online;
+    let mode = view.mode.clone();
     rsx! {
         section { class: "amp-panel",
-            div { class: "amp-ident",
-                span { class: "amp-name", "{view.name}" }
-                div { class: "amp-status-row",
-                    span { class: "status", style: "color: {colour}",
-                        span { class: "dot", style: "background: {colour}" }
-                        "{view.status.label()}"
+            div { class: "amp-head",
+                div { class: "amp-ident",
+                    span { class: "amp-name", "{view.name}" }
+                    div { class: "amp-status-row",
+                        span { class: "status", style: "color: {colour}",
+                            span { class: "dot", style: "background: {colour}" }
+                            "{view.status.label()}"
+                        }
+                        span { class: "amp-badge", "{view.protocol}" }
+                        input {
+                            class: "ip-input",
+                            r#type: "text",
+                            inputmode: "decimal",
+                            autocomplete: "off",
+                            "aria-label": "IP address of {view.name}",
+                            value: "{view.ip}",
+                            style: "{ip_style}",
+                            onchange: move |event| on_ip.call(event.value()),
+                        }
                     }
-                    span { class: "amp-badge", "{view.protocol}" }
+                }
+                div { class: "amp-actions",
                     button {
                         class: "small-button",
                         "aria-label": if view.status == Status::Disconnected { "Connect" } else { "Disconnect" },
                         onclick: move |_| on_connect.call(view.status == Status::Disconnected),
                         if view.status == Status::Disconnected { "CONNECT" } else { "DISCONNECT" }
                     }
+                    button {
+                        class: if view.amp_muted { "amp-mute muted" } else { "amp-mute" },
+                        disabled: !online,
+                        "aria-pressed": "{view.amp_muted}",
+                        onclick: move |_| on_amp_mute.call(!view.amp_muted),
+                        if view.amp_muted { "UNMUTE" } else { "MUTE" }
+                    }
                 }
+            }
+            div { class: "amp-body",
                 div { class: "amp-info",
-                    span { class: "label", "IP" }
-                    input {
-                        class: "ip-input",
-                        r#type: "text",
-                        inputmode: "decimal",
-                        autocomplete: "off",
-                        "aria-label": "IP address of {view.name}",
-                        value: "{view.ip}",
-                        style: "{ip_style}",
-                        onchange: move |event| on_ip.call(event.value()),
-                    }
-                    span { class: "label", "PRESET" }
-                    button { class: "preset-link", onclick: move |_| on_preset.call(()),
-                        span { class: "preset-name", "{preset}" }
-                        if view.modified {
-                            span { class: "modified", "MODIFIED" }
-                        }
-                    }
-                    if let Some(current) = view.mode.clone() {
+                    div { class: "amp-box",
                         span { class: "label", "MODE" }
                         div { class: "mode-choice", role: "group", "aria-label": "Mode of {view.name}",
-                            for mode in labgruppen::DEVICE_MODES.iter().copied() {
+                            for choice in labgruppen::DEVICE_MODES.iter().copied() {
                                 button {
-                                    key: "{mode}",
-                                    class: if mode == current { "mode-button on" } else { "mode-button" },
-                                    "aria-pressed": "{mode == current}",
-                                    disabled: !online || view.busy,
-                                    onclick: move |_| on_mode.call(mode.to_string()),
-                                    "{crate::presets::mode_label(mode)}"
+                                    key: "{choice}",
+                                    class: if mode.as_deref() == Some(choice) { "mode-button on" } else { "mode-button" },
+                                    "aria-pressed": "{mode.as_deref() == Some(choice)}",
+                                    disabled: !online || mode.is_none() || view.busy,
+                                    onclick: move |_| on_mode.call(choice.to_string()),
+                                    "{crate::presets::mode_label(choice)}"
                                 }
                             }
                         }
                     }
+                    button { class: "amp-box preset-link", onclick: move |_| on_preset.call(()),
+                        span { class: "label", "PRESET" }
+                        span { class: "preset-name", "{preset}" }
+                        if view.modified {
+                            span { class: "modified", role: "img", title: "Changed since it was loaded", "aria-label": "Modified" }
+                        }
+                    }
                 }
-            }
-            div { class: "amp-meter",
-                for (output, level) in view.levels.iter().enumerate() {
-                    div { class: "channel",
-                        div { class: "channel-text",
-                            span { "{level.label}" }
-                            span {
-                                if !online {
-                                    "no signal"
-                                } else if level_muted[output] {
-                                    "MUTED"
+                div { class: "amp-meter",
+                    for (output, level) in view.levels.iter().enumerate() {
+                        div { class: "channel",
+                            div { class: "channel-text",
+                                span { class: "channel-name", "{level.label}" }
+                                span { class: "channel-figures",
+                                    if !online {
+                                        "no signal"
+                                    } else if level_muted[output] {
+                                        "MUTED · GR {control::number(level.gr)}"
+                                    } else {
+                                        "{control::number(level.db)} dB · GR {control::number(level.gr)}"
+                                    }
+                                }
+                            }
+                            crate::Meter { level_db: if online && !level_muted[output] { level.db } else { control::METER_FLOOR }, gain_reduction_db: level.gr }
+                            button {
+                                class: if muted[output] { "m-button muted" } else { "m-button" },
+                                disabled: !online,
+                                "aria-pressed": "{muted[output]}",
+                                "aria-label": if muted[output] {
+                                    "Unmute output {output + 1} of {view.name}"
                                 } else {
-                                    "{control::number(level.db)} dB · GR {control::number(level.gr)}"
-                                }
+                                    "Mute output {output + 1} of {view.name}"
+                                },
+                                onclick: move |_| on_mute.call((output as u8, !muted[output])),
+                                "M"
                             }
-                        }
-                        crate::Meter { level_db: if online && !level_muted[output] { level.db } else { control::METER_FLOOR }, gain_reduction_db: level.gr }
-                        button {
-                            class: if muted[output] { "m-button muted" } else { "m-button" },
-                            disabled: !online,
-                            "aria-pressed": "{muted[output]}",
-                            "aria-label": if muted[output] {
-                                "Unmute output {output + 1} of {view.name}"
-                            } else {
-                                "Mute output {output + 1} of {view.name}"
-                            },
-                            onclick: move |_| on_mute.call((output as u8, !muted[output])),
-                            "M"
                         }
                     }
                 }
-            }
-            button {
-                class: if view.amp_muted { "amp-mute muted" } else { "amp-mute" },
-                disabled: !online,
-                "aria-pressed": "{view.amp_muted}",
-                onclick: move |_| on_amp_mute.call(!view.amp_muted),
-                if view.amp_muted { "UNMUTE" } else { "MUTE" }
             }
         }
     }
@@ -323,7 +329,7 @@ mod tests {
     #[test]
     fn an_offline_amp_has_no_controls() {
         let out = panel(Status::Unreachable);
-        assert_eq!(out.matches("disabled").count(), 3, "two outputs and the amp: {out}");
+        assert_eq!(out.matches("disabled").count(), 5, "two outputs, the amp and the two modes: {out}");
         assert!(out.contains("no signal"));
     }
 
@@ -335,7 +341,7 @@ mod tests {
         assert!(out.contains("Search"), "{out}");
     }
 
-    // BEH-11: the preset, with MODIFIED when the app saw a change
+    // BEH-11: the preset, with a dot when the app saw a change
     #[test]
     fn the_preset_shows_modified() {
         let with = |modified| {
@@ -346,19 +352,29 @@ mod tests {
         };
         let out = panel_html(with(true));
         assert!(out.contains("05 · Subs"));
-        assert!(out.contains("MODIFIED"));
-        assert!(!panel_html(with(false)).contains("MODIFIED"));
+        assert!(out.contains("class=\"modified\""), "a dot: {out}");
+        assert!(!panel_html(with(false)).contains("modified"));
     }
 
-    // UX-11, BEH-44: an IPD shows its device mode, the one the amp holds is pressed; an IPX shows none
+    // UX-11, BEH-44: every amp shows its device mode, the one the amp holds is pressed, none until it is read
     #[test]
     fn the_device_mode_is_shown_and_pressed() {
-        let mut view = AmpView::new(0, "FOH", "IPD", "192.168.1.21", Status::Online);
-        assert!(!panel_html(view.clone()).contains("MODE"), "an amp without a mode shows none");
-        view.mode = Some("two_way".into());
+        let mut view = AmpView::new(0, "FOH", "IPX", "192.168.1.21", Status::Online);
         let out = panel_html(view.clone());
         assert!(out.contains(">MODE<") && out.contains(">Stereo<") && out.contains(">2 ways<"), "{out}");
+        assert!(
+            !out.contains("mode-button on") && out.matches("disabled").count() == 2,
+            "only the two modes are disabled while it is not read: {out}"
+        );
+        view.mode = Some("two_way".into());
+        let out = panel_html(view.clone());
         assert!(out.contains("mode-button on") && out.matches("mode-button on").count() == 1, "{out}");
+        assert_eq!(out.matches("aria-pressed=\"true\"").count(), 1, "{out}");
+        let on = out.find("mode-button on").unwrap();
+        assert!(
+            out[on..].contains(">2 ways<") && !out[on..].contains(">Stereo<"),
+            "2 ways is the pressed one: {out}"
+        );
         assert!(!out.contains("disabled"), "{out}");
         view.busy = true;
         assert!(panel_html(view).contains("disabled"), "no change while an action runs");

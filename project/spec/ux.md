@@ -31,17 +31,19 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 
 ## Amplifiers page
 
-- **UX-11** One panel per amplifier in a vertical list. Left: the name, large and without an index;
-  under it the status line (dot and status, the protocol IPD / IPX, and the DISCONNECT / CONNECT
-  button at its right end), then a two-column grid: IP in gray followed by the address (plain text,
-  no border, editable in place), PRESET in gray followed by the preset (clicking it opens Mix & EQ),
-  and, for an amp that has one, MODE in gray followed by its device modes as two buttons (STEREO,
-  2 WAYS), the one the amp holds pressed (`BEH-44`). Clicking the other one asks first (`UX-24`).
-- **UX-12** Centre: one meter per output. Above each meter, the channel name on the left and level
-  in dB with gain reduction on the right. The segmented level meter (green, yellow, red) has a
+- **UX-11** One panel per amplifier in a vertical list. At the top left the name, large and without an
+  index; under it the status line: dot and status, the protocol IPD / IPX, and the address (plain text,
+  no border, editable in place). At the top right the DISCONNECT / CONNECT button and the amp-level
+  MUTE / UNMUTE. Below, on the left, two boxes of the same height: MODE in gray followed by the device
+  modes as two buttons (STEREO, 2 WAYS), the one the amp holds pressed (`BEH-44`), and PRESET in gray
+  followed by the preset name (cut with an ellipsis when long; clicking it opens Mix & EQ), with a dot
+  after it when the preset is modified (`BEH-11`). Clicking the other mode asks first (`UX-24`). Every amp
+  shows the MODE box; its buttons are disabled until the amp is ONLINE and its mode read.
+- **UX-12** On the right of those boxes, one row per output, level with the box on its left. In each row:
+  the channel name in bold with, under it in gray, the level in dB and the gain reduction (MUTED instead
+  of the level while the output is muted), then the segmented level meter (green, yellow, red) with a
   thinner peach gain reduction bar under it.
-- **UX-13** Right edge: one M button per output (44 × 44 px) and the amp-level MUTE / UNMUTE
-  button, so all mute buttons sit in the same area.
+- **UX-13** At the end of each output row, one M button (36 × 36 px).
 
 ## Search page
 
