@@ -751,7 +751,6 @@ pub fn MixeqPage(
                         "aria-pressed": "{index == view.selected}",
                         onclick: move |_| on_pick.call(index),
                         span { class: "picker-title",
-                            span { class: "picker-index", "{index + 1:02}" }
                             span { class: "picker-name", "{amp.name}" }
                         }
                         span { class: "picker-bars", "aria-hidden": "true",

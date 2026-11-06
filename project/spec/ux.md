@@ -61,7 +61,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
-  scale line under the meters. A muted channel dims its whole card (a linked card when both of its
+  scale line under the meters. A muted IN keeps a meter: the amp reports nothing for it, so it shows the
+  loudest source that is on in the mixer, at the mixer and input gains (an estimate; a muted OUT shows
+  what the amp reports). A muted channel dims its whole card (a linked card when both of its
   channels are muted), on Levels and on the Mixer alike.
 - **UX-20** EQ tabs: one tab per channel, with the ten bands; outputs add HPF, LPF and delay. A
   COPY FROM INPUT 2 / INPUT 1 / OUTPUT 2 / OUTPUT 1 button takes the other channel's EQ (`BEH-33`).

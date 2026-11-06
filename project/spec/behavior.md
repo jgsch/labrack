@@ -59,7 +59,8 @@ statement with a `BEH-<n>` ID.
 - **BEH-12** Level, gain reduction and mute state of both outputs refresh about every 100 ms.
   The IPX reports mute changes itself; the app asks an IPD for the two output mutes every 100 ms,
   but not before its state is read and never while a bulk change runs: an IPD answers one thing at a
-  time, and the polling made the bulk change time out. Linking and copying an EQ wait for the state.
+  time, and the polling made the bulk change time out. Linking and copying an EQ wait for the state, take channel 1 from the state the app holds, and ask the
+  amp for the output mutes once; unlinking the app's own link does not wait for the amp.
 - **BEH-42** The app connects to every amp that is not DISCONNECTED when it starts. A failed attempt
   (BUSY, UNREACHABLE) and a lost connection are retried after 1 s, then after twice as long each
   time, up to 15 s; the status shows the outcome of the latest attempt, and a lost connection shows
@@ -136,7 +137,8 @@ statement with a `BEH-<n>` ID.
 - **BEH-27** Mixer: each of the 4 sources has a gain and a mute into IN 1 and into IN 2, with a
   level meter. The IPD stores it as ON (1 = the source plays), the app shows it as a mute. The meters
   are the IPD's source meters and, on the IPX, its two input signals (ANALOG 1 and 2; AES has none).
-- **BEH-28** Levels: the routing is fixed, IN n → OUT n. IN n has a fader (input gain), a meter, a
+- **BEH-28** Levels: the routing is assumed fixed, IN n → OUT n (true on the IPX; an IPD2400 was seen
+  feeding both outputs from IN 1, whatever IN 2 does, and the app has no setting for it). IN n has a fader (input gain), a meter, a
   dB value and a mute; OUT n the same (output gain). Each output has a limiter with its own gain
   reduction meter and linked unit values (Vpk, Ohm, Watt, dBu).
 

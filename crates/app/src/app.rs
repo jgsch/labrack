@@ -526,6 +526,18 @@ async fn run_ask_inner(
     }
 }
 
+/// The level a muted input would have: its loudest source that is on (connector signal, mixer gain, whether
+/// the source is muted in the mixer), at the input gain. The amp reports nothing for a muted input, and the
+/// user wants to see whether there is sound (UX-19).
+fn muted_input_level(sources: &[(Option<f64>, f64, bool)], gain_db: f64) -> f64 {
+    sources
+        .iter()
+        .filter(|(_, _, off)| !off)
+        .filter_map(|(signal, mixer_db, _)| signal.map(|s| s + mixer_db))
+        .fold(None, |top: Option<f64>, level| Some(top.map_or(level, |t| t.max(level))))
+        .map_or(-120.0, |level| level + gain_db)
+}
+
 /// The level a source's meter shows in the Mixer: its signal at the mixer's gain. A muted source keeps
 /// its meter, to see which channel has sound (UX-18); one without a meter (AES on an IPX) shows none.
 fn source_level(signal_db: Option<f64>, gain_db: f64) -> f64 {
@@ -645,6 +657,23 @@ pub fn mixeq_view(
     let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
     let strip =
         |label: String, ch: Channel, level_db: f64| Strip { label, db: gain(ch), level_db, muted: mute(ch) };
+    // an amp blanks the meter of a muted input; the sound that arrives is estimated from the connectors
+    let raw = meters.extra.get("raw_input").cloned().unwrap_or_default();
+    let input_level = |i: u8| {
+        let ch = Channel::Input(i);
+        if !mute(ch) {
+            return at(&meters.input, usize::from(i), -120.0);
+        }
+        let sources: Vec<(Option<f64>, f64, bool)> = (0..4u8)
+            .map(|src| {
+                let param = |field| Param::Mixer { ch, src, field };
+                let level = hub.shown(id, &param(MixerField::Level)).and_then(|v| v.as_f64());
+                let off = hub.shown(id, &param(MixerField::Mute)) == Some(Value::Bool(true));
+                (raw.get(usize::from(src)).copied(), level.unwrap_or(0.0), off)
+            })
+            .collect();
+        muted_input_level(&sources, gain(ch))
+    };
     let rows = (0..2u8)
         .map(|i| {
             let n = usize::from(i);
@@ -656,7 +685,7 @@ pub fn mixeq_view(
                 )
             });
             LevelRow {
-                input: strip(format!("IN {}", n + 1), Channel::Input(i), at(&meters.input, n, -120.0)),
+                input: strip(format!("IN {}", n + 1), Channel::Input(i), input_level(i)),
                 output: strip(format!("OUT {}", n + 1), Channel::Output(i), at(&meters.output, n, -120.0)),
                 limiter: LimiterStrip {
                     label: format!("LIMITER {}", n + 1),
@@ -789,7 +818,19 @@ pub fn corrected_zoom(dpr: f64, scale: f64) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{corrected_zoom, source_level};
+    use super::{corrected_zoom, muted_input_level, source_level};
+
+    // UX-19: a muted input still shows the sound that arrives: the loudest source that is on, through the
+    // mixer and the input gain; sources switched off in the mixer or without a meter count for nothing
+    #[test]
+    fn a_muted_input_shows_the_sound_that_arrives() {
+        let sources = [(Some(-28.0), -3.0, false), (Some(-20.0), 0.0, true), (None, 0.0, false)];
+        assert_eq!(muted_input_level(&sources, -8.0), -39.0, "ANALOG 1 only: -28 -3 -8");
+        let both = [(Some(-28.0), 0.0, false), (Some(-20.0), 0.0, false)];
+        assert_eq!(muted_input_level(&both, 0.0), -20.0, "the loudest");
+        assert_eq!(muted_input_level(&[(None, 0.0, false)], 0.0), -120.0);
+        assert_eq!(muted_input_level(&[], 0.0), -120.0);
+    }
 
     // UX-18: a muted source keeps its meter (the caller does not even pass the mute); no meter, no level
     #[test]

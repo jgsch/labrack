@@ -134,8 +134,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .picker-card{display:flex;flex-direction:column;gap:8px;text-align:left;min-height:60px;padding:8px 12px;box-sizing:border-box;border-radius:4px;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .picker-card.picked{color:var(--lavender);border-color:var(--lavender);box-shadow:inset 0 0 0 1px var(--lavender)}
 .picker-title{display:flex;align-items:baseline;gap:10px}
-.picker-index{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;line-height:1}
-.picker-name{font-size:13px;font-weight:600}
+.picker-name{font-size:20px;font-weight:700;line-height:1.2}
 .picker-bars{display:flex;flex-direction:column;gap:3px}
 .picker-level,.picker-gr{position:relative;display:block;height:6px;background:rgba(0,0,0,0.55)}
 .picker-gr{height:4px}
