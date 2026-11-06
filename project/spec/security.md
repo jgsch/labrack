@@ -20,7 +20,7 @@ The app controls the volume of a sound system. A wrong value can damage speakers
 - **SEC-4** **Small steps.** Faders follow `UX-22` and `UX-23`. While a fader moves, only the
   latest value is sent, at most every 50 ms per parameter.
 - **SEC-5** **Confirm dangerous actions:** UNMUTE ALL, and every action that mutes the outputs of
-  an amp: preset recall, storing a preset, loading a file, linking channels, copying an EQ (see `UX-24`).
+  an amp: preset recall, storing a preset, loading a file, linking channels, copying an EQ, changing the device mode (see `UX-24`).
 - **SEC-6** **Bulk changes mute first and leave the outputs muted.** Preset recall, file load and
   storing a preset mute both outputs of the amp first, change the amp, and leave both outputs
   muted, whatever they were and whatever the preset or file says. Unmuting is always the user's

@@ -34,6 +34,10 @@ pub struct AmpView {
     /// The loaded preset, and whether the app saw a change since (BEH-11, BEH-38).
     pub preset: Option<String>,
     pub modified: bool,
+    /// The device mode the amp holds (`stereo`, `two_way`); `None` for an amp without one (BEH-44).
+    pub mode: Option<String>,
+    /// An action runs on the amp: its mode cannot be changed meanwhile.
+    pub busy: bool,
 }
 
 impl AmpView {
@@ -54,6 +58,8 @@ impl AmpView {
             muted: [false, false],
             preset: None,
             modified: false,
+            mode: None,
+            busy: false,
         }
     }
 }
@@ -83,6 +89,7 @@ pub fn AmplifierPanel(
     #[props(default)] on_mute: EventHandler<(u8, bool)>,
     #[props(default)] on_amp_mute: EventHandler<bool>,
     #[props(default)] on_preset: EventHandler<()>,
+    #[props(default)] on_mode: EventHandler<String>,
 ) -> Element {
     let colour = status_colour(view.status);
     let preset = view.preset.clone().unwrap_or_else(|| "—".into());
@@ -124,6 +131,21 @@ pub fn AmplifierPanel(
                         span { class: "preset-name", "{preset}" }
                         if view.modified {
                             span { class: "modified", "MODIFIED" }
+                        }
+                    }
+                    if let Some(current) = view.mode.clone() {
+                        span { class: "label", "MODE" }
+                        div { class: "mode-choice", role: "group", "aria-label": "Mode of {view.name}",
+                            for mode in labgruppen::DEVICE_MODES.iter().copied() {
+                                button {
+                                    key: "{mode}",
+                                    class: if mode == current { "mode-button on" } else { "mode-button" },
+                                    "aria-pressed": "{mode == current}",
+                                    disabled: !online || view.busy,
+                                    onclick: move |_| on_mode.call(mode.to_string()),
+                                    "{crate::presets::mode_label(mode)}"
+                                }
+                            }
                         }
                     }
                 }
@@ -180,6 +202,7 @@ pub fn AmplifiersPage(
     #[props(default)] on_mute: EventHandler<(usize, u8, bool)>,
     #[props(default)] on_amp_mute: EventHandler<(usize, bool)>,
     #[props(default)] on_preset: EventHandler<usize>,
+    #[props(default)] on_mode: EventHandler<(usize, String)>,
 ) -> Element {
     if amps.is_empty() {
         return rsx! {
@@ -199,6 +222,7 @@ pub fn AmplifiersPage(
                     on_mute: move |(output, muted)| on_mute.call((view.index, output, muted)),
                     on_amp_mute: move |muted| on_amp_mute.call((view.index, muted)),
                     on_preset: move |_| on_preset.call(view.index),
+                    on_mode: move |mode| on_mode.call((view.index, mode)),
                     view: view.clone(),
                 }
             }
@@ -324,6 +348,20 @@ mod tests {
         assert!(out.contains("05 · Subs"));
         assert!(out.contains("MODIFIED"));
         assert!(!panel_html(with(false)).contains("MODIFIED"));
+    }
+
+    // UX-11, BEH-44: an IPD shows its device mode, the one the amp holds is pressed; an IPX shows none
+    #[test]
+    fn the_device_mode_is_shown_and_pressed() {
+        let mut view = AmpView::new(0, "FOH", "IPD", "192.168.1.21", Status::Online);
+        assert!(!panel_html(view.clone()).contains("MODE"), "an amp without a mode shows none");
+        view.mode = Some("two_way".into());
+        let out = panel_html(view.clone());
+        assert!(out.contains(">MODE<") && out.contains(">Stereo<") && out.contains(">2 ways<"), "{out}");
+        assert!(out.contains("mode-button on") && out.matches("mode-button on").count() == 1, "{out}");
+        assert!(!out.contains("disabled"), "{out}");
+        view.busy = true;
+        assert!(panel_html(view).contains("disabled"), "no change while an action runs");
     }
 
     // UX-11: an amp without a preset shows a dash

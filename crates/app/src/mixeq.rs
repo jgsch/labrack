@@ -8,7 +8,7 @@ use labrack_core::{Limiter, Side, Unit};
 use crate::control::{self, Bounds};
 use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
-use crate::{Fader, Toasts, ValueField};
+use crate::{Fader, ValueField};
 
 /// The six tabs of UX-16. They never change: a link does not merge EQs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,9 +145,8 @@ pub struct MixeqView {
     pub presets: PresetView,
     /// An action that mutes the outputs, waiting for the user's yes (UX-24).
     pub asking: Option<Ask>,
-    /// What runs on the amp now, for the spinner, and why the last action failed (UX-29).
+    /// What runs on the amp now: the page cannot be clicked meanwhile (UX-29).
     pub busy: Option<String>,
-    pub error: Option<String>,
 }
 
 impl Default for MixeqView {
@@ -165,7 +164,6 @@ impl Default for MixeqView {
             presets: PresetView::default(),
             asking: None,
             busy: None,
-            error: None,
         }
     }
 }
@@ -721,9 +719,6 @@ pub fn MixeqPage(
     /// The answer to [`MixeqView::asking`].
     #[props(default)]
     on_answer: EventHandler<bool>,
-    /// The error toast was clicked away.
-    #[props(default)]
-    on_dismiss: EventHandler<()>,
 ) -> Element {
     let amp_name = view.amps.get(view.selected).map(|a| a.name.clone()).unwrap_or_default();
     let tab = view.tab;
@@ -743,7 +738,6 @@ pub fn MixeqPage(
             if busy {
                 div { class: "busy-shield", "aria-hidden": "true" }
             }
-            Toasts { busy: view.busy.clone(), error: view.error.clone(), on_dismiss }
             div { class: "amp-picker",
                 for (index, amp) in view.amps.iter().enumerate() {
                     button {
@@ -886,7 +880,7 @@ mod tests {
         let out = page_html(view(false));
         assert!(!out.contains("busy-shield"), "{out}");
         let out = page_html(MixeqView { busy: Some("Linking the inputs…".into()), ..view(false) });
-        assert!(out.contains("busy-shield") && out.contains("Linking the inputs…"), "{out}");
+        assert!(out.contains("busy-shield"), "{out}");
     }
 
     // UX-16, UX-17: the six tabs stay whatever is linked; the links are on Levels, one per side

@@ -34,7 +34,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-11** One panel per amplifier in a vertical list. Left: the name, large and without an index;
   under it the status line (dot and status, the protocol IPD / IPX, and the DISCONNECT / CONNECT
   button at its right end), then a two-column grid: IP in gray followed by the address (plain text,
-  no border, editable in place), PRESET in gray followed by the preset (clicking it opens Mix & EQ).
+  no border, editable in place), PRESET in gray followed by the preset (clicking it opens Mix & EQ),
+  and, for an amp that has one, MODE in gray followed by its device modes as two buttons (STEREO,
+  2 WAYS), the one the amp holds pressed (`BEH-44`). Clicking the other one asks first (`UX-24`).
 - **UX-12** Centre: one meter per output. Above each meter, the channel name on the left and level
   in dB with gain reduction on the right. The segmented level meter (green, yellow, red) has a
   thinner peach gain reduction bar under it.
@@ -94,7 +96,7 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-23** Typed values apply on Enter or when the field loses focus, never while typing (typing
   −20 passes through −2).
 - **UX-24** Dangerous actions are confirmed. An action that mutes the outputs of an amp (preset
-  recall, storing a preset, loading a file, linking channels, copying an EQ) opens a validation popup that names
+  recall, storing a preset, loading a file, linking channels, copying an EQ, changing the device mode) opens a validation popup that names
   the amplifier, says that its outputs will be muted and, for recall, store and load, that they
   stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
   same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a
@@ -104,7 +106,7 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-26** Error text is red and appears beside the control that caused it. The error of a typed
   value floats over the page (it moves nothing) and goes after 3 s.
 - **UX-27** Hover brightens buttons and tabs slightly.
-- **UX-29** Toasts, at the bottom right of the window: a spinner and what runs ("Linking the
+- **UX-29** Toasts, on every page, at the bottom right of the window: a spinner and what runs ("Linking the
   outputs…", "Copying the EQ…", recall, store, load) while an action on an amp runs, which cannot
   be started again meanwhile; and the error of an action, in red, wrapped (at most 360 px wide),
   gone after 12 s or when clicked. Errors are not written in the preset bar. They are large enough

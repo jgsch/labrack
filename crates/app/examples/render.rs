@@ -114,6 +114,7 @@ fn amplifiers_demo() -> Element {
     a.levels[1] = Level { label: "OUT 2".into(), db: -24.5, gr: 3.0 };
     a.preset = Some("02 · Show".into());
     a.modified = true;
+    a.mode = Some("two_way".into());
     let b = AmpView::new(1, "Subs", "IPX", "192.168.1.31", Status::Busy);
     let mut c = AmpView::new(2, "Delays", "IPD", "192.168.1.24", Status::Disconnected);
     c.preset = Some("05 · Subs cardioid end-fire".into());
@@ -174,19 +175,17 @@ fn linked_demo() -> Element {
 
 /// The toasts: a spinner for what runs and a long error that wraps, bottom right.
 fn toasts_demo() -> Element {
-    let view = labrack_app::MixeqView {
-        busy: Some("Copying the EQ…".into()),
-        error: Some(
-            "timeout: reading the output mutes. The outputs that were muted for it stay muted.".into(),
-        ),
-        presets: demo_presets(),
-        ..labrack_app::MixeqView::default()
-    };
+    let view = labrack_app::MixeqView { presets: demo_presets(), ..labrack_app::MixeqView::default() };
     rsx! {
         Style {}
         div { class: "frame",
             Header { page: Page::MixEq, all_muted: false }
             main { labrack_app::MixeqPage { view } }
+            labrack_app::Toasts {
+                busy: "Copying the EQ…".to_string(),
+                error: "timeout: reading the output mutes. The outputs that were muted for it stay muted."
+                    .to_string(),
+            }
         }
     }
 }

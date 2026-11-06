@@ -71,6 +71,17 @@ pub enum Ask {
     Link(Side),
     /// Copy the EQ of the other channel to this one.
     CopyEq(Channel),
+    /// Change the device mode of the amp: `stereo` or `two_way`.
+    Mode(String),
+}
+
+/// What the amp's front panel calls a device mode.
+pub fn mode_label(mode: &str) -> &'static str {
+    match mode {
+        "stereo" => "Stereo",
+        "two_way" => "2 ways",
+        _ => "Unknown",
+    }
 }
 
 fn side_name(side: Side) -> &'static str {
@@ -109,6 +120,7 @@ impl Ask {
             Ask::CopyEq(to) => {
                 format!("Copy the EQ of {} to {} on {amp}?", channel_name(other(*to)), channel_name(*to))
             }
+            Ask::Mode(mode) => format!("Change the mode of {amp} to {}?", mode_label(mode)),
         }
     }
 
@@ -125,6 +137,10 @@ impl Ask {
             Ask::Link(Side::Outputs) => format!(
                 "Output 2 takes the gain and the limiter of output 1, and both follow each other from then \
                  on. Both outputs of {amp} are muted while it is done, then put back as they were."
+            ),
+            Ask::Mode(_) => format!(
+                "The mode decides which input feeds which output. Both outputs of {amp} are muted while it \
+                 is done, then put back as they were."
             ),
             Ask::CopyEq(to) => format!(
                 "The bands{} of {} replace those of {}. Both outputs of {amp} are muted while it is done, \
@@ -145,6 +161,7 @@ impl Ask {
             Ask::Load { .. } => "Loading the file…".into(),
             Ask::Link(side) => format!("Linking the {}…", side_name(*side)),
             Ask::CopyEq(_) => "Copying the EQ…".into(),
+            Ask::Mode(_) => "Changing the mode…".into(),
         }
     }
 
@@ -156,6 +173,7 @@ impl Ask {
             Ask::Load { .. } => "LOAD",
             Ask::Link(_) => "LINK",
             Ask::CopyEq(_) => "COPY",
+            Ask::Mode(_) => "CHANGE",
         }
     }
 }
@@ -311,6 +329,7 @@ mod tests {
             Ask::Load { path: PathBuf::from("/home/me/show.json") },
             Ask::Link(Side::Outputs),
             Ask::CopyEq(Channel::Output(1)),
+            Ask::Mode("two_way".into()),
         ];
         for ask in &asks {
             assert!(ask.title("FOH").contains("FOH"), "{ask:?}");
@@ -324,13 +343,14 @@ mod tests {
         }
         assert_eq!(asks[3].title("FOH"), "Link the outputs 1 and 2 of FOH?");
         assert_eq!(asks[4].title("FOH"), "Copy the EQ of output 1 to output 2 on FOH?");
+        assert_eq!(asks[5].title("FOH"), "Change the mode of FOH to 2 ways?");
         assert!(asks[3].text("FOH").contains("gain and the limiter"));
         assert!(asks[4].text("FOH").contains("and the filters"), "outputs have filters");
         assert!(!Ask::CopyEq(Channel::Input(0)).text("FOH").contains("filters"), "inputs have none");
         assert_eq!(asks[0].title("FOH"), "Recall preset 03 · Show on FOH?");
         assert!(asks[1].text("FOH").starts_with("It replaces 03 · Old."));
         assert_eq!(asks[2].title("FOH"), "Load the file show.json into FOH?");
-        assert_eq!(asks.map(|a| a.confirm()), ["RECALL", "STORE", "LOAD", "LINK", "COPY"]);
+        assert_eq!(asks.map(|a| a.confirm()), ["RECALL", "STORE", "LOAD", "LINK", "COPY", "CHANGE"]);
     }
 
     fn html(page: fn() -> Element) -> String {

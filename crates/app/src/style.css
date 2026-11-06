@@ -68,7 +68,10 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .amp-status-row{display:flex;align-items:center;gap:10px;min-width:0}
 .amp-badge{flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--muted);border:1px solid var(--border-strong);border-radius:3px;padding:1px 6px}
 .amp-status-row .small-button{margin-left:auto}
-.amp-info{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:2px 8px}
+.amp-info{display:grid;grid-template-columns:62px minmax(0,1fr);align-items:center;gap:6px 8px}
+.mode-choice{display:flex;gap:6px;min-height:28px;align-items:center}
+.mode-button{min-height:26px;padding:0 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.06em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.mode-button.on{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .small-button{flex:0 0 auto;min-height:26px;padding:0 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em}
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}

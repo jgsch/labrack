@@ -14,9 +14,9 @@ use crate::mixeq::{
     AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixRow, MixTab, MixeqView,
     SOURCE_NAMES, Strip,
 };
-use crate::presets::{Ask, PresetView, loaded_text, slot_text};
+use crate::presets::{Ask, ConfirmDialog, PresetView, loaded_text, slot_text};
 use crate::search::{KnownAmp, SearchView};
-use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style};
+use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style, Toasts};
 
 /// The amp list from the config file, or an empty one that is never written when the file cannot be
 /// read: a file the app does not understand must not be replaced by an empty list.
@@ -128,8 +128,17 @@ pub fn App() -> Element {
     });
     changes();
 
-    let amps = views(&hub);
+    let mut amps = views(&hub);
     let ids = std::sync::Arc::new(hub.amps().iter().map(|amp| amp.id).collect::<Vec<_>>());
+    for amp in amps.iter_mut() {
+        amp.busy = ids.get(amp.index).is_some_and(|id| busy.read().contains_key(id));
+    }
+    // what runs and what failed show on every page, bottom right (UX-29)
+    let toast_busy = busy.read().values().next().cloned();
+    let toast_error = preset_errors.read().values().next().cloned();
+    // the mode of an amp is asked about on the Amplifiers page; the other questions on Mix & EQ
+    let mode_ask =
+        asking.read().clone().filter(|(_, ask)| matches!(ask, Ask::Mode(_)) && page() == Page::Amplifiers);
 
     rsx! {
         Style {}
@@ -196,6 +205,17 @@ pub fn App() -> Element {
                                 picked.set(index);
                                 page.set(Page::MixEq);
                             },
+                            // the mode changes which input feeds which output: it asks first (UX-24)
+                            on_mode: {
+                                let ids = ids.clone();
+                                move |(index, mode): (usize, String)| {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && !busy.read().contains_key(&id)
+                                    {
+                                        asking.set(Some((id, Ask::Mode(mode))));
+                                    }
+                                }
+                            },
                         }
                     },
                     Page::MixEq => rsx! {
@@ -205,7 +225,6 @@ pub fn App() -> Element {
                                 if let Some(id) = ids.get(picked()).copied() {
                                     view.presets = preset_view(&hub, id, &preset_lists.read());
                                     view.busy = busy.read().get(&id).cloned();
-                                    view.error = preset_errors.read().get(&id).cloned();
                                     view.asking = asking.read().as_ref().filter(|(at, _)| *at == id).map(|(_, ask)| ask.clone());
                                 }
                                 view
@@ -273,15 +292,6 @@ pub fn App() -> Element {
                                     let Some((id, ask)) = asking.take() else { return };
                                     if yes && !busy.read().contains_key(&id) {
                                         spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors, busy));
-                                    }
-                                }
-                            },
-                            on_dismiss: {
-                                let ids = ids.clone();
-                                let mut errors = preset_errors;
-                                move |_| {
-                                    if let Some(id) = ids.get(picked()).copied() {
-                                        errors.write().remove(&id);
                                     }
                                 }
                             },
@@ -433,6 +443,32 @@ pub fn App() -> Element {
                     },
                 }
             }
+            if let Some((id, ask)) = mode_ask {
+                ConfirmDialog {
+                    amp: hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_default(),
+                    ask,
+                    on_confirm: {
+                        let hub = hub.clone();
+                        move |_| {
+                            let Some((id, ask)) = asking.take() else { return };
+                            if !busy.read().contains_key(&id) {
+                                spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors, busy));
+                            }
+                        }
+                    },
+                    on_cancel: move |_| {
+                        asking.set(None);
+                    },
+                }
+            }
+            Toasts {
+                busy: toast_busy,
+                error: toast_error,
+                on_dismiss: {
+                    let mut errors = preset_errors;
+                    move |_| errors.write().clear()
+                },
+            }
         }
     }
 }
@@ -516,6 +552,7 @@ async fn run_ask_inner(
     match ask {
         Ask::Link(side) => hub.set_link(id, side, true).await,
         Ask::CopyEq(to) => hub.copy_eq(id, to).await,
+        Ask::Mode(mode) => hub.set_device_mode(id, &mode).await,
         Ask::Recall { slot, .. } => hub.recall_preset(id, slot).await,
         Ask::Store { slot, name, .. } => {
             let done = hub.store_preset(id, slot, &name).await;
@@ -602,6 +639,7 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             }
             view.amp_muted = hub.amp_muted(amp.id);
             view.preset = amp.preset.as_ref().map(|p| loaded_text(p.number, &p.name));
+            view.mode = hub.device_mode(amp.id);
             view.modified = hub.modified(amp.id);
             view
         })
@@ -750,7 +788,6 @@ pub fn mixeq_view(
         presets: PresetView::default(),
         asking: None,
         busy: None,
-        error: None,
     }
 }
 
