@@ -185,6 +185,13 @@ statement with a `BEH-<n>` ID.
   stay per channel. The sides are independent: with only one side linked, the second row shows the
   other side's channel 2 alone.
 - **BEH-35** Unlinking restores separate channels and keeps the current values.
+- **BEH-44** Device mode. An IPD has a mode, `stereo` or `two_way` ("2 ways" on its front panel), that
+  decides which inputs feed which outputs: in stereo input n feeds output n, in two ways an IPD2400
+  feeds both outputs from input A (seen on hardware). The mode is bit 0x1000 of a number the amp
+  also uses for other things, so a change keeps the other bits. The app reads it with the state and
+  asks for it again about once a second, so a change made on the front panel shows. Changing it from
+  the app asks first, mutes the outputs while it is done and puts them back as they were (`SEC-6`,
+  `SEC-7`). A settings file never sets it. An amp without a mode (the IPX) shows none.
 
 ## Presets
 

@@ -19,6 +19,7 @@ use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 mod access;
 mod limiter;
 mod link;
+mod mode;
 mod mute;
 mod presets;
 
@@ -868,13 +869,23 @@ async fn poll_mutes(
     // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
     wait_loaded(&shared, id).await;
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
+    // the device mode is changed on the front panel now and then: asked for once a second, with the mutes
+    let with_mode = amp.params().contains(&Param::Mode);
+    let mode_every =
+        (Duration::from_secs(1).as_millis() / shared.timing.mute_poll_interval.as_millis().max(1)).max(1);
     let mut tick = interval(shared.timing.mute_poll_interval);
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut round = 0u128;
     loop {
         tick.tick().await;
+        let mut asked = outputs.to_vec();
+        if with_mode && round % mode_every == 0 {
+            asked.push(Param::Mode);
+        }
+        round += 1;
         let _gate = gate.lock().await;
-        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&outputs)).await {
-            for (param, value) in outputs.iter().zip(values) {
+        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&asked)).await {
+            for (param, value) in asked.iter().zip(values) {
                 shared.observed(id, param, &value, false);
             }
         }
