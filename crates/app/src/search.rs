@@ -21,6 +21,12 @@ pub struct KnownAmp {
     pub max_limiter_dbu: Option<f64>,
 }
 
+/// A ceiling as its box shows it: as typed, to 4 decimals, never rounded to the one decimal of a level. The box
+/// text goes back to the core whole when the other box is edited, so a rounded one would change the ceiling.
+pub fn ceiling_text(ceiling: Option<f64>) -> String {
+    ceiling.map(|v| control::number_to(v, 4)).unwrap_or_default()
+}
+
 /// A ceiling typed in its box: nothing or `none` is no ceiling (SEC-3).
 pub fn ceiling_from_text(text: &str) -> Result<Option<f64>, String> {
     let text = text.trim();
@@ -247,8 +253,8 @@ pub fn SearchPage(
                                 autocomplete: "off",
                                 placeholder: "none",
                                 "aria-label": "Highest output gain of amplifier {amp.index + 1}",
-                                value: amp.max_gain_db.map(control::number).unwrap_or_default(),
-                                onchange: move |event| on_ceilings.call((amp.index, event.value(), amp.max_limiter_dbu.map(control::number).unwrap_or_default())),
+                                value: ceiling_text(amp.max_gain_db),
+                                onchange: move |event| on_ceilings.call((amp.index, event.value(), ceiling_text(amp.max_limiter_dbu))),
                             }
                         }
                         label { class: "known-ceiling",
@@ -259,8 +265,8 @@ pub fn SearchPage(
                                 autocomplete: "off",
                                 placeholder: "none",
                                 "aria-label": "Highest limiter threshold of amplifier {amp.index + 1}",
-                                value: amp.max_limiter_dbu.map(control::number).unwrap_or_default(),
-                                onchange: move |event| on_ceilings.call((amp.index, amp.max_gain_db.map(control::number).unwrap_or_default(), event.value())),
+                                value: ceiling_text(amp.max_limiter_dbu),
+                                onchange: move |event| on_ceilings.call((amp.index, ceiling_text(amp.max_gain_db), event.value())),
                             }
                         }
                         button {
@@ -323,6 +329,10 @@ mod tests {
         assert_eq!(ceiling_from_text(" None "), Ok(None));
         assert_eq!(ceiling_from_text("-6"), Ok(Some(-6.0)));
         assert_eq!(ceiling_from_text("3,5"), Ok(Some(3.5)));
+        // SEC-3: editing one box sends the other back as shown; it must come back as it was set
+        assert_eq!(ceiling_from_text(&ceiling_text(Some(31.26))), Ok(Some(31.26)));
+        assert_eq!(ceiling_text(Some(-6.0)), "-6");
+        assert_eq!(ceiling_text(None), "");
         assert!(ceiling_from_text("loud").is_err());
         assert!(ceiling_from_text("inf").is_err());
         assert!(ceiling_from_text("NaN").is_err());
