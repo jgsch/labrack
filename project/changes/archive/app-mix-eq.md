@@ -29,7 +29,8 @@ No spec change; implements:
 
 ## Done when
 
-- [ ] The pages match the mockup boards, linked and unlinked
+- [x] The pages match the mockup boards, linked and unlinked (checked with `mise run app-shot` and a
+      rendered page for each board; the Amplifiers panel was rearranged later at the user's request)
 - [x] Clicking a preset on the Amplifiers page opens this page for that amp
 
 ## Notes
@@ -74,8 +75,11 @@ No spec change; implements:
   kept the amp picked before).
 - **Screenshots**: `mise run app-shot` renders a demo beside each Mix & EQ board, 02 to 05 and 07 to
   09 (`eq-inputs-demo`, `eq-outputs-demo` for the linked EQ tabs).
-- **Still to do**: the boxes show
-  `0` where the boards show `0.0` (`control::number`).
+- **Number format**: the boxes show `0` where the boards show `0.0`; decided with the user on
+  2026-11-05 that `0` is fine.
+- **Afterwards, same change**: the device mode row on the Amplifiers panel (`BEH-44`), the toasts on
+  every page (`UX-29`), the reorder of the known amps (`BEH-45`) and the narrow-window layouts
+  (`UX-10`) were done in later commits while this file was open.
 
 - Depends on `core-dsp-control`, `core-limiter`, `core-link`, `core-mute-presets` and
   `app-controls`.

@@ -31,7 +31,7 @@ the app's.
 
 ## Notes
 
-- Not archived yet: the new links and COPY wait for a try on the real amps.
+- Accepted and archived 2026-11-10.
 - The IPD2400 refused its link flag from this app for a while and then accepted it after the Windows
   app set it; the cause is unknown. Not needed any more: the app does not write the flag to link.
 - COPY copies the bands and the HPF/LPF, not the delay (a time alignment, not part of the tone).
