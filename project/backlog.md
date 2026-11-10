@@ -17,7 +17,6 @@ Minor:
 
 - IPD client: a write that times out removes a newer pending write of the same key; `get_many`
   returns cached values for keys that did not answer, and `Ok` after a disconnect.
-- `DeviceState::parse` decodes the IPX passwords into memory (SEC-8); nothing uses them.
 - Docs: `docs/ipx-protocol.md:205` (a filter type write does not switch it on, IPX 1200 firmware
   2.3.4.0, seen 2026-11-10); BEH-37 says the limiter is skipped from files but it is restored; the
   last Chores item (IPD discovery on the default route only) looks fixed; the `Header` doc comment

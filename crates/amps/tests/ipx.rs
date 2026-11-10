@@ -876,3 +876,17 @@ async fn an_unlisted_device_mode_is_unknown_not_an_error() {
     assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("unknown(2)"));
     assert_eq!(amp.snapshot().await.unwrap().params["mode"], text("unknown(2)"));
 }
+
+/// SEC-8: the passwords the amp hands out are not decoded into memory
+#[test]
+fn a_password_in_the_state_is_not_decoded() {
+    let mut data = vec![0u8; DeviceState::SIZE];
+    for k in 0..3 {
+        let at = 0x54 + k * 0x14;
+        let mut plain = [0u8; 16];
+        plain[..7].copy_from_slice(b"hunter2");
+        data[at..at + 16].copy_from_slice(&xor_password(&plain));
+    }
+    let state = DeviceState::parse(&data).unwrap();
+    assert!(!format!("{state:?}").contains("hunter2"), "the password was decoded");
+}

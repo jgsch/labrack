@@ -5,9 +5,7 @@
 //! that address to the dword index inside the audio config, so one table drives both single reads and
 //! bulk reads.
 
-use std::collections::BTreeMap;
-
-use super::protocol::{Address, Env, xor_password};
+use super::protocol::{Address, Env};
 use crate::error::{Error, Result};
 
 pub const AUDCFG_SIZE: usize = 0x548;
@@ -135,8 +133,6 @@ pub struct DeviceState {
     pub preset_name: String,
     pub preset_index: u32,
     pub current_user_mode: u32,
-    /// Access level -> password (decoded).
-    pub user_passwords: BTreeMap<u32, String>,
     pub network: NetworkConfig,
     pub device: DeviceConfig,
     pub versions: Versions,
@@ -153,17 +149,10 @@ impl DeviceState {
         if data.len() < Self::SIZE {
             return Err(Error::Protocol(format!("DEV_PRM_SYNC payload too short ({} bytes)", data.len())));
         }
-        let mut user_passwords = BTreeMap::new();
-        for k in 0..3 {
-            let o = 0x44 + 0x10 + k * 0x14;
-            let level = if k > 0 { u32_at(data, o - 4).unwrap_or(0) } else { 0 };
-            user_passwords.insert(level, cstr(&xor_password(&data[o..o + 16])));
-        }
         Ok(DeviceState {
             preset_name: str_at(data, 0, 16),
             preset_index: u32_at(data, 16).unwrap_or(0),
             current_user_mode: u32_at(data, 0x44 + 8).unwrap_or(0),
-            user_passwords,
             network: NetworkConfig::parse(data, 0x8C),
             device: DeviceConfig::parse(data, 0x62C),
             versions: Versions {
