@@ -246,6 +246,10 @@ impl Hub {
         if drop_waiting {
             session.writer.clear();
             self.0.shared.drop_pending(id);
+        } else {
+            // the rest stays, but an unmute would be written after the change (SEC-6)
+            session.writer.drop_unmutes();
+            self.0.shared.drop_pending(id);
         }
         let amp = &session.amp;
         let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());

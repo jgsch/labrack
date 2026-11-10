@@ -530,11 +530,9 @@ impl Hub {
         // a muted output is never the dangerous state: muting is always tried, and the amp has the last word
         if !(matches!(param, Param::Mute(_)) && value == Value::Bool(true)) {
             self.permit_channel(id, param.channel())?;
-            // a bulk change leaves the outputs muted: an unmute now would be written after it (SEC-6)
-            if matches!(param, Param::Mute(_))
-                && value == Value::Bool(false)
-                && session.bulk.load(Ordering::SeqCst) > 0
-            {
+            // a bulk change replaces the settings and leaves the outputs muted: anything accepted now would
+            // be written after it, over the new settings or as an unmute (SEC-6)
+            if session.bulk.load(Ordering::SeqCst) > 0 {
                 return Err(Error::Busy);
             }
             // until the state is read a view shows 0 dB for a gain, and a drag would start from there (SEC-4)

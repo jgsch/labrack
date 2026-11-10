@@ -113,6 +113,10 @@ impl Hub {
         }
         let session = self.session(id)?;
         self.permit_channel(id, Channel::Output(output))?;
+        // a bulk change replaces the settings: a threshold accepted now would be written over them (SEC-6)
+        if session.bulk.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            return Err(Error::Busy);
+        }
         // the second output follows the first while the pair is linked
         if output == 1 && self.linked(id, Side::Outputs) {
             return Err(Error::Linked);

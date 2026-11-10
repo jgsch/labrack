@@ -965,3 +965,43 @@ async fn an_unmute_asked_for_during_a_recall_is_refused() {
     // and when it is over, the user can unmute on purpose
     set_and_wait(&hub, id, "out1.mute", FALSE).await;
 }
+
+// SEC-6: a setting asked for while a bulk change runs is refused, not queued: it would be written over the
+// recalled settings. Muting stays possible.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_setting_asked_for_during_a_recall_is_refused() {
+    let (hub, id, sim) = online_ipd().await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(-20.0)).await;
+    ipd_elsewhere_store(&sim, 7, "Quiet").await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(0.0)).await;
+    sim.set_latency(Duration::from_millis(40));
+    let recall = tokio::spawn({
+        let hub = hub.clone();
+        async move { hub.recall_preset(id, 7).await }
+    });
+    sleep(Duration::from_millis(150)).await;
+    assert!(!recall.is_finished(), "the recall is still running");
+
+    assert!(matches!(hub.set(id, param("out1.gain"), f(3.0)), Err(Error::Busy)));
+    assert!(matches!(hub.set(id, param("in1.eq.0.gain"), f(3.0)), Err(Error::Busy)));
+    assert!(matches!(hub.set_limiter(id, 0, labrack_core::Unit::Dbu, 30.0), Err(Error::Busy)));
+    assert!(hub.set_mute(id, 1, true).is_ok(), "muting is never held back");
+
+    recall.await.unwrap().unwrap();
+    sim.set_latency(Duration::ZERO);
+    wait_loaded(&hub, id).await;
+    assert_eq!(ipd_value(&sim, "out1.gain").await, f(-20.0), "the recalled gain was not overwritten");
+}
+
+// SEC-6: an unmute that waits for its turn when a store starts is dropped, not written after the store
+#[tokio::test]
+async fn an_unmute_waiting_when_a_store_starts_is_dropped() {
+    let slow = labrack_core::Timing { write_interval: Duration::from_millis(700), ..timing() };
+    let (hub, id, fake) = online_ipx(slow).await;
+    set_and_wait(&hub, id, "out1.mute", TRUE).await;
+    hub.set(id, param("out1.mute"), FALSE).unwrap(); // waits for its turn
+
+    hub.store_preset(id, 7, "Probe").await.unwrap();
+    sleep(Duration::from_millis(1500)).await;
+    assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "the output was unmuted after the store");
+}

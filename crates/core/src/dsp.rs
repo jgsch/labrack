@@ -175,6 +175,15 @@ impl Coalescer {
         }
     }
 
+    /// Drop the output unmutes that wait to be written; a mute and every other value stays.
+    pub fn drop_unmutes(&mut self) {
+        for (param, slot) in &mut self.slots {
+            if matches!(param, Param::Mute(Channel::Output(_))) && slot.waiting == Some(Value::Bool(false)) {
+                slot.waiting = None;
+            }
+        }
+    }
+
     /// The output mutes that wait to be written as MUTED.
     pub fn muting(&self) -> [bool; 2] {
         let mut muting = [false; 2];
@@ -231,6 +240,11 @@ impl Writer {
     /// A bulk change replaces the settings these values were meant for.
     pub fn clear(&self) {
         self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
+
+    /// A bulk change leaves the outputs muted: an unmute still waiting must not be written after it.
+    pub fn drop_unmutes(&self) {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).drop_unmutes();
     }
 
     /// The output mutes the user asked for that the amp has not got yet (see [`Coalescer::muting`]).
