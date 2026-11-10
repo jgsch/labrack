@@ -74,6 +74,8 @@ statement with a `BEH-<n>` ID.
   controls are gain, mute, delay, mixer, EQ and the output filters. Until the state is read, and while it is
   read again after a recall or a file load, only turning a mute on is accepted: a control has no known
   value yet, and a drag would start from a value that is not the amp's (`SEC-4`).
+  The Mix & EQ page is covered by the same shield as while an action runs until then; MUTE ALL in the
+  header stays usable.
 
 ## IPD access levels
 

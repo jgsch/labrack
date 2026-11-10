@@ -836,6 +836,7 @@ pub fn mixeq_view(
         presets: PresetView::default(),
         asking: None,
         busy: None,
+        unread: !hub.loaded(id),
     }
 }
 

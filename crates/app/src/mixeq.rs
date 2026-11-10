@@ -147,6 +147,9 @@ pub struct MixeqView {
     pub asking: Option<Ask>,
     /// What runs on the amp now: the page cannot be clicked meanwhile (UX-29).
     pub busy: Option<String>,
+    /// The amp is offline or its state is not read yet: the page shows a figure it does not know, so
+    /// nothing of it can be set (SEC-4).
+    pub unread: bool,
 }
 
 impl Default for MixeqView {
@@ -164,6 +167,7 @@ impl Default for MixeqView {
             presets: PresetView::default(),
             asking: None,
             busy: None,
+            unread: false,
         }
     }
 }
@@ -742,7 +746,7 @@ pub fn MixeqPage(
         view.presets.loaded.as_ref().map_or(0, |(n, _)| *n),
         view.presets.slots.iter().filter(|(_, name)| name.is_some()).count()
     );
-    let busy = view.busy.is_some();
+    let busy = view.busy.is_some() || view.unread;
     rsx! {
         div { class: "mixeq",
             // while an action runs on the amp nothing of the page can be clicked, so that it is not started
@@ -902,6 +906,14 @@ mod tests {
         assert!(!out.contains("busy-shield"), "{out}");
         let out = page_html(MixeqView { busy: Some("Linking the inputs…".into()), ..view(false) });
         assert!(out.contains("busy-shield"), "{out}");
+    }
+
+    // SEC-4: until the amp's state is read the shield covers the page, as while an action runs
+    #[test]
+    fn a_shield_covers_the_page_until_the_state_is_read() {
+        let out = page_html(MixeqView { unread: true, ..view(false) });
+        assert!(out.contains("busy-shield"), "{out}");
+        assert!(!page_html(view(false)).contains("busy-shield"));
     }
 
     // UX-16, UX-17: the six tabs stay whatever is linked; the links are on Levels, one per side
