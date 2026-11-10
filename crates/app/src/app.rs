@@ -127,6 +127,16 @@ pub fn App() -> Element {
                             });
                             changes += 1;
                         }
+                        // the state was read (connect, recall, file): a value above a ceiling is said (SEC-3)
+                        Ok(Update::Loaded(id)) => {
+                            let above = hub.above_ceilings(id);
+                            if !above.is_empty() {
+                                let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone());
+                                let text = crate::presets::above_text(&name.unwrap_or_default(), &above);
+                                said(preset_errors, id, Err(labrack_core::Error::Invalid(text)));
+                            }
+                            changes += 1;
+                        }
                         Ok(Update::Status(id, labrack_core::Status::Online) | Update::Preset(id)) => {
                             read_presets(hub.clone(), id, preset_lists);
                             changes += 1;

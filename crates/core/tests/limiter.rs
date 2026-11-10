@@ -399,3 +399,36 @@ async fn a_taken_threshold_is_shown_at_once() {
     let shown = hub.limiter_shown(id, 0).unwrap();
     assert!((shown.dbu - 22.0).abs() < 1e-9, "{shown:?}");
 }
+
+// SEC-3: what the amp already holds above a ceiling (a recalled preset, a file made elsewhere) is listed,
+// so that the user hears of it before unmuting; nothing is written
+#[tokio::test(flavor = "multi_thread")]
+async fn a_value_the_amp_holds_above_a_ceiling_is_listed() {
+    for ipx in [true, false] {
+        let (hub, id, _keep): (Hub, AmpId, Box<dyn std::any::Any>) = if ipx {
+            let (hub, id, fake) = online_ipx(timing()).await;
+            (hub, id, Box::new(fake))
+        } else {
+            let (hub, id, sim) = online_ipd().await;
+            (hub, id, Box::new(sim))
+        };
+        assert!(hub.above_ceilings(id).is_empty(), "no ceiling, nothing above it");
+
+        let at = |name: &str| hub.value(id, &param(name)).unwrap().as_f64().unwrap();
+        let gain = at("out1.gain");
+        let top = gain.max(at("out2.gain"));
+        hub.set_ceilings(id, Ceilings { max_output_gain_db: Some(top + 1.0), max_limiter_dbu: Some(99.0) })
+            .unwrap();
+        assert!(hub.above_ceilings(id).is_empty(), "ceilings above the values");
+
+        hub.set_ceilings(id, Ceilings { max_output_gain_db: Some(gain - 1.0), max_limiter_dbu: Some(5.0) })
+            .unwrap();
+        let above = hub.above_ceilings(id);
+        let names: Vec<String> = above.iter().map(|a| a.param.to_string()).collect();
+        assert!(names.contains(&"out1.gain".to_string()), "{names:?}");
+        assert!(names.contains(&"out1.limiter.threshold".to_string()), "{names:?}");
+        assert!(!names.iter().any(|n| n.starts_with("in")), "only outputs: {names:?}");
+        let g = above.iter().find(|a| a.param.to_string() == "out1.gain").unwrap();
+        assert_eq!((g.value, g.ceiling, g.unit), (gain, gain - 1.0, "dB"));
+    }
+}

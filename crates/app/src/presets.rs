@@ -26,6 +26,24 @@ pub fn loaded_text(slot: u32, name: &str) -> String {
     if slot == 0 { name.to_string() } else { slot_text(slot, Some(name)) }
 }
 
+/// What the toast says of settings the amp holds above the user ceilings (SEC-3), e.g. after a recall.
+pub fn above_text(name: &str, above: &[labrack_core::Above]) -> String {
+    let list: Vec<String> = above
+        .iter()
+        .map(|a| {
+            format!(
+                "{} {} {} is above your ceiling of {} {}",
+                a.param.channel(),
+                if matches!(a.param, labgruppen::Param::Gain(_)) { "gain" } else { "limiter" },
+                crate::control::number_to(a.value, 2),
+                crate::control::number_to(a.ceiling, 2),
+                a.unit
+            )
+        })
+        .collect();
+    format!("{name}: {}. Check it before unmuting.", list.join("; "))
+}
+
 /// A slot as the list and the messages write it: `03 · Show`.
 pub fn slot_text(slot: u32, name: Option<&str>) -> String {
     format!("{slot:02} · {}", name.unwrap_or("Empty"))
@@ -293,6 +311,21 @@ pub fn PresetBar(
 
 #[cfg(test)]
 mod tests {
+    // SEC-3: the toast names the amp, the output, the value and the ceiling
+    #[test]
+    fn the_toast_for_a_value_above_a_ceiling() {
+        let above = [labrack_core::Above {
+            param: "out2.gain".parse().unwrap(),
+            value: 3.0,
+            ceiling: -6.0,
+            unit: "dB",
+        }];
+        assert_eq!(
+            super::above_text("Church", &above),
+            "Church: out2 gain 3 is above your ceiling of -6 dB. Check it before unmuting."
+        );
+    }
+
     use super::*;
 
     fn view() -> PresetView {
