@@ -182,6 +182,27 @@ fn an_unreadable_file_is_an_error_and_is_left_alone() {
     assert_eq!(fs::read_to_string(&path).unwrap(), "this is [not toml");
 }
 
+// BEH-40, SEC-3: a ceiling or a load in the file is held to what the setters accept; a `nan` ceiling would
+// let every value through
+#[test]
+fn a_ceiling_or_a_load_that_is_not_valid_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let amp =
+        "[[amp]]\nname = \"A\"\nprotocol = \"ipd\"\nip = \"10.0.0.1\"\nsource = \"auto\"\nconnected = true\n";
+    for extra in [
+        "[amp.ceilings]\nmax_output_gain_db = nan\n",
+        "[amp.ceilings]\nmax_limiter_dbu = inf\n",
+        "load_ohms = [4.0, 0.0]\n",
+        "load_ohms = [nan, 4.0]\n",
+        "load_ohms = [4.0, 1000.0]\n",
+    ] {
+        fs::write(&path, format!("{amp}{extra}")).unwrap();
+        let err = Store::open(&path).err();
+        assert!(matches!(err, Some(Error::Invalid(_))), "{extra:?}: {err:?}");
+    }
+}
+
 // BEH-40
 #[test]
 fn a_file_with_an_unknown_protocol_is_an_error() {

@@ -50,6 +50,12 @@ impl Entry {
         }
     }
 
+    /// The ceilings and loads are valid, as the setters of the store require.
+    pub fn checks(&self) -> Result<()> {
+        crate::store::check_ceilings(&self.ceilings)?;
+        self.load_ohms.into_iter().try_for_each(crate::store::check_load)
+    }
+
     pub fn into_amp(self, id: AmpId) -> Amp {
         Amp {
             id,

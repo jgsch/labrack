@@ -128,6 +128,9 @@ impl Store {
         let file = config::read(&path)?;
         let mut store = Store { path: Some(path), switches: file.switches, ..Store::in_memory() };
         for entry in file.amps {
+            // the setters refuse these values; a file that carries them is not used (a `nan` ceiling would
+            // let every value through)
+            entry.checks()?;
             let id = store.new_id();
             store.amps.push(entry.into_amp(id));
         }
@@ -239,21 +242,14 @@ impl Store {
 
     /// The user ceilings of an amp (SEC-3); NaN and infinity are refused.
     pub fn set_ceilings(&mut self, id: AmpId, ceilings: Ceilings) -> Result<()> {
-        for value in [ceilings.max_output_gain_db, ceilings.max_limiter_dbu].into_iter().flatten() {
-            if !value.is_finite() {
-                return Err(Error::Invalid(format!("A ceiling must be a number, not {value}")));
-            }
-        }
+        check_ceilings(&ceilings)?;
         self.get_mut(id)?.ceilings = ceilings;
         self.save()
     }
 
     /// The load of an IPD output in ohm (BEH-5, BEH-40), which only scales the watts it shows.
     pub fn set_load(&mut self, id: AmpId, output: u8, ohm: f64) -> Result<()> {
-        let (min, max) = labgruppen::limiter::OHM_RANGE;
-        if !(min..=max).contains(&ohm) {
-            return Err(Error::Invalid(format!("The load must be between {min} and {max} Ohm")));
-        }
+        check_load(ohm)?;
         let amp = self.get_mut(id)?;
         *amp.load_ohms.get_mut(usize::from(output)).ok_or(Error::NotControllable)? = ohm;
         self.save()
@@ -316,4 +312,23 @@ impl Store {
         let file = File { switches: self.switches, amps: self.amps.iter().map(Entry::from_amp).collect() };
         config::write(path, &file)
     }
+}
+
+/// A ceiling is a number (SEC-3).
+pub(crate) fn check_ceilings(ceilings: &Ceilings) -> Result<()> {
+    for value in [ceilings.max_output_gain_db, ceilings.max_limiter_dbu].into_iter().flatten() {
+        if !value.is_finite() {
+            return Err(Error::Invalid(format!("A ceiling must be a number, not {value}")));
+        }
+    }
+    Ok(())
+}
+
+/// The load of an output is in the range the limiter converts for.
+pub(crate) fn check_load(ohm: f64) -> Result<()> {
+    let (min, max) = labgruppen::limiter::OHM_RANGE;
+    if !(min..=max).contains(&ohm) {
+        return Err(Error::Invalid(format!("The load must be between {min} and {max} Ohm")));
+    }
+    Ok(())
 }
