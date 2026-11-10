@@ -140,6 +140,18 @@ pub trait Amp: Send + Sync {
                 report.skipped.push(name.clone());
                 continue;
             };
+            let limiter = matches!(param, Param::Limiter { .. });
+            // the limiter threshold is dBV on an IPD and Vpk on an IPX: a number from the other family is no
+            // threshold
+            if limiter && snap.driver != self.info().driver {
+                report.skipped.push(name.clone());
+                continue;
+            }
+            // a limiter a hair beyond the range, as the amp itself stores it, is taken at the edge
+            let value = match value {
+                Value::Float(x) if limiter => &Value::Float(spec.near(*x)),
+                _ => value,
+            };
             match spec.check(&name, value) {
                 Ok(v) => todo.push((name.clone(), param, v)),
                 Err(e) => report.failed.push((name.clone(), e.to_string())),

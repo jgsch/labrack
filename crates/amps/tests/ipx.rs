@@ -890,3 +890,42 @@ fn a_password_in_the_state_is_not_decoded() {
     let state = DeviceState::parse(&data).unwrap();
     assert!(!format!("{state:?}").contains("hunter2"), "the password was decoded");
 }
+
+/// BEH-37, BEH-5: the amp stores a hair more than its limiter range (36.02 dBu for the 35.99 dBu of 69 Vpk),
+/// so its own dump restores, with the nearest value in range; a value further out still fails
+#[tokio::test]
+async fn restore_takes_the_limiter_a_hair_above_the_range() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let mut snap = amp.snapshot().await.unwrap();
+    snap.params.insert("out1.limiter.threshold_dbu".into(), f(36.02));
+    snap.params.insert("out2.limiter.threshold_dbu".into(), f(39.9));
+
+    let report = amp.restore(&snap, false).await.unwrap();
+
+    let failed: Vec<_> = report.failed.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(failed, ["out2.limiter.threshold_dbu"], "{:?}", report.failed);
+    let Value::Float(dbu) = amp.get(&param("out1.limiter.threshold_dbu")).await.unwrap() else { panic!() };
+    assert!((dbu - 35.99).abs() < 1e-3, "the nearest value in range: {dbu}");
+}
+
+/// BEH-37, SEC-2: the limiter threshold is dBV in an IPD's dump and Vpk in an IPX's: a dump of the other
+/// family leaves the limiter alone, and the rest is restored as usual
+#[tokio::test]
+async fn restore_of_the_other_family_leaves_the_limiter_alone() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let mut snap = amp.snapshot().await.unwrap();
+    snap.driver = "ipd".into();
+    snap.params.insert("out1.limiter.threshold".into(), Value::Float(32.56));
+    snap.params.insert("out1.gain".into(), f(-10.0));
+    let before = amp.get(&param("out1.limiter.threshold")).await.unwrap();
+
+    let dry = amp.restore(&snap, true).await.unwrap();
+    assert!(dry.skipped.contains(&"out1.limiter.threshold".to_string()), "{:?}", dry.skipped);
+    let report = amp.restore(&snap, false).await.unwrap();
+
+    assert!(report.skipped.contains(&"out1.limiter.threshold".to_string()), "{:?}", report.skipped);
+    assert_eq!(amp.get(&param("out1.limiter.threshold")).await.unwrap(), before);
+    assert_eq!(amp.get(&param("out1.gain")).await.unwrap(), f(-10.0));
+}

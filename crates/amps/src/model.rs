@@ -370,6 +370,16 @@ impl ParamSpec {
     pub const fn new(kind: Kind) -> Self {
         ParamSpec { kind, unit: "", min: None, max: None, writable: true }
     }
+    /// `x`, or the edge of the range when it lies within 1 % of that edge: the amp itself stores a hair more
+    /// than its limiter range (36.02 dBu for the 35.99 dBu of 69 Vpk), and its own file must load.
+    pub fn near(&self, x: f64) -> f64 {
+        let near = |edge: f64| (x - edge).abs() <= 0.01 * edge.abs().max(1.0);
+        match (self.min, self.max) {
+            (Some(min), _) if x < min && near(min) => min,
+            (_, Some(max)) if x > max && near(max) => max,
+            _ => x,
+        }
+    }
     pub const fn unit(mut self, unit: &'static str) -> Self {
         self.unit = unit;
         self
