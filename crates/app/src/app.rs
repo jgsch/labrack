@@ -19,22 +19,34 @@ use crate::search::{KnownAmp, SearchView};
 use crate::{AmplifiersPage, Header, MixeqPage, Page, SearchPage, Style, Toasts};
 
 /// The amp list from the config file, or an empty one that is never written when the file cannot be
-/// read: a file the app does not understand must not be replaced by an empty list.
-fn store() -> Store {
-    match Store::default_path().map(Store::open) {
-        Some(Ok(store)) => store,
+/// read: a file the app does not understand must not be replaced by an empty list. The text says so in
+/// the window (BEH-40).
+fn store() -> (Store, Option<String>) {
+    store_at(Store::default_path())
+}
+
+fn store_at(path: Option<std::path::PathBuf>) -> (Store, Option<String>) {
+    match path.map(Store::open) {
+        Some(Ok(store)) => (store, None),
         Some(Err(e)) => {
             eprintln!("labrack: the config file cannot be used, working without it: {e}");
-            Store::in_memory()
+            (
+                Store::in_memory(),
+                Some(format!("The config file cannot be used ({e}). The amps you add are not saved.")),
+            )
         }
-        None => Store::in_memory(),
+        None => (Store::in_memory(), None),
     }
 }
 
 /// The window: the connections of the core, the header and the page chosen in it.
 #[component]
 pub fn App() -> Element {
-    let hub = use_hook(|| Hub::new(store(), Arc::new(Network), Arc::new(Lan), Timing::default()));
+    let (hub, config_problem) = use_hook(|| {
+        let (store, problem) = store();
+        (Hub::new(store, Arc::new(Network), Arc::new(Lan), Timing::default()), problem)
+    });
+    let mut config_problem = use_signal(|| config_problem);
     let mut page = use_signal(|| Page::Amplifiers);
     let mut picked = use_signal(|| 0usize);
     let mut tab = use_signal(|| MixTab::Levels);
@@ -135,7 +147,7 @@ pub fn App() -> Element {
     }
     // what runs and what failed show on every page, bottom right (UX-29)
     let toast_busy = busy.read().values().next().cloned();
-    let toast_error = preset_errors.read().values().next().cloned();
+    let toast_error = preset_errors.read().values().next().cloned().or_else(|| config_problem.read().clone());
     // the mode of an amp is asked about on the Amplifiers page; the other questions on Mix & EQ
     let mode_ask =
         asking.read().clone().filter(|(_, ask)| matches!(ask, Ask::Mode(_)) && page() == Page::Amplifiers);
@@ -486,7 +498,10 @@ pub fn App() -> Element {
                 error: toast_error,
                 on_dismiss: {
                     let mut errors = preset_errors;
-                    move |_| errors.write().clear()
+                    move |_| {
+                        errors.write().clear();
+                        config_problem.set(None);
+                    }
                 },
             }
         }
@@ -890,9 +905,23 @@ pub fn picked_after_removal(picked: usize, removed: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{corrected_zoom, muted_input_level, picked_after_removal, refused, source_level};
+    use super::{corrected_zoom, muted_input_level, picked_after_removal, refused, source_level, store_at};
     use dioxus::prelude::*;
     use labrack_core::{Error, Protocol, Store};
+
+    // BEH-40: a config file that cannot be read is said in the window, and is left as it is
+    #[test]
+    fn an_unreadable_config_is_reported_and_left_alone() {
+        let path = std::env::temp_dir().join(format!("labrack-config-{}.toml", std::process::id()));
+        std::fs::write(&path, "amps = [[[ not toml").unwrap();
+        let (mut store, problem) = store_at(Some(path.clone()));
+        let problem = problem.expect("a message for the window");
+        assert!(problem.contains("not saved"), "{problem}");
+        store.add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "amps = [[[ not toml", "never written");
+        std::fs::remove_file(&path).unwrap();
+        assert!(store_at(None).1.is_none());
+    }
 
     // UX-26, UX-29: what the core refuses shows as an error toast; a success clears nothing
     #[test]

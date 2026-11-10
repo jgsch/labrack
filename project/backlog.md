@@ -8,11 +8,6 @@ committed.
 
 From the full review of 2026-11-10, in order of priority. Each starts with a failing test.
 
-Bugs:
-
-- An unreadable config file is reported on stderr only, and what the user adds is lost at exit.
-  Show it in the window. `app/src/app.rs`. Spec: BEH-40
-
 Unverified (test on the hardware first):
 
 - IPX recall: the mutes are read straight after the recall, which has no reply. If the amp applies
