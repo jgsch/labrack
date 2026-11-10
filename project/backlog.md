@@ -6,6 +6,59 @@ committed.
 
 ## Bugs
 
+From the full review of 2026-11-10, in order of priority. Each starts with a failing test.
+
+Safety:
+
+- A fader drag stays armed when the button is released outside the track: the next pass of the mouse
+  moves the gain. Stop the drag when no button is held. `app/src/components.rs`. Spec: UX-22, SEC-4
+- An IPX that drops off the network stays ONLINE until TCP gives up (no FIN, the heartbeat expects no
+  reply). Treat meters that stop arriving, or a heartbeat that cannot be written, as a lost
+  connection. `amps/src/amps/ipx/client.rs`, `core/src/hub.rs`. Spec: BEH-8, BEH-42
+- MUTE ALL during a link, EQ copy or mode change is queued behind it, and the bulk change then puts the
+  outputs back as before (unmuted) before the mute is written. A mute must win. `core/src/hub/presets.rs`.
+  Spec: SEC-6, SEC-7
+- A settings file from the other family is accepted: `out1.limiter.threshold` is dBV on an IPD and Vpk
+  on an IPX. Refuse a file whose driver is not the amp's, or convert the unit. `core/src/hub/presets.rs`.
+  Spec: BEH-37, SEC-2
+
+Bugs:
+
+- A failed state read (`load_state`) is dropped: the amp stays ONLINE and never loaded, so link, copy,
+  mode and the mute polling never work. Retry and report. `core/src/hub.rs`. Spec: BEH-43
+- The IPX refuses its own saved file: the amp stores 36.02 dBu, above `LIMITER_DBU` (35.99).
+  `plan_load` should accept the nearest value in range, as `plan_copy` does. Spec: BEH-37, BEH-5
+- Removing an amp above the one picked on Mix & EQ changes the picked amp (`picked` is a list
+  index). `app/src/app.rs`. Spec: BEH-45
+- An IPX in a mode outside the table (`IPX_MODES`) fails the whole snapshot; decode it as
+  `unknown(n)` like the IPD. `amps/src/amps/ipx/params.rs`. Spec: BEH-44
+- `wait_loaded` never gives up when the amp disconnects or is removed: the task spins forever.
+  `core/src/hub.rs`
+- The app drops the refusals of the core (`let _ =` on `set`, `set_limiter`, `set_ip`, `rename`,
+  `remove`): a duplicate IP, a linked channel 2 or a missing right shows nothing. Show them as
+  toasts. `app/src/app.rs`. Spec: UX-26, UX-29
+- An unreadable config file is reported on stderr only, and what the user adds is lost at exit.
+  Show it in the window. `app/src/app.rs`. Spec: BEH-40
+
+Unverified (test on the hardware first):
+
+- IPX recall: the mutes are read straight after the recall, which has no reply. If the amp applies
+  it late, an output may be unmuted while shown MUTED. Spec: SEC-6
+
+Minor:
+
+- IPD client: a write that times out removes a newer pending write of the same key; `get_many`
+  returns cached values for keys that did not answer, and `Ok` after a disconnect.
+- Config: ceilings and loads from the file are not validated (a `nan` ceiling disables it).
+- The preset name box allows 24 characters, the amps 15 or 16: a long name mutes the outputs, is
+  refused, and unmutes them.
+- The preset list is read twice at once after a store (50 slow reads each on an IPD).
+- `DeviceState::parse` decodes the IPX passwords into memory (SEC-8); nothing uses them.
+- Docs: `docs/ipx-protocol.md:205` (a filter type write does not switch it on, IPX 1200 firmware
+  2.3.4.0, seen 2026-11-10); BEH-37 says the limiter is skipped from files but it is restored; the
+  last Chores item (IPD discovery on the default route only) looks fixed; the `Header` doc comment
+  says UNMUTE ALL is disabled.
+
 ## Features
 
 ## Chores
