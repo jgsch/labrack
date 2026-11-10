@@ -185,6 +185,21 @@ impl Hub {
         tokio::spawn(load_state(self.0.shared.clone(), id, session.amp.clone(), session.writer.clone()));
     }
 
+    /// The change failed, but the amp may have applied it all the same (a command whose echo came too late):
+    /// a preset can have unmuted the outputs. Mute both again, as well as can be done, and read the state
+    /// again, so that what the app shows is what the amp holds (SEC-6). The outputs the amp did not
+    /// confirm are not shown as muted.
+    async fn failed_muted(&self, id: AmpId, session: &Session, error: labgruppen::Error) -> Error {
+        let both: Vec<(Param, Value)> = OUTPUTS.iter().map(|p| (p.clone(), Value::Bool(true))).collect();
+        for (param, result) in OUTPUTS.iter().zip(session.amp.set_many(&both).await) {
+            if result.is_ok() {
+                self.0.shared.observed(id, param, &Value::Bool(true), false);
+            }
+        }
+        self.read_state_again(id, session);
+        Error::LeftMuted(error.to_string())
+    }
+
     /// Run `change` on an amp with its outputs muted (SEC-6).
     ///
     /// 1. wait for the amp's writes to finish and, if `drop_waiting`, drop the values still waiting:
@@ -193,7 +208,8 @@ impl Hub {
     /// 3. `change`;
     /// 4. read the mutes again and put them right: see [`End`].
     ///
-    /// Any failure stops there and leaves the outputs as they are, muted.
+    /// Any failure stops there and leaves the outputs muted, also when the amp applied the change anyway
+    /// ([`Hub::failed_muted`]).
     pub(super) async fn bulk<T, F, Fut>(
         &self,
         id: AmpId,
@@ -241,7 +257,7 @@ impl Hub {
                 }
                 return Err(refused.into());
             }
-            Err(e) => return Err(left_muted(e)),
+            Err(e) => return Err(self.failed_muted(id, session, e).await),
         };
 
         // a change that is no preset or file leaves the mutes as this function set them: no need to ask the

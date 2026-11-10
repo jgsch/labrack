@@ -4,7 +4,10 @@
 mod common;
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
+
+use async_trait::async_trait;
 
 use common::*;
 use labgruppen::amps::ipd::IpdAmp;
@@ -17,7 +20,7 @@ use labgruppen::amps::ipx::params as ipx_params;
 use labgruppen::amps::ipx::protocol::{Address, Env, Main, build_frame};
 use labgruppen::amps::ipx::structs::{AUDCFG_SIZE, DeviceState, audio_dword};
 use labgruppen::{Snapshot, Value};
-use labrack_core::{AmpId, Ceilings, Error, Hub, Preset, Protocol, Status, Update};
+use labrack_core::{AmpId, Ceilings, Connector, Error, Hub, Preset, Protocol, Status, Store, Update};
 use tokio::time::{sleep, timeout};
 
 const TRUE: Value = Value::Bool(true);
@@ -835,4 +838,102 @@ async fn a_reconnect_clears_modified_and_changes_no_mute() {
     assert_eq!(fake.state().sync, state);
     assert_eq!(hub.value(id, &param("out1.mute")), Some(TRUE));
     assert_eq!(hub.value(id, &param("out2.mute")), Some(FALSE));
+}
+
+// ---- a bulk change that fails after the amp may have applied it ------------------------------------
+
+/// An IPX whose recall is sent, and so applied, but reported as not confirmed: the echo of an IPD's
+/// command that comes too late looks the same.
+struct Unconfirmed(Arc<dyn labgruppen::Amp>);
+
+#[async_trait]
+impl labgruppen::Amp for Unconfirmed {
+    fn info(&self) -> &labgruppen::AmpInfo {
+        self.0.info()
+    }
+    fn params(&self) -> Vec<labgruppen::Param> {
+        self.0.params()
+    }
+    fn spec(&self, p: &labgruppen::Param) -> Option<labgruppen::ParamSpec> {
+        self.0.spec(p)
+    }
+    async fn get(&self, p: &labgruppen::Param) -> labgruppen::Result<Value> {
+        self.0.get(p).await
+    }
+    async fn set(&self, p: &labgruppen::Param, v: Value) -> labgruppen::Result<()> {
+        self.0.set(p, v).await
+    }
+    async fn status(&self) -> labgruppen::Result<labgruppen::Status> {
+        self.0.status().await
+    }
+    fn preset_slots(&self) -> std::ops::RangeInclusive<u32> {
+        self.0.preset_slots()
+    }
+    async fn presets(&self) -> labgruppen::Result<Vec<labgruppen::PresetInfo>> {
+        self.0.presets().await
+    }
+    async fn recall_preset(&self, index: u32) -> labgruppen::Result<()> {
+        self.0.recall_preset(index).await?;
+        Err(labgruppen::Error::NotConfirmed("SET key (11, 26, 0, 1)".into()))
+    }
+    async fn store_preset(&self, slot: u32, name: &str) -> labgruppen::Result<()> {
+        self.0.store_preset(slot, name).await
+    }
+    fn meters(&self) -> labgruppen::Meters {
+        self.0.meters()
+    }
+    fn subscribe(&self) -> tokio::sync::broadcast::Receiver<labgruppen::AmpEvent> {
+        self.0.subscribe()
+    }
+    async fn close(&self) {
+        self.0.close().await
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    async fn snapshot(&self) -> labgruppen::Result<labgruppen::Snapshot> {
+        self.0.snapshot().await
+    }
+}
+
+struct UnconfirmedRecall(u16);
+
+#[async_trait]
+impl Connector for UnconfirmedRecall {
+    async fn connect(&self, _: Protocol, _: &str) -> labgruppen::Result<Arc<dyn labgruppen::Amp>> {
+        let amp =
+            labgruppen::amps::ipx::IpxAmp::connect_with("127.0.0.1", self.0, Duration::from_secs(1)).await?;
+        Ok(Arc::new(Unconfirmed(Arc::new(amp))))
+    }
+}
+
+// SEC-6, SEC-7: a recall the amp applied but did not confirm must not leave the outputs unmuted while
+// the app says they are muted: the outputs are muted again after the failure, and the state is read again
+#[tokio::test]
+async fn a_recall_that_fails_after_the_amp_applied_it_still_ends_muted() {
+    let fake = FakeAmp::start().await;
+    legacy_preset(&fake, 7, "Loud", &[("out1.mute", FALSE), ("out2.mute", FALSE), ("out1.gain", f(-7.5))]);
+    let hub =
+        Hub::new(Store::in_memory(), Arc::new(UnconfirmedRecall(fake.port)), Heard::nothing(), timing());
+    let id = hub.add_manual("Left", Protocol::Ipx, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+
+    let done = hub.recall_preset(id, 7).await;
+
+    assert!(matches!(done, Err(Error::LeftMuted(_))), "{done:?}");
+    let settled = async {
+        while ipx_value(&fake, "out1.gain") != f(-7.5) || !hub.loaded(id) {
+            sleep(Duration::from_millis(10)).await;
+        }
+    };
+    timeout(Duration::from_secs(5), settled).await.expect("the recall was applied and the state read again");
+    assert_eq!((ipx_value(&fake, "out1.mute"), ipx_value(&fake, "out2.mute")), (TRUE, TRUE), "the amp");
+    assert_eq!(
+        (hub.value(id, &param("out1.mute")), hub.value(id, &param("out2.mute"))),
+        (Some(TRUE), Some(TRUE)),
+        "what the app shows is what the amp holds"
+    );
+    assert_eq!(hub.value(id, &param("out1.gain")), Some(f(-7.5)), "the state was read again");
 }
