@@ -44,6 +44,11 @@ pub fn above_text(name: &str, above: &[labrack_core::Above]) -> String {
     format!("{name}: {}. Check it before unmuting.", list.join("; "))
 }
 
+/// What the toast says of a write the amp did not take: the control goes back to what the amp holds.
+pub fn write_failed_text(amp: &str, param: &labgruppen::Param, why: &str) -> String {
+    format!("{amp}: {param} was not taken by the amplifier ({why}). It shows what the amplifier holds.")
+}
+
 /// A slot as the list and the messages write it: `03 · Show`.
 pub fn slot_text(slot: u32, name: Option<&str>) -> String {
     format!("{slot:02} · {}", name.unwrap_or("Empty"))
@@ -311,6 +316,14 @@ pub fn PresetBar(
 
 #[cfg(test)]
 mod tests {
+    // UX-29: a write the amp did not take is said, naming the amp and the control
+    #[test]
+    fn a_write_the_amp_did_not_take_is_told() {
+        let text = write_failed_text("FOH", &"out1.mute".parse().unwrap(), "write not confirmed");
+        assert!(text.starts_with("FOH: out1.mute was not taken"), "{text}");
+        assert!(text.contains("write not confirmed") && text.contains("holds"), "{text}");
+    }
+
     // SEC-3: the toast names the amp, the output, the value and the ceiling
     #[test]
     fn the_toast_for_a_value_above_a_ceiling() {

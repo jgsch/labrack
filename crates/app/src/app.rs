@@ -141,6 +141,14 @@ pub fn App() -> Element {
                             read_presets(hub.clone(), id, preset_lists);
                             changes += 1;
                         }
+                        // a write the amp did not take: the control already went back to what it holds (SEC-2)
+                        Ok(Update::WriteFailed(id, param, why)) => {
+                            let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone());
+                            let text =
+                                crate::presets::write_failed_text(&name.unwrap_or_default(), &param, &why);
+                            said(preset_errors, id, Err(labrack_core::Error::Invalid(text)));
+                            changes += 1;
+                        }
                         Ok(_) | Err(RecvError::Lagged(_)) => changes += 1,
                         Err(RecvError::Closed) => break,
                     }
