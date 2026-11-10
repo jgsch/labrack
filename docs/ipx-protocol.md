@@ -202,7 +202,7 @@ The firmware upgrade and key commands should not be sent without understanding t
 - Replies are matched by (main, sub). Meters and temperature arrive interleaved with replies and must be filtered out.
 - Changes made elsewhere (front panel) arrive as GETPRM or DEVPRMCHAGE frames carrying the address and the new value.
 - Timeouts used by the client: 2 s per request, 5 s for DEV_PRM_SYNC and GETPRESET.
-- Writing a crossover or EQ band `type` also switches that filter on (seen on the IPX 1200). Write `enabled` last when restoring settings.
+- Writing a crossover or EQ band `type` does not switch that filter on (IPX 1200, firmware 2.3.4.0, 2026-11-10: tried on a disabled EQ band and on the disabled low-pass of output 2; both stayed off and only the type changed). An older note said it did. Writing `enabled` last when restoring settings is harmless and keeps the filter off until it is complete.
 - Link (verified on the IPX 1200): setting the output link flag copies channel 1's settings to channel 2 once (gain, limiter dBu). After that the channels stay independent: writes to either channel are not mirrored, for inputs and outputs alike. A client that wants linked channels to follow each other must write both.
 - An occasional GETPRM gets no reply (seen over Wi-Fi during a restore); retry before reporting a failure.
 - TCP is a byte stream; frames can split or coalesce.

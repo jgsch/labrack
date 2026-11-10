@@ -10,8 +10,7 @@ const SUBTITLE: [&str; 14] = ["D", "S", "P", "", "C", "O", "N", "T", "R", "O", "
 /// open, the outputs are one click away from silence. Tabs are links and MUTE ALL a button, so the
 /// keyboard reaches all of them (UX-4).
 ///
-/// UNMUTE ALL needs a second click (SEC-5, UX-24); the confirmation is `app-controls`, and until it
-/// exists the button is disabled.
+/// UNMUTE ALL needs a second click within three seconds (SEC-5, UX-24); MUTE ALL acts at once.
 #[component]
 pub fn Header(
     page: Page,

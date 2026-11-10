@@ -13,13 +13,6 @@ Unverified (test on the hardware first):
 - IPX recall: the mutes are read straight after the recall, which has no reply. If the amp applies
   it late, an output may be unmuted while shown MUTED. Spec: SEC-6
 
-Minor:
-
-- Docs: `docs/ipx-protocol.md:205` (a filter type write does not switch it on, IPX 1200 firmware
-  2.3.4.0, seen 2026-11-10); BEH-37 says the limiter is skipped from files but it is restored; the
-  last Chores item (IPD discovery on the default route only) looks fixed; the `Header` doc comment
-  says UNMUTE ALL is disabled.
-
 ## Features
 
 ## Chores
@@ -57,5 +50,3 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   answers on 192.168.1.87. Discovery uses the IP text inside the IPX broadcast; if that is the
   amp's configured address, it can be unreachable from where the amp is heard. Prefer the sender
   address of the datagram, once a real broadcast has been seen (none was on this network). Spec: BEH-19
-- Discovery of the IPD only probes the /24 of the default route. On a machine with Wi-Fi to the amps
-  and a wired default route (like the development machine) it finds nothing. Spec: BEH-18

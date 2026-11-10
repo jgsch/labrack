@@ -204,8 +204,11 @@ statement with a `BEH-<n>` ID.
   save the settings to a JSON file on the computer, load such a file into an amp. The file format
   is the library's snapshot (`labgruppen dump`). A file is checked as a whole before anything is
   written: if one value is outside the range of the amp or above a user ceiling, the load is
-  refused. Entries that cannot be set from a file are skipped and listed: output mutes (`SEC-6`),
-  and the controls that only have their own change yet (the limiter, link).
+  refused, except a limiter value a hair beyond the range (the amp itself stores 36.02 dBu for its
+  35.99 dBu maximum), which is taken as the nearest value in range. Entries that cannot be set from a
+  file are skipped and listed: output mutes (`SEC-6`), the controls that only have their own change yet
+  (the link, names, polarity, compressors, input limiters, device mode), and the output limiter of a
+  file from the other family (the threshold is dBV on an IPD and Vpk on an IPX).
 - **BEH-38** MODIFIED means "changed since this app recalled or loaded the preset": any change made
   in the app, and any change from elsewhere (front panel, another controller) that the app sees.
   Recalling or storing a preset clears it; loading a file sets it, as the file is not the stored
