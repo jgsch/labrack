@@ -673,7 +673,9 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             }
             for output in 0..2 {
                 let param = Param::Mute(Channel::Output(output as u8));
-                view.muted[output] = hub.shown(amp.id, &param) == Some(Value::Bool(true));
+                let shown = hub.shown(amp.id, &param);
+                view.muted[output] = shown == Some(Value::Bool(true));
+                view.mute_known[output] = shown.is_some();
             }
             view.amp_muted = hub.amp_muted(amp.id);
             view.preset = amp.preset.as_ref().map(|p| loaded_text(p.number, &p.name));

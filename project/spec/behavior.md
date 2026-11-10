@@ -132,7 +132,8 @@ statement with a `BEH-<n>` ID.
   becomes UNMUTE ALL when everything is muted).
 - **BEH-25** MUTE ALL and UNMUTE ALL act on the amps that are ONLINE, and on their two outputs only:
   inputs and the mixer are never touched.
-- **BEH-26** A muted output shows MUTED and an empty meter. Mute state is the same on the
+- **BEH-26** An output whose mute the amp has not told yet (an IPD takes seconds after ONLINE) shows
+  "mute unknown", not unmuted. A muted output shows MUTED and an empty meter. Mute state is the same on the
   Amplifiers page and in the Levels tab.
 
 ## Mixer, levels and limiter

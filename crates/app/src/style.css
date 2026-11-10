@@ -94,6 +94,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .channel-name{font-size:12px;font-weight:700;letter-spacing:0.04em;color:var(--text)}
 .m-button{flex:0 0 36px;width:36px;height:36px;border-radius:4px;font-size:13px;font-weight:600;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .m-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
+.m-button.unknown{border-style:dashed;color:var(--muted)}
 .amp-mute{flex:0 0 118px;width:118px;box-sizing:border-box;min-height:36px;border-radius:4px;font-size:13px;font-weight:600;letter-spacing:0.1em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .amp-mute.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 .empty-state{padding:28px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--panel);border:1px dashed var(--border-strong);border-radius:6px;display:flex;flex-direction:column;align-items:center;gap:14px}

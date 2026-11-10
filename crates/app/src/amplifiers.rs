@@ -31,6 +31,9 @@ pub struct AmpView {
     pub amp_muted: bool,
     pub levels: [Level; 2],
     pub muted: [bool; 2],
+    /// The amp has told the mute of each output. An IPD takes seconds after ONLINE to do it; until then
+    /// the output is not shown as unmuted (SEC-7).
+    pub mute_known: [bool; 2],
     /// The loaded preset, and whether the app saw a change since (BEH-11, BEH-38).
     pub preset: Option<String>,
     pub modified: bool,
@@ -56,6 +59,7 @@ impl AmpView {
                 Level { label: "OUT 2".into(), db: control::METER_FLOOR, gr: 0.0 },
             ],
             muted: [false, false],
+            mute_known: [false, false],
             preset: None,
             modified: false,
             mode: None,
@@ -98,6 +102,7 @@ pub fn AmplifierPanel(
     let ip_style = format!("{ip_colour}width: {}ch", view.ip.chars().count().max(7));
     let muted = view.muted;
     let level_muted = view.muted;
+    let mute_known = view.mute_known;
     let online = view.online;
     let mode = view.mode.clone();
     rsx! {
@@ -172,6 +177,8 @@ pub fn AmplifierPanel(
                                 span { class: "channel-figures",
                                     if !online {
                                         "no signal"
+                                    } else if !mute_known[output] {
+                                        "mute unknown"
                                     } else if level_muted[output] {
                                         "MUTED · GR {control::number(level.gr)}"
                                     } else {
@@ -181,11 +188,19 @@ pub fn AmplifierPanel(
                             }
                             crate::Meter { level_db: if online && !level_muted[output] { level.db } else { control::METER_FLOOR }, gain_reduction_db: level.gr }
                             button {
-                                class: if muted[output] { "m-button muted" } else { "m-button" },
+                                class: if muted[output] {
+                                    "m-button muted"
+                                } else if !mute_known[output] {
+                                    "m-button unknown"
+                                } else {
+                                    "m-button"
+                                },
                                 disabled: !online,
                                 "aria-pressed": "{muted[output]}",
                                 "aria-label": if muted[output] {
                                     "Unmute output {output + 1} of {view.name}"
+                                } else if !mute_known[output] {
+                                    "Mute output {output + 1} of {view.name} (its state is not known yet)"
                                 } else {
                                     "Mute output {output + 1} of {view.name}"
                                 },
@@ -319,12 +334,24 @@ mod tests {
     fn a_muted_output_says_so() {
         let mut view = AmpView::new(0, "Subs", "IPX", "192.168.1.31", Status::Online);
         view.muted[0] = true;
+        view.mute_known = [true, true];
         view.levels[0].db = -12.0;
         let out = panel_html(view);
         assert!(out.contains("MUTED"), "{out}");
         assert!(out.contains("aria-pressed=\"true\""), "{out}");
         assert!(out.contains("m-button muted"), "{out}");
         assert!(out.contains("Mute output 2 of Subs"), "the other output offers to mute: {out}");
+    }
+
+    // SEC-7: until the amp has told a mute, the output is not shown as unmuted
+    #[test]
+    fn an_unknown_mute_is_not_shown_as_unmuted() {
+        let mut view = AmpView::new(0, "Subs", "IPD", "192.168.1.31", Status::Online);
+        view.mute_known = [true, false];
+        let out = panel_html(view);
+        assert_eq!(out.matches("mute unknown").count(), 1, "{out}");
+        assert!(out.contains("m-button unknown"), "{out}");
+        assert!(out.contains("its state is not known yet"), "{out}");
     }
 
     // BEH-10: an amp that is not ONLINE has no working controls
