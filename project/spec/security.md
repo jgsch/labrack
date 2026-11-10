@@ -19,6 +19,8 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   that is above it stays until the user moves it. What the amp holds above a ceiling, because of a
   recalled preset or a change made elsewhere, is told in a toast naming the amp, output, value and
   ceiling whenever the state is read (connect, recall, file load), before the user unmutes.
+  That toast stays until the user dismisses it and is not replaced by an error. An IPX limiter is judged by its
+  dBu field, and a value outside the model's range is told as well.
 - **SEC-4** **Small steps.** Faders follow `UX-22` and `UX-23`. While a fader moves, only the
   latest value is sent, at most every 50 ms per parameter. A gesture cannot jump a level: no key
   auto-repeat, at most 6 dB up per drag, one wheel raise per 200 ms.

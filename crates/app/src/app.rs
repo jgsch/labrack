@@ -56,6 +56,8 @@ pub fn App() -> Element {
     let preset_lists = use_signal(HashMap::<AmpId, Vec<Preset>>::new);
     // why the last action of an amp failed, and what an amp is busy with (the toasts, UX-29)
     let preset_errors: Errors = use_signal(HashMap::new);
+    // what each amp holds above its ceilings: it stays until dismissed or the amp is read again (SEC-3)
+    let mut ceiling_warnings: Errors = use_signal(HashMap::new);
     let busy: Busy = use_signal(HashMap::new);
     // the action that mutes the outputs, waiting for the user's yes (UX-24)
     let mut asking = use_signal(|| None::<(AmpId, Ask)>);
@@ -130,10 +132,12 @@ pub fn App() -> Element {
                         // the state was read (connect, recall, file): a value above a ceiling is said (SEC-3)
                         Ok(Update::Loaded(id)) => {
                             let above = hub.above_ceilings(id);
-                            if !above.is_empty() {
+                            if above.is_empty() {
+                                ceiling_warnings.write().remove(&id);
+                            } else {
                                 let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone());
                                 let text = crate::presets::above_text(&name.unwrap_or_default(), &above);
-                                said(preset_errors, id, Err(labrack_core::Error::Invalid(text)));
+                                ceiling_warnings.write().insert(id, text);
                             }
                             changes += 1;
                         }
@@ -165,6 +169,7 @@ pub fn App() -> Element {
     }
     // what runs and what failed show on every page, bottom right (UX-29)
     let toast_busy = busy.read().values().next().cloned();
+    let warnings_shown: Vec<String> = ceiling_warnings.read().values().cloned().collect();
     let toast_error = preset_errors.read().values().next().cloned().or_else(|| config_problem.read().clone());
     // the mode of an amp is asked about on the Amplifiers page; the other questions on Mix & EQ
     let mode_ask =
@@ -514,6 +519,8 @@ pub fn App() -> Element {
             Toasts {
                 busy: toast_busy,
                 error: toast_error,
+                warnings: warnings_shown,
+                on_dismiss_warnings: move |_| ceiling_warnings.write().clear(),
                 on_dismiss: {
                     let mut errors = preset_errors;
                     move |_| {

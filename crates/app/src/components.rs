@@ -375,6 +375,10 @@ pub fn Toasts(
     #[props(default)] busy: Option<String>,
     #[props(default)] error: Option<String>,
     #[props(default)] on_dismiss: EventHandler<()>,
+    /// What the amps hold above the user ceilings (SEC-3): it stays until dismissed, apart from the errors.
+    #[props(default)]
+    warnings: Vec<String>,
+    #[props(default)] on_dismiss_warnings: EventHandler<()>,
 ) -> Element {
     rsx! {
         div { class: "toasts",
@@ -382,6 +386,12 @@ pub fn Toasts(
                 div { class: "toast busy", role: "status",
                     span { class: "spinner", "aria-hidden": "true" }
                     span { "{text}" }
+                }
+            }
+            if !warnings.is_empty() {
+                div { class: "toast warning", role: "alert", onclick: move |_| on_dismiss_warnings.call(()),
+                    span { { warnings.join(" ") } }
+                    button { class: "toast-close", "aria-label": "Dismiss the warning", "×" }
                 }
             }
             if let Some(text) = error {
@@ -461,6 +471,19 @@ mod tests {
         });
         assert!(both.contains("class=\"spinner\"") && both.contains("Copying the EQ…"), "{both}");
         assert!(both.contains("role=\"alert\"") && both.contains("No answer"), "{both}");
+    }
+
+    // SEC-3, UX-29: a ceiling warning is a toast of its own, which an error does not replace
+    #[test]
+    fn a_ceiling_warning_is_a_toast_of_its_own() {
+        let out = html(|| {
+            rsx! {
+                Toasts { warnings: vec!["Left: out1 gain 3 is above".to_string()], error: "No answer".to_string() }
+            }
+        });
+        assert!(out.contains("toast warning") && out.contains("Left: out1 gain 3 is above"), "{out}");
+        assert!(out.contains("toast error") && out.contains("No answer"), "{out}");
+        assert!(!html(|| rsx! { Toasts {} }).contains("toast warning"));
     }
 
     // UX-26: the error is announced
