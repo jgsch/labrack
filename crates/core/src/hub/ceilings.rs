@@ -4,7 +4,6 @@
 use labgruppen::{Channel, LimiterField, Param, Value};
 
 use super::Hub;
-use crate::Error;
 use crate::store::AmpId;
 
 /// A setting of the amp that is above a ceiling.
@@ -25,15 +24,21 @@ impl Hub {
         let Ok(session) = self.session(id) else { return Vec::new() };
         let Some(ceilings) = self.0.shared.store().get(id).map(|amp| amp.ceilings) else { return Vec::new() };
         let mut above = Vec::new();
+        // an IPX holds the threshold as Vpk and as dBu, which can disagree: the dBu is the one held to
+        // the ceiling (an IPD has the one)
+        let threshold = if session.is_ipx() { LimiterField::ThresholdDbu } else { LimiterField::Threshold };
         for output in 0..2u8 {
             let ch = Channel::Output(output);
-            for param in [Param::Gain(ch), Param::Limiter { ch, field: LimiterField::Threshold }] {
-                let Some(Value::Float(value)) = self.value(id, &param) else { continue };
-                let Some(spec) = session.amp.spec(&param) else { continue };
+            let shown = [Param::Gain(ch), Param::Limiter { ch, field: LimiterField::Threshold }];
+            for param in shown {
+                let held = match &param {
+                    Param::Limiter { .. } => Param::Limiter { ch, field: threshold },
+                    other => other.clone(),
+                };
+                let Some(Value::Float(value)) = self.value(id, &held) else { continue };
+                let Some(spec) = session.amp.spec(&held) else { continue };
                 // the amp's own range is not the question; only the ceiling is
-                if let Err(Error::AboveCeiling { ceiling, unit }) =
-                    crate::dsp::check(&param, &spec, &Value::Float(value), &ceilings)
-                {
+                if let Some((ceiling, unit)) = crate::dsp::above_ceiling(&held, spec.unit, value, &ceilings) {
                     above.push(Above { param, value, ceiling, unit });
                 }
             }

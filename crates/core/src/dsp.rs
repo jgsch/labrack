@@ -99,24 +99,38 @@ pub(crate) fn check(param: &Param, spec: &ParamSpec, value: &Value, ceilings: &C
         labgruppen::Error::InvalidValue(why) => Error::Invalid(why),
         other => Error::Invalid(other.to_string()),
     })?;
-    if let Some(limit) = ceiling(param, ceilings)
-        && checked.as_f64().is_some_and(|v| v > limit)
+    if let Some(v) = checked.as_f64()
+        && let Some((ceiling, unit)) = above_ceiling(param, spec.unit, v, ceilings)
     {
-        return Err(Error::AboveCeiling { ceiling: limit, unit: spec.unit });
+        return Err(Error::AboveCeiling { ceiling, unit });
     }
-    // the limiter ceiling is a dBu; a threshold in Vpk is held to it as well
-    if let Some(limit) = ceilings.max_limiter_dbu
-        && let Some(dbu) = checked.as_f64().and_then(|v| threshold_dbu(param, spec.unit, v))
-        && dbu > limit + 1e-9
+    Ok(checked)
+}
+
+/// The user ceiling (SEC-3) that `value` of `param`, held in `unit`, is above, with its unit; the
+/// amp's own range is not asked, so a value read from the amp that is out of it is still told. A
+/// limiter threshold is held to the dBu ceiling in whatever unit it is held.
+pub(crate) fn above_ceiling(
+    param: &Param,
+    unit: &'static str,
+    value: f64,
+    ceilings: &Ceilings,
+) -> Option<(f64, &'static str)> {
+    if let Some(limit) = ceiling(param, ceilings)
+        && value > limit
     {
-        let ceiling = match spec.unit {
+        return Some((limit, unit));
+    }
+    let limit = ceilings.max_limiter_dbu?;
+    let dbu = threshold_dbu(param, unit, value)?;
+    (dbu > limit + 1e-9).then(|| {
+        let ceiling = match unit {
             "Vpk" => limiter::vpk_from_dbu(limit),
             "dBV" => limit - limiter::DBV_TO_DBU,
             _ => limit,
         };
-        return Err(Error::AboveCeiling { ceiling, unit: spec.unit });
-    }
-    Ok(checked)
+        (ceiling, unit)
+    })
 }
 
 /// Keeps the latest value per parameter and says when it may go out: the first at once, then not
@@ -303,6 +317,23 @@ mod tests {
         assert_eq!(check(&freq, &spec, &f(1000.4), &NONE).unwrap(), Value::Int(1000));
         assert_eq!(check(&freq, &spec, &f(19.6), &NONE).unwrap(), Value::Int(20));
         assert!(check(&freq, &spec, &f(19.4), &NONE).is_err());
+    }
+
+    // SEC-3: a value out of the amp's own range is still told when it is above a ceiling, and the IPX's
+    // dBu threshold is held to the dBu ceiling
+    #[test]
+    fn a_value_outside_the_model_range_is_still_above_a_ceiling() {
+        let zero = Ceilings { max_output_gain_db: Some(0.0), ..NONE };
+        let out2 = param("out2.gain");
+        assert_eq!(above_ceiling(&out2, "dB", 15.0, &zero), Some((0.0, "dB")));
+        assert_eq!(above_ceiling(&out2, "dB", 0.0, &zero), None);
+        let lim = Ceilings { max_limiter_dbu: Some(30.0), ..NONE };
+        let dbu = param("out1.limiter.threshold_dbu");
+        assert_eq!(above_ceiling(&dbu, "dBu", 35.0, &lim), Some((30.0, "dBu")));
+        assert_eq!(above_ceiling(&dbu, "dBu", 30.0, &lim), None);
+        let vpk = param("out1.limiter.threshold");
+        assert!(above_ceiling(&vpk, "Vpk", 69.0, &lim).is_some());
+        assert_eq!(above_ceiling(&param("in1.gain"), "dB", 99.0, &zero), None);
     }
 
     // SEC-3: the ceiling is a closed bound on output gain, and only on that
