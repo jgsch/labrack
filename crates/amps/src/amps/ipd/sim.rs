@@ -115,6 +115,8 @@ pub struct SimAmp {
     reads: Vec<Key>,
     /// The access rights a successful login gives.
     login_rights: u32,
+    /// The amp never sends its model name along with the version, as a real IPD 2400 often does not.
+    withhold_model_name: bool,
 }
 
 /// The settings a linked pair shares (docs/ipd-protocol.md: gain and EQ seen on a real IPD). Mutes and
@@ -197,6 +199,7 @@ impl SimAmp {
             latency: std::time::Duration::ZERO,
             reads: Vec::new(),
             login_rights: 0xFFFF_FFFF,
+            withhold_model_name: false,
         }
     }
 
@@ -370,7 +373,7 @@ impl SimAmp {
                 (S_GLOBAL, M_SW_VERSION) => Some(M_MODEL_NAME),
                 _ => None,
             };
-            if let Some(m) = companion {
+            if let Some(m) = companion.filter(|m| !(self.withhold_model_name && *m == M_MODEL_NAME)) {
                 rsps.push(self.rsp(GLOBAL(m, 0)));
             }
         }
@@ -447,6 +450,11 @@ impl SimServer {
     pub fn set_device_mode_number(&self, number: i64) {
         let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
         amp.values.insert(Key::new(S_PRESET, M_DEVICE_MODE, 0, 0), Raw::Int(number));
+    }
+
+    /// From now on the model name is no longer sent along with the version.
+    pub fn withhold_model_name(&self) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).withhold_model_name = true;
     }
 
     /// From now on every answer takes `latency`.

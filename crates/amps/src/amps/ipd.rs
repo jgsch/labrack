@@ -27,6 +27,9 @@ use crate::model::*;
 
 pub use self::protocol::Announcement;
 
+/// How long a connect waits for the model name after the version came.
+const MODEL_NAME_WAIT: Duration = Duration::from_millis(1500);
+
 /// The amp has 100 slots; the app uses the first 50 (BEH-6).
 const PRESET_SLOTS: RangeInclusive<u32> = 1..=50;
 
@@ -57,11 +60,21 @@ impl IpdAmp {
 
     pub async fn connect_with(host: &str, port: u16, opts: Options) -> Result<IpdAmp> {
         let client = Arc::new(Client::connect(host, port, opts).await?);
-        // MODEL_NAME arrives together with SW_VERSION; firmware 1.2.6 has no MODEL_NUMBER.
-        let model = match client.get_raw(global(M_MODEL_NAME), Some(Duration::from_secs(8))).await {
-            Ok(Raw::Text(t)) if !t.trim().is_empty() => t.trim().to_string(),
-            _ => "IPD".to_string(),
+        // MODEL_NAME arrives together with SW_VERSION; firmware 1.2.6 has no MODEL_NUMBER. Asking for the name
+        // itself waits for a reply that may not carry it (8 s on a real IPD 2400), so the version is asked for
+        // and the name is taken if it came with it; the forwarder takes it when it comes later.
+        let _ = client.get_raw(global(M_SW_VERSION), Some(Duration::from_secs(8))).await;
+        // the name can follow in the next reply (an MK1 sends one fragment per reply): a moment is allowed for it
+        let named = |client: &Client| match client.cached(global(M_MODEL_NAME)) {
+            Some(Raw::Text(t)) if !t.trim().is_empty() => Some(t.trim().to_string()),
+            _ => None,
         };
+        let mut waited = Duration::ZERO;
+        while named(&client).is_none() && waited < MODEL_NAME_WAIT {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            waited += Duration::from_millis(50);
+        }
+        let model = named(&client).unwrap_or_else(|| "IPD".to_string());
         let (events, _) = broadcast::channel(256);
         let model = Arc::new(Mutex::new(model));
         let forwarder =

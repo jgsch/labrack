@@ -544,3 +544,16 @@ async fn get_many_does_not_pass_off_old_values() {
     let got = amp.client().get_many(&[key], Duration::from_secs(1)).await;
     assert!(got.is_err(), "{got:?}");
 }
+
+// BEH-8: an IPD that does not send its model name along with the version is still connected at once: the
+// name is not waited for (a real IPD 2400 made every connect wait 8 s)
+#[tokio::test]
+async fn connecting_does_not_wait_for_a_model_name_that_does_not_come() {
+    let srv = SimServer::spawn("127.0.0.1:0".parse().unwrap(), false, 0).await.unwrap();
+    srv.withhold_model_name();
+    let opts = Options { mk2: None, timeout: Duration::from_secs(10) };
+    let started = std::time::Instant::now();
+    let amp = IpdAmp::connect_with("127.0.0.1", srv.addr.port(), opts).await.unwrap();
+    assert!(started.elapsed() < Duration::from_secs(3), "took {:?}", started.elapsed());
+    assert_eq!(amp.model(), "IPD");
+}
