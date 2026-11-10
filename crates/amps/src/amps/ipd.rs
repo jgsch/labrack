@@ -321,7 +321,7 @@ impl Amp for IpdAmp {
             ..Default::default()
         };
         st.extra.insert("user".into(), user);
-        st.extra.insert("faults".into(), decode_status(hw).join(", "));
+        st.extra.insert("hardware".into(), decode_status(hw).join(", "));
         st.extra.insert("standby".into(), (hw & 4 != 0).to_string());
         st.extra.insert("generation".into(), if self.client.mk2() { "MK2" } else { "MK1" }.into());
         if let Some(Raw::Int(r)) = self.client.cached(global(M_AMP_READINGS)) {
