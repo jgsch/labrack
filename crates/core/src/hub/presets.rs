@@ -13,6 +13,7 @@ use std::future::Future;
 use std::ops::RangeInclusive;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use labgruppen::{Channel, Param, Snapshot, Value};
@@ -45,6 +46,22 @@ pub(super) enum End {
     MutedAtOnce,
     /// As they were before the change.
     AsBefore,
+}
+
+/// A bulk change that runs or waits for the amp, as long as it is held (see `Session::bulk`).
+struct Running(Arc<AtomicUsize>);
+
+impl Running {
+    fn start(count: &Arc<AtomicUsize>) -> Running {
+        count.fetch_add(1, Ordering::SeqCst);
+        Running(count.clone())
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 const OUTPUTS: [Param; 2] = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
@@ -222,6 +239,7 @@ impl Hub {
         F: FnOnce(Arc<dyn labgruppen::Amp>) -> Fut,
         Fut: Future<Output = labgruppen::Result<T>>,
     {
+        let _running = Running::start(&session.bulk);
         let _gate = session.gate.lock().await;
         // a MUTE the user asked for that is not written yet: dropping it with the rest must not lose it
         let asked = session.writer.muting();

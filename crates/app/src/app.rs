@@ -209,7 +209,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(index, output, muted)| {
                                     if let Some(id) = ids.get(index).copied() {
-                                        let _ = hub.set_mute(id, output, muted);
+                                        refused(preset_errors, id, hub.set_mute(id, output, muted));
                                     }
                                 }
                             },
@@ -218,7 +218,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(index, muted): (usize, bool)| {
                                     if let Some(id) = ids.get(index).copied() {
-                                        let _ = hub.mute_amp(id, muted);
+                                        refused(preset_errors, id, hub.mute_amp(id, muted));
                                     }
                                 }
                             },

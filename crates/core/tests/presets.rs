@@ -938,3 +938,30 @@ async fn a_recall_that_fails_after_the_amp_applied_it_still_ends_muted() {
     );
     assert_eq!(hub.value(id, &param("out1.gain")), Some(f(-7.5)), "the state was read again");
 }
+
+// SEC-6, SEC-7: an unmute asked for while a bulk change runs is refused, not queued: it would be written
+// after the change and undo "leave the outputs muted". Muting stays possible.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unmute_asked_for_during_a_recall_is_refused() {
+    let (hub, id, sim) = online_ipd().await;
+    hub.store_preset(id, 7, "Scene").await.unwrap();
+    sim.set_latency(Duration::from_millis(40));
+    let recall = tokio::spawn({
+        let hub = hub.clone();
+        async move { hub.recall_preset(id, 7).await }
+    });
+    sleep(Duration::from_millis(150)).await;
+    assert!(!recall.is_finished(), "the recall is still running");
+
+    let got = hub.set_mute(id, 0, false);
+    assert!(matches!(got, Err(Error::Busy)), "{got:?}");
+    hub.unmute_all(); // refused for this amp, and says nothing
+    assert!(hub.set_mute(id, 1, true).is_ok(), "muting is never held back");
+
+    recall.await.unwrap().unwrap();
+    sim.set_latency(Duration::ZERO);
+    wait_loaded(&hub, id).await;
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, TRUE));
+    // and when it is over, the user can unmute on purpose
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+}

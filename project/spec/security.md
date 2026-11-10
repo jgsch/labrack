@@ -41,6 +41,8 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   - If anything fails after the outputs were muted, they stay muted and the user is told. If the amp
     refuses the change before sending anything (a bad name, a protected slot), the app takes back
     only the mute it added.
+  - An unmute asked for while a bulk change runs on the amp is refused, not queued: it would be written
+    after the change. Turning a mute on is never refused.
   - Link copy mutes first too, and puts the outputs back as they were: it changes no scene.
   A muted output is never the dangerous state.
 - **SEC-7** **Never unmute automatically:** not after a reconnect, a preset recall, a file load, a

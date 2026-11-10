@@ -159,6 +159,8 @@ struct Session {
     writer: Arc<Writer>,
     /// Held while something writes to the amp: the writer for each batch, a bulk change throughout.
     gate: Arc<tokio::sync::Mutex<()>>,
+    /// How many bulk changes run or wait for the amp: an unmute is refused meanwhile (SEC-6).
+    bulk: Arc<AtomicUsize>,
 }
 
 impl Session {
@@ -528,6 +530,13 @@ impl Hub {
         // a muted output is never the dangerous state: muting is always tried, and the amp has the last word
         if !(matches!(param, Param::Mute(_)) && value == Value::Bool(true)) {
             self.permit_channel(id, param.channel())?;
+            // a bulk change leaves the outputs muted: an unmute now would be written after it (SEC-6)
+            if matches!(param, Param::Mute(_))
+                && value == Value::Bool(false)
+                && session.bulk.load(Ordering::SeqCst) > 0
+            {
+                return Err(Error::Busy);
+            }
             // until the state is read a view shows 0 dB for a gain, and a drag would start from there (SEC-4)
             if !self.loaded(id) {
                 return Err(Error::NotLoaded);
@@ -793,7 +802,12 @@ async fn session(
                 }
                 let writer = Arc::new(Writer::new(timing.write_interval));
                 let gate = Arc::new(tokio::sync::Mutex::new(()));
-                let session = Session { amp: link.amp.clone(), writer: writer.clone(), gate: gate.clone() };
+                let session = Session {
+                    amp: link.amp.clone(),
+                    writer: writer.clone(),
+                    gate: gate.clone(),
+                    bulk: Arc::default(),
+                };
                 shared.attach(id, session, link.access.take());
                 shared.apply(id, Event::Connected);
                 // the helpers end with the connection: what they still hold is dropped, never sent later

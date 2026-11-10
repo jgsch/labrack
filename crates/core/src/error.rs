@@ -18,6 +18,9 @@ pub enum Error {
     /// The user level of the IPD (its name) does not have the right for this (BEH-14).
     #[error("The user level {0} of the amplifier does not allow this")]
     AccessDenied(String),
+    /// An unmute while a bulk change runs on the amp (SEC-6): it would be written after the change.
+    #[error("The amplifier is busy changing its settings. Unmute when it is done.")]
+    Busy,
     /// A setting of channel 2 of a linked pair: it follows channel 1.
     #[error("This channel follows channel 1 while the pair is linked")]
     Linked,
