@@ -635,6 +635,41 @@ async fn load_file_skips_what_it_cannot_set() {
     assert_eq!(ipx_value(&fake, "out1.polarity"), polarity);
 }
 
+// BEH-5, BEH-37, SEC-2: the limiter threshold is dBV in an IPD's file and Vpk in an IPX's: a file of the
+// other family leaves the limiter alone (32.56 dBV read as 32.56 Vpk is a threshold far too low); what the
+// families share is loaded as usual
+#[tokio::test]
+async fn load_file_of_the_other_family_leaves_the_limiter_alone() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let (_dir, path) = temp_file("amp.json");
+    hub.save_file(id, &path).await.unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    json["driver"] = "ipd".into();
+    json["params"]["out1.limiter.threshold"] = serde_json::json!(32.56);
+    json["params"]["out2.limiter.threshold"] = serde_json::json!(32.56);
+    json["params"]["out1.gain"] = serde_json::json!(-10.0);
+    std::fs::write(&path, serde_json::to_string(&json).unwrap()).unwrap();
+    let limiter: Vec<_> = ["threshold", "threshold_dbu", "power", "impedance"]
+        .map(|field| ipx_value(&fake, &format!("out1.limiter.{field}")))
+        .into();
+    let writes = fake.state().setprm.len();
+
+    let report = hub.load_file(id, &path).await.unwrap();
+
+    let after: Vec<_> = ["threshold", "threshold_dbu", "power", "impedance"]
+        .map(|field| ipx_value(&fake, &format!("out1.limiter.{field}")))
+        .into();
+    assert_eq!(after, limiter, "the limiter is as it was");
+    let touched = fake.state().setprm[writes..].to_vec();
+    assert!(!touched.iter().any(|a| a.env == 17), "no limiter address was written: {touched:?}");
+    assert!(
+        report.skipped.iter().any(|s| s.starts_with("out1.limiter.threshold:")),
+        "the limiter is reported as skipped: {:?}",
+        report.skipped
+    );
+    assert_eq!(ipx_value(&fake, "out1.gain"), f(-10.0), "the shared settings are loaded");
+}
+
 #[tokio::test]
 async fn load_file_refuses_files_that_are_not_settings() {
     let (hub, id, fake) = online_ipx(timing()).await;

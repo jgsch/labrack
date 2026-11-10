@@ -277,6 +277,7 @@ fn plan_load(
             snapshot.format
         )));
     }
+    let same_family = snapshot.driver == session.amp.info().driver;
     let mut accepted = Snapshot::new(&snapshot.driver, &snapshot.model);
     let (mut skipped, mut refused) = (Vec::new(), Vec::new());
     for (name, value) in &snapshot.params {
@@ -286,6 +287,11 @@ fn plan_load(
         };
         if matches!(param, Param::Mute(Channel::Output(_))) {
             skipped.push(format!("{name}: output mutes are left as they are"));
+            continue;
+        }
+        // the limiter threshold is dBV on an IPD and Vpk on an IPX: a number from the other family is no threshold
+        if !same_family && matches!(param, Param::Limiter { .. }) {
+            skipped.push(format!("{name}: its unit differs between IPD and IPX; set it on the amplifier"));
             continue;
         }
         if !dsp::restorable(&param) {

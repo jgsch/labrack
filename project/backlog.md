@@ -8,12 +8,6 @@ committed.
 
 From the full review of 2026-11-10, in order of priority. Each starts with a failing test.
 
-Safety:
-
-- A settings file from the other family is accepted: `out1.limiter.threshold` is dBV on an IPD and Vpk
-  on an IPX. Refuse a file whose driver is not the amp's, or convert the unit. `core/src/hub/presets.rs`.
-  Spec: BEH-37, SEC-2
-
 Bugs:
 
 - A failed state read (`load_state`) is dropped: the amp stays ONLINE and never loaded, so link, copy,
