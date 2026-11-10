@@ -477,3 +477,42 @@ async fn a_dropped_value_is_not_shown() {
     wait_value(&hub, id, "out1.gain", f(1.0)).await;
     assert_eq!(hub.shown(id, &param("out1.gain")), Some(f(1.0)));
 }
+
+// BEH-43, SEC-4: until the state is read a control has no known value (a view shows 0 dB), so a drag would
+// start from nowhere: only turning a mute on is taken, and nothing is written for the rest
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_but_a_mute_is_taken_until_the_state_is_read() {
+    let sim =
+        labgruppen::amps::ipd::sim::SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    sim.set_latency(Duration::from_millis(60));
+    let (hub, local) = hub();
+    local.route("10.0.0.1", sim.addr.port());
+    let id = hub.add_manual("Right", Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_status(&hub, id, Status::Online).await;
+    assert!(!hub.loaded(id), "the state takes seconds to read");
+
+    let writes = sim.writes().len();
+    for (name, value) in [("out1.gain", f(0.2)), ("in1.gain", f(0.0)), ("out1.mute", Value::Bool(false))] {
+        let got = hub.set(id, param(name), value);
+        assert!(matches!(got, Err(Error::NotLoaded)), "{name}: {got:?}");
+    }
+    hub.set_mute(id, 0, true).expect("a mute is never held back");
+    assert_eq!(sim.writes().len(), writes, "nothing but the mute was queued");
+
+    sim.set_latency(Duration::ZERO);
+    wait_loaded(&hub, id).await;
+    hub.set(id, param("out1.gain"), f(-30.0)).unwrap();
+}
+
+// BEH-43, SEC-4: the state is forgotten while it is read again after a recall: the same holds then
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_but_a_mute_is_taken_while_the_state_is_read_again_after_a_recall() {
+    let (hub, id, sim) = online_ipd().await;
+    hub.store_preset(id, 7, "Scene").await.unwrap();
+    sim.set_latency(Duration::from_millis(60));
+    hub.recall_preset(id, 7).await.unwrap();
+    assert!(!hub.loaded(id));
+    assert!(matches!(hub.set(id, param("out1.gain"), f(0.2)), Err(Error::NotLoaded)));
+    assert!(hub.set_mute(id, 1, true).is_ok());
+    sim.set_latency(Duration::ZERO);
+}

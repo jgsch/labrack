@@ -769,6 +769,7 @@ async fn a_load_that_fails_leaves_the_outputs_muted() {
 
     // the amp is usable again, and the user can unmute on purpose
     fake.state().reject_writes.clear();
+    wait_loaded(&hub, id).await; // the state is read again after a failure; an unmute needs it
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
 }
 

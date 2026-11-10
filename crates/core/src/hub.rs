@@ -528,6 +528,10 @@ impl Hub {
         // a muted output is never the dangerous state: muting is always tried, and the amp has the last word
         if !(matches!(param, Param::Mute(_)) && value == Value::Bool(true)) {
             self.permit_channel(id, param.channel())?;
+            // until the state is read a view shows 0 dB for a gain, and a drag would start from there (SEC-4)
+            if !self.loaded(id) {
+                return Err(Error::NotLoaded);
+            }
         }
         let spec = session.amp.spec(&param).ok_or(Error::NotControllable)?;
         let checked = dsp::check(&param, &spec, &value, &ceilings)?;

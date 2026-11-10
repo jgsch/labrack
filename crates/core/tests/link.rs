@@ -343,6 +343,8 @@ async fn a_failed_link_copy_leaves_the_outputs_muted() {
     assert_eq!(ipx_value(&fake, "out1.link"), FALSE);
 
     fake.state().reject_writes.clear();
+    // the state is read again after a failure; an unmute needs it
+    wait_loaded(&hub, id).await;
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
 }
 

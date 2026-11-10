@@ -71,7 +71,9 @@ statement with a `BEH-<n>` ID.
   forgotten when the amp is not ONLINE. Until the read is done the state is partial. An IPD takes
   several seconds, so the amp is ONLINE before that. Intents (`BEH-27` to `BEH-30`) are accepted
   only for an amp that is ONLINE; they are refused otherwise, never queued (`SEC-1`). The basic
-  controls are gain, mute, delay, mixer, EQ and the output filters.
+  controls are gain, mute, delay, mixer, EQ and the output filters. Until the state is read, and while it is
+  read again after a recall or a file load, only turning a mute on is accepted: a control has no known
+  value yet, and a drag would start from a value that is not the amp's (`SEC-4`).
 
 ## IPD access levels
 
