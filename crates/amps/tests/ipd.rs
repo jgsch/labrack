@@ -495,3 +495,52 @@ async fn a_settings_file_never_sets_the_device_mode() {
     assert_eq!(amp.get(&Param::Mode).await.unwrap(), Value::Text("stereo".into()));
     assert!(!srv.writes()[before..].contains(&Key::new(S_PRESET, M_DEVICE_MODE, 0, 0)));
 }
+
+fn key_of(name: &str) -> Key {
+    labgruppen::amps::ipd::params::slot(&param(name)).unwrap().key
+}
+
+/// A write that a newer write of the same key supersedes does not take the newer one with it when it gives up
+#[tokio::test]
+async fn a_superseded_write_does_not_remove_the_newer_one() {
+    let (srv, amp) = connect(true).await;
+    let amp = std::sync::Arc::new(amp);
+    srv.set_latency(Duration::from_millis(200));
+    let key = key_of("out1.mute");
+    let first = tokio::spawn({
+        let amp = amp.clone();
+        async move { amp.client().set_raw(key, Raw::Int(0), None).await }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let second = amp.client().set_raw(key, Raw::Int(1), None).await;
+
+    assert!(second.is_ok(), "the newer write is confirmed: {second:?}");
+    assert!(first.await.unwrap().is_err(), "the superseded one is not");
+    assert_eq!(amp.get(&param("out1.mute")).await.unwrap(), Value::Bool(true));
+}
+
+/// `get_many` says which keys did not answer, instead of passing off an old value; and fails once the
+/// connection is gone
+#[tokio::test]
+async fn get_many_does_not_pass_off_old_values() {
+    let (srv, amp) = connect(true).await;
+    let key = key_of("out1.mute");
+    let first = amp.client().get_many(&[key], Duration::from_secs(5)).await.unwrap();
+    assert!(first[0].is_some());
+
+    srv.set_latency(Duration::from_secs(3));
+    let slow = amp.client().get_many(&[key], Duration::from_millis(300)).await.unwrap();
+    assert_eq!(slow, vec![None], "no fresh answer within the limit");
+
+    srv.set_latency(Duration::ZERO);
+    srv.shutdown();
+    let gone = async {
+        while amp.client().connected() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(30), gone).await.expect("the loss is seen");
+    let got = amp.client().get_many(&[key], Duration::from_secs(1)).await;
+    assert!(got.is_err(), "{got:?}");
+}

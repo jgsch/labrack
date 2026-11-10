@@ -282,8 +282,18 @@ impl Client {
                 self.request(&pending);
             }
         }
+        // gone while it waited: nothing it holds is an answer
+        self.shared.check_alive()?;
+        // a key that did not answer after the request is missing, not whatever it held before; a key the
+        // firmware only answers together with another one keeps what it has
         let st = self.shared.lock();
-        Ok(keys.iter().map(|k| st.values.get(k).cloned()).collect())
+        Ok(keys
+            .iter()
+            .map(|k| {
+                let fresh = get_replace(*k) != *k || st.updated.get(k).is_some_and(|&u| u > asked);
+                st.values.get(k).filter(|_| fresh).cloned()
+            })
+            .collect())
     }
 
     /// Write and wait until the amp echoes the value (the worker resends every 0.5 s, up to 50 times).
@@ -331,8 +341,17 @@ impl Client {
         if matches!(timeout(left, rx).await, Ok(Ok(true))) {
             return Ok(());
         }
-        self.shared.lock().sets.remove(&key);
+        self.give_up(key);
         Err(Error::NotConfirmed(format!("SET key {key}")))
+    }
+
+    /// Drop the pending write of `key` whose waiter gave up. A newer write of the same key took its place
+    /// when it was registered; that one still has a waiter and stays.
+    fn give_up(&self, key: Key) {
+        let mut st = self.shared.lock();
+        if st.sets.get(&key).is_some_and(|ps| ps.done.as_ref().is_none_or(|done| done.is_closed())) {
+            st.sets.remove(&key);
+        }
     }
 
     /// SET Command[cmd] = 1. Any echo confirms it; at most 3 sends.
@@ -361,7 +380,7 @@ impl Client {
         self.shared.lock().sets.insert(key, ps);
         let confirmed = matches!(timeout(limit.unwrap_or(self.shared.timeout), rx).await, Ok(Ok(true)));
         if !confirmed {
-            self.shared.lock().sets.remove(&key);
+            self.give_up(key);
             return Err(Error::NotConfirmed(format!("SET key {key}")));
         }
         Ok(())
