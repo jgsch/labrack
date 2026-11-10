@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 
-use crate::control;
+use crate::control::{self, CONFIRM_WINDOW, Click, SecondClick};
 
 /// One row of Known amplifiers.
 #[derive(Clone, Debug, PartialEq)]
@@ -107,6 +107,41 @@ pub fn Switch(
                 span { class: "switch-name", "{name} amplifiers" }
                 span { class: "switch-status", "{status}" }
             }
+        }
+    }
+}
+
+/// REMOVE takes a second click within 3 s (UX-24): the ceilings of the amp go with the row (SEC-3).
+#[component]
+fn RemoveButton(number: usize, #[props(default)] on_remove: EventHandler<()>) -> Element {
+    let mut armed = use_signal(SecondClick::default);
+    let clock = use_hook(|| {
+        let started = std::time::Instant::now();
+        move || started.elapsed()
+    });
+    let asking = armed().armed(clock());
+    rsx! {
+        button {
+            class: if asking { "known-remove armed" } else { "known-remove" },
+            "aria-label": if asking { "Confirm removing amplifier {number}" } else { "Remove amplifier {number}" },
+            onclick: move |_| {
+                let mut s = armed();
+                match s.click(clock()) {
+                    Click::Confirmed => {
+                        armed.set(s);
+                        on_remove.call(());
+                    }
+                    Click::Armed | Click::Expired => {
+                        armed.set(s);
+                        // the label goes back when the window is over, without another event
+                        spawn(async move {
+                            tokio::time::sleep(CONFIRM_WINDOW + std::time::Duration::from_millis(100)).await;
+                            armed.set(armed());
+                        });
+                    }
+                }
+            },
+            if asking { "CONFIRM REMOVE" } else { "REMOVE" }
         }
     }
 }
@@ -269,12 +304,7 @@ pub fn SearchPage(
                                 onchange: move |event| on_ceilings.call((amp.index, ceiling_text(amp.max_gain_db), event.value())),
                             }
                         }
-                        button {
-                            class: "known-remove",
-                            "aria-label": "Remove amplifier {amp.index + 1}",
-                            onclick: move |_| on_remove.call(amp.index),
-                            "REMOVE"
-                        }
+                        RemoveButton { number: amp.index + 1, on_remove: move |_| on_remove.call(amp.index) }
                     }
                 }
             }

@@ -146,6 +146,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .known-ceiling input:focus{border-color:var(--border-strong)}
 .known-source{flex:0 0 64px;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .known-remove{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:transparent;color:var(--muted);border:1px solid var(--border-strong)}
+.known-remove.armed{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 /* Mix & EQ (UX-16, UX-17, UX-19). Inputs are sapphire, outputs lavender (UX-7). */
 .button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 .mixeq{position:relative;display:flex;flex-direction:column;gap:16px}

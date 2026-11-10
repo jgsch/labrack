@@ -111,7 +111,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   recall, storing a preset, loading a file, linking channels, copying an EQ, changing the device mode) opens a validation popup that names
   the amplifier, says that its outputs will be muted and, for recall, store and load, that they
   stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
-  same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a
+  same button (→ CONFIRM UNMUTE ALL), and so does REMOVE on the Search page (→ CONFIRM REMOVE): the
+  ceilings of the amp (`SEC-3`) go with its row. Raising a level by more than 6 dB by typing opens a
   confirmation dialog. An EQ band's gain counts the raise from 0 dB at least: easing a cut off
   (-12 to -1 dB) does not ask.
   A limiter threshold typed in volts or watts asks by the same rule, counted in dB of level (20·log10 of
