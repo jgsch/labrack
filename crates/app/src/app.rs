@@ -161,11 +161,11 @@ pub fn App() -> Element {
                 on_page: move |next| page.set(next),
                 on_mute_all: {
                     let hub = hub.clone();
-                    move |_| {
-                        if hub.all_muted() {
-                            hub.unmute_all();
-                        } else {
+                    move |muted: bool| {
+                        if muted {
                             hub.mute_all();
+                        } else {
+                            hub.unmute_all();
                         }
                     }
                 },

@@ -6,6 +6,12 @@ use crate::control::{CONFIRM_WINDOW, Click, SecondClick};
 /// The title of the app and its subtitle, spread letter by letter over the width of the title (UX-2).
 const SUBTITLE: [&str; 14] = ["D", "S", "P", "", "C", "O", "N", "T", "R", "O", "L", "L", "E", "R"];
 
+/// What a click on the button asks for: the opposite of what it showed. The state is the one the button
+/// was drawn with, not the hub's at click time, which may have moved since (SEC-5).
+pub(crate) fn mute_all_target(all_muted_as_shown: bool) -> bool {
+    !all_muted_as_shown
+}
+
 /// Title, the three tabs (UX-1) and MUTE ALL (UX-3). The button is on every page: whatever page is
 /// open, the outputs are one click away from silence. Tabs are links and MUTE ALL a button, so the
 /// keyboard reaches all of them (UX-4).
@@ -16,7 +22,9 @@ pub fn Header(
     page: Page,
     all_muted: bool,
     #[props(default)] on_page: EventHandler<Page>,
-    #[props(default)] on_mute_all: EventHandler<()>,
+    /// What the click asks for, as the label said it: `true` mutes, `false` unmutes (SEC-5).
+    #[props(default)]
+    on_mute_all: EventHandler<bool>,
 ) -> Element {
     // UNMUTE ALL takes a second click within three seconds (UX-24, SEC-5); MUTE ALL does not wait
     let mut armed = use_signal(SecondClick::default);
@@ -64,14 +72,14 @@ pub fn Header(
                 "aria-pressed": "{all_muted}",
                 onclick: move |_| {
                     if !all_muted {
-                        on_mute_all.call(());
+                        on_mute_all.call(mute_all_target(all_muted));
                         return;
                     }
                     let mut s = armed();
                     match s.click(clock()) {
                         Click::Confirmed => {
                             armed.set(s);
-                            on_mute_all.call(());
+                            on_mute_all.call(mute_all_target(all_muted));
                         }
                         Click::Armed | Click::Expired => {
                             armed.set(s);
@@ -86,5 +94,17 @@ pub fn Header(
                 "{label}"
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // SEC-5: MUTE ALL asks to mute and UNMUTE ALL to unmute, whatever the hub says by the time of the click
+    #[test]
+    fn the_click_asks_for_what_the_label_said() {
+        assert!(mute_all_target(false), "MUTE ALL mutes");
+        assert!(!mute_all_target(true), "UNMUTE ALL unmutes");
     }
 }
