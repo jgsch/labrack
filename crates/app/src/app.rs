@@ -303,7 +303,7 @@ pub fn App() -> Element {
                                 move |yes: bool| {
                                     let Some((id, ask)) = asking.take() else { return };
                                     if yes && !busy.read().contains_key(&id) {
-                                        spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors, busy));
+                                        spawn(run_ask(hub.clone(), id, ask, preset_errors, busy));
                                     }
                                 }
                             },
@@ -484,7 +484,7 @@ pub fn App() -> Element {
                         move |_| {
                             let Some((id, ask)) = asking.take() else { return };
                             if !busy.read().contains_key(&id) {
-                                spawn(run_ask(hub.clone(), id, ask, preset_lists, preset_errors, busy));
+                                spawn(run_ask(hub.clone(), id, ask, preset_errors, busy));
                             }
                         }
                     },
@@ -573,35 +573,20 @@ async fn set_link(hub: Hub, id: AmpId, side: Side, linked: bool, errors: Errors,
 }
 
 /// Do what the user said yes to (UX-24). What it did shows in the running preset, or in an error toast.
-async fn run_ask(
-    hub: Hub,
-    id: AmpId,
-    ask: Ask,
-    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
-    errors: Errors,
-    busy: Busy,
-) {
+async fn run_ask(hub: Hub, id: AmpId, ask: Ask, errors: Errors, busy: Busy) {
     let what = ask.progress();
-    let done = working(busy, id, what, run_ask_inner(hub.clone(), id, ask, lists)).await;
+    let done = working(busy, id, what, run_ask_inner(hub.clone(), id, ask)).await;
     said(errors, id, done);
 }
 
-async fn run_ask_inner(
-    hub: Hub,
-    id: AmpId,
-    ask: Ask,
-    lists: Signal<HashMap<AmpId, Vec<Preset>>>,
-) -> labrack_core::Result<()> {
+async fn run_ask_inner(hub: Hub, id: AmpId, ask: Ask) -> labrack_core::Result<()> {
     match ask {
         Ask::Link(side) => hub.set_link(id, side, true).await,
         Ask::CopyEq(to) => hub.copy_eq(id, to).await,
         Ask::Mode(mode) => hub.set_device_mode(id, &mode).await,
         Ask::Recall { slot, .. } => hub.recall_preset(id, slot).await,
-        Ask::Store { slot, name, .. } => {
-            let done = hub.store_preset(id, slot, &name).await;
-            read_presets(hub.clone(), id, lists);
-            done
-        }
+        // the list of presets is read again on the Preset update that a store causes
+        Ask::Store { slot, name, .. } => hub.store_preset(id, slot, &name).await,
         Ask::Load { path } => hub.load_file(id, &path).await.map(|_| ()),
     }
 }

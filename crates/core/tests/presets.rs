@@ -440,6 +440,22 @@ async fn recall_sets_the_loaded_preset_clears_modified_and_reads_the_state_again
     assert!(seen.contains(&"preset".to_string()) && seen.contains(&"modified false".to_string()), "{seen:?}");
 }
 
+// BEH-36: a store tells the views by a Preset update, which is what makes the app read the list of presets
+// again (it does so once, on that update, and not a second time itself)
+#[tokio::test]
+async fn a_store_is_followed_by_a_preset_update() {
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    let mut rx = hub.subscribe();
+
+    hub.store_preset(id, 12, "Church").await.unwrap();
+
+    let mut presets = 0;
+    while let Ok(update) = rx.try_recv() {
+        presets += usize::from(matches!(update, Update::Preset(i) if i == id));
+    }
+    assert_eq!(presets, 1, "one update, so one read of the list");
+}
+
 // SEC-6: if the recall cannot be done, the outputs that were muted for it stay muted
 #[tokio::test]
 async fn when_muting_fails_nothing_is_recalled() {
