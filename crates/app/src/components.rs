@@ -28,6 +28,11 @@ pub fn Fader(
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
     let mut drag = use_signal(|| None::<control::Drag>);
+    let mut last_raise = use_signal(|| None::<std::time::Duration>);
+    let clock = use_hook(|| {
+        let started = std::time::Instant::now();
+        move || started.elapsed()
+    });
     let ruler = scale.unwrap_or(bounds);
     let span = (ruler.max - ruler.min).max(f64::MIN_POSITIVE);
     let at = move |db: f64| ((db - ruler.min) / span).clamp(0.0, 1.0) * 100.0;
@@ -98,6 +103,11 @@ pub fn Fader(
                 onpointerup: move |_| drag.set(None),
                 onpointercancel: move |_| drag.set(None),
                 onkeydown: move |event| {
+                    // a held key repeats 30 times a second: one press, one step (SEC-4)
+                    if event.is_auto_repeating() {
+                        event.prevent_default();
+                        return;
+                    }
                     if let Some(step) = control::key_step(&event.key().to_string())
                         && let Some(next) = control::step(value, step, bounds)
                     {
@@ -108,7 +118,15 @@ pub fn Fader(
                 onwheel: move |event| {
                     event.prevent_default();
                     let step = control::wheel_step(event.delta().strip_units().y);
+                    let now = clock();
+                    // raising is spaced out; lowering is not (SEC-4)
+                    if step > 0.0 && !control::wheel_raise_allowed(last_raise(), now) {
+                        return;
+                    }
                     if let Some(next) = control::step(value, step, bounds) {
+                        if step > 0.0 {
+                            last_raise.set(Some(now));
+                        }
                         set(next);
                     }
                 },

@@ -99,7 +99,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-21** Names and IPs are edited in place and saved on Enter or when the field loses focus.
 - **UX-22** Faders: clicking the track or the cap never changes the value. Dragging moves the value
   relative to where the drag started (0.2 dB per pixel); arrow keys and the mouse wheel step
-  0.5 dB, Page Up / Page Down 3 dB.
+  0.5 dB, Page Up / Page Down 3 dB. A held key does not repeat (one press, one step). One drag raises
+  a level by 6 dB at most from where it started (lowering is free; let go and drag again to go on),
+  and the wheel raises at most once every 200 ms (`SEC-4`).
 - **UX-23** Typed values apply on Enter or when the field loses focus, never while typing (typing
   −20 passes through −2).
 - **UX-24** Dangerous actions are confirmed. An action that mutes the outputs of an amp (preset

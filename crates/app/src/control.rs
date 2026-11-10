@@ -37,6 +37,15 @@ pub fn key_step(key: &str) -> Option<f64> {
     }
 }
 
+/// Raising by the wheel is spaced out by this much: a fast spin or a touchpad's inertia sends hundreds
+/// of notches a second (UX-22, SEC-4).
+pub const WHEEL_RAISE_GAP: Duration = Duration::from_millis(200);
+
+/// Whether a wheel notch that raises a level may act at `now`, given when the last one did.
+pub fn wheel_raise_allowed(last: Option<Duration>, now: Duration) -> bool {
+    last.is_none_or(|at| now.saturating_sub(at) >= WHEEL_RAISE_GAP)
+}
+
 /// A wheel notch: up is louder (UX-22).
 pub fn wheel_step(delta_y: f64) -> f64 {
     if delta_y < 0.0 { 0.5 } else { -0.5 }
@@ -55,9 +64,11 @@ impl Drag {
     }
 
     /// The value while the pointer is at `y`: relative to where the drag started, 0.2 dB per pixel,
-    /// up is louder. A click that does not move changes nothing, and the range is never left.
+    /// up is louder, but never more than [`RAISE_ASK`] above where the drag started (a flick cannot
+    /// jump a level; let go and drag again to go on). A click that does not move changes nothing, and
+    /// the range is never left.
     pub fn value_at(self, y: f64, bounds: Bounds) -> f64 {
-        bounds.clamp(self.value + (self.y - y) * 0.2)
+        bounds.clamp((self.value + (self.y - y) * 0.2).min(self.value + RAISE_ASK))
     }
 
     /// [`Drag::value_at`] while the button is held; `None` once it is not, which ends the drag. A
@@ -293,6 +304,7 @@ mod tests {
     fn a_drag_stops_at_the_range() {
         let drag = Drag::start(0.0, 10.0);
         assert_eq!(drag.value_at(-1000.0, GAIN), 12.0);
+        assert_eq!(Drag::start(0.0, -1.0).value_at(-1000.0, Bounds::new(-60.0, 0.0)), 0.0);
         assert_eq!(drag.value_at(1000.0, GAIN), -48.0);
         assert_eq!(Drag::start(0.0, 0.5).value_at(-10.0, Bounds::new(0.0, 0.0)), 0.0);
     }
