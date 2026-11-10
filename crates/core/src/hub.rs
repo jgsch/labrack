@@ -857,9 +857,18 @@ async fn connect_and_read(shared: &Shared, target: &Target) -> labgruppen::Resul
 
 /// Read the whole DSP state (reads only, SEC-1). It takes a while on an IPD, which is why the amp is
 /// ONLINE before it is done.
+///
+/// A read that fails is tried again, as slowly as a connection is: link, copy, mode and the mute polling
+/// wait for it. It ends with the connection, whose helpers are aborted with it.
 async fn load_state(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>, token: Arc<Writer>) {
-    if let Ok(snapshot) = amp.snapshot().await {
-        shared.load(id, &token, snapshot);
+    let mut delay = shared.timing.retry_first;
+    loop {
+        if let Ok(snapshot) = amp.snapshot().await {
+            shared.load(id, &token, snapshot);
+            return;
+        }
+        sleep(delay).await;
+        delay = (delay * 2).min(shared.timing.retry_max);
     }
 }
 

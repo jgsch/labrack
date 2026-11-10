@@ -517,3 +517,15 @@ async fn an_ipd_is_asked_for_its_mutes_five_times_a_second() {
     let reads = count() - before;
     assert!((14..=26).contains(&reads), "{reads} reads of the output mutes in 2 s");
 }
+
+// BEH-43: a read of the state that fails is tried again; the amp is not left ONLINE and never loaded
+#[tokio::test]
+async fn a_failed_state_read_is_tried_again() {
+    let fake = FakeAmp::start().await;
+    fake.state().drop_syncs = 1;
+    let (hub, local) = hub_with(Store::in_memory(), timing());
+    local.route("10.0.0.1", fake.port);
+    let id = hub.add_manual("Left", Protocol::Ipx, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+    assert_eq!(fake.state().drop_syncs, 0, "the reads that got no answer were made");
+}

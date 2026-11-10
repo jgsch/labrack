@@ -10,8 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Bugs:
 
-- A failed state read (`load_state`) is dropped: the amp stays ONLINE and never loaded, so link, copy,
-  mode and the mute polling never work. Retry and report. `core/src/hub.rs`. Spec: BEH-43
 - The IPX refuses its own saved file: the amp stores 36.02 dBu, above `LIMITER_DBU` (35.99).
   `plan_load` should accept the nearest value in range, as `plan_copy` does. Spec: BEH-37, BEH-5
 - Removing an amp above the one picked on Mix & EQ changes the picked amp (`picked` is a list

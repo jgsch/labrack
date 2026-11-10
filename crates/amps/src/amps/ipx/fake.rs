@@ -44,6 +44,10 @@ pub struct State {
     pub quiet: bool,
     /// Do not answer the next GETPRM of these addresses (once per entry).
     pub drop_reads: Vec<Address>,
+    /// Do not answer the reading of the whole state, this many times, once it has been answered once
+    /// (connecting reads it for the status).
+    pub drop_syncs: usize,
+    synced: bool,
     /// SETPRESET payloads as received.
     pub store_payloads: Vec<Vec<u8>>,
     /// Presets stored by SETPRESET: wire index -> name and audio config.
@@ -154,7 +158,14 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
                     st.drop_reads.retain(|x| *x != a);
                     return vec![];
                 }
-                Env::DEV_PRM_SYNC => st.sync.clone(),
+                Env::DEV_PRM_SYNC if st.synced && st.drop_syncs > 0 => {
+                    st.drop_syncs -= 1;
+                    return vec![];
+                }
+                Env::DEV_PRM_SYNC => {
+                    st.synced = true;
+                    st.sync.clone()
+                }
                 Env::DEVICE_NAME => padded("Stage Left", 32),
                 Env::ALL_TEMPERATURES => [35i32, 40, 38].iter().flat_map(|t| t.to_le_bytes()).collect(),
                 _ => {
