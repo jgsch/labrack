@@ -10,8 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Bugs:
 
-- An IPX in a mode outside the table (`IPX_MODES`) fails the whole snapshot; decode it as
-  `unknown(n)` like the IPD. `amps/src/amps/ipx/params.rs`. Spec: BEH-44
 - `wait_loaded` never gives up when the amp disconnects or is removed: the task spins forever.
   `core/src/hub.rs`
 - The app drops the refusals of the core (`let _ =` on `set`, `set_limiter`, `set_ip`, `rename`,

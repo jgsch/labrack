@@ -108,14 +108,9 @@ impl Slot {
             Ty::Float => Value::Float((f32::from_le_bytes(word) as f64 * 1e4).round() / 1e4),
             Ty::Enum(labels) => {
                 let i = i32::from_le_bytes(word);
+                // a number the table does not know is shown as it is, like on the IPD, not an error
                 let label = usize::try_from(i).ok().and_then(|i| labels.get(i));
-                Value::Text(
-                    label
-                        .ok_or_else(|| {
-                            Error::Protocol(format!("enum code {i} out of range at {:?}", self.addr))
-                        })?
-                        .to_string(),
-                )
+                Value::Text(label.map_or_else(|| format!("unknown({i})"), |label| label.to_string()))
             }
             Ty::Text => unreachable!(),
         })

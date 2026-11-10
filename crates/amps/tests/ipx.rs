@@ -116,7 +116,8 @@ fn value_codec() {
     assert_eq!(kind.encode(&text("Notch")).unwrap(), 1i32.to_le_bytes());
     assert_eq!(kind.decode(&7i32.to_le_bytes()).unwrap(), text("low_pass"));
     assert!(kind.encode(&text("nope")).is_err());
-    assert!(kind.decode(&99i32.to_le_bytes()).is_err());
+    assert_eq!(kind.decode(&99i32.to_le_bytes()).unwrap(), text("unknown(99)"), "as the IPD does");
+    assert!(kind.encode(&text("unknown(99)")).is_err());
 
     let mute = params::slot(&param("in1.mute")).unwrap();
     assert_eq!(mute.encode(&Value::Bool(true)).unwrap(), 1i32.to_le_bytes());
@@ -863,4 +864,15 @@ async fn the_device_mode_is_read_and_written() {
     let report = amp.restore(&snap, false).await.unwrap();
     assert!(report.skipped.contains(&"mode".to_string()), "{:?}", report.skipped);
     assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("two_way"));
+}
+
+/// BEH-44: a device mode the table does not know (bridge, parallel?) is shown as `unknown(n)`, and does not
+/// fail the snapshot of the whole amp
+#[tokio::test]
+async fn an_unlisted_device_mode_is_unknown_not_an_error() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    amp.set_raw(Address::new(Env::MODEAES, 0, 0, 0), &2i32.to_le_bytes()).await.unwrap();
+    assert_eq!(amp.get(&Param::Mode).await.unwrap(), text("unknown(2)"));
+    assert_eq!(amp.snapshot().await.unwrap().params["mode"], text("unknown(2)"));
 }
