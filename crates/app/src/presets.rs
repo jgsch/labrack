@@ -255,7 +255,7 @@ pub fn PresetBar(
             input {
                 class: "preset-name",
                 r#type: "text",
-                maxlength: "24",
+                maxlength: "16",
                 autocomplete: "off",
                 placeholder: "Slot name",
                 "aria-label": "Name to store the preset under",

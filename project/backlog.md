@@ -18,8 +18,6 @@ Minor:
 - IPD client: a write that times out removes a newer pending write of the same key; `get_many`
   returns cached values for keys that did not answer, and `Ok` after a disconnect.
 - Config: ceilings and loads from the file are not validated (a `nan` ceiling disables it).
-- The preset name box allows 24 characters, the amps 15 or 16: a long name mutes the outputs, is
-  refused, and unmutes them.
 - The preset list is read twice at once after a store (50 slow reads each on an IPD).
 - `DeviceState::parse` decodes the IPX passwords into memory (SEC-8); nothing uses them.
 - Docs: `docs/ipx-protocol.md:205` (a filter type write does not switch it on, IPX 1200 firmware

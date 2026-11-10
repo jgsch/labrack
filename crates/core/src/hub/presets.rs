@@ -102,6 +102,8 @@ impl Hub {
         let session = self.session(id)?;
         self.permit(id, |rights| rights.save_preset)?;
         self.check_slot(&session, slot)?;
+        // a name the amp cannot hold is refused before the outputs are muted for it
+        session.amp.check_preset_name(name)?;
         // the preset is stored with the outputs muted, and they stay muted. What waits to be written
         // stays too: it is not replaced by anything.
         let stored = name.to_string();

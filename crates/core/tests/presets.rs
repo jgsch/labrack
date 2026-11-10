@@ -385,10 +385,13 @@ async fn a_refused_store_does_not_leave_the_outputs_muted() {
     set_and_wait(&hub, id, "out1.mute", FALSE).await;
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
 
+    // a name the amp cannot hold is refused before anything is muted
+    let writes = fake.writes();
     for (slot, name) in [(5, ""), (5, "Empty"), (5, "this name is far too long")] {
         let got = hub.store_preset(id, slot, name).await;
         assert!(matches!(got, Err(Error::Amp(labgruppen::Error::InvalidValue(_)))), "{name:?}: {got:?}");
     }
+    assert_eq!(fake.writes(), writes, "nothing was muted for them");
     let got = hub.store_preset(id, 1, "Protected").await;
     assert!(matches!(got, Err(Error::Amp(labgruppen::Error::Denied(_)))), "{got:?}");
 

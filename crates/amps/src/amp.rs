@@ -88,6 +88,13 @@ pub trait Amp: Send + Sync {
     /// [`Error::NotConfirmed`] when the amp does not take it.
     async fn store_preset(&self, slot: u32, name: &str) -> Result<()>;
 
+    /// The name as [`Amp::store_preset`] would store it, or [`Error::InvalidValue`] when the amp cannot
+    /// hold it: asked first by whoever must protect something before a store. The default holds what the
+    /// shortest name allows.
+    fn check_preset_name(&self, name: &str) -> Result<String> {
+        check_preset_name(name, 15)
+    }
+
     /// Latest meter readings.
     fn meters(&self) -> Meters;
 

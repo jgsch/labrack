@@ -345,11 +345,15 @@ impl Amp for IpdAmp {
         self.client.command(CMD_LOAD_PRESET).await
     }
 
+    fn check_preset_name(&self, name: &str) -> Result<String> {
+        check_preset_name(name, 16)
+    }
+
     async fn store_preset(&self, slot: u32, name: &str) -> Result<()> {
         if !PRESET_SLOTS.contains(&slot) {
             return Err(Error::InvalidValue(format!("preset {slot} (valid: 1..=50)")));
         }
-        let name = check_preset_name(name, 16)?;
+        let name = self.check_preset_name(name)?;
         if !self.access_rights().await?.save_preset {
             return Err(Error::Denied("the current user level may not save presets".into()));
         }
