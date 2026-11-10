@@ -10,9 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Safety:
 
-- An IPX that drops off the network stays ONLINE until TCP gives up (no FIN, the heartbeat expects no
-  reply). Treat meters that stop arriving, or a heartbeat that cannot be written, as a lost
-  connection. `amps/src/amps/ipx/client.rs`, `core/src/hub.rs`. Spec: BEH-8, BEH-42
 - MUTE ALL during a link, EQ copy or mode change is queued behind it, and the bulk change then puts the
   outputs back as before (unmuted) before the mute is written. A mute must win. `core/src/hub/presets.rs`.
   Spec: SEC-6, SEC-7

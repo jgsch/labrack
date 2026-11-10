@@ -40,6 +40,8 @@ pub struct State {
     pub recalled: Vec<u32>,
     pub reject_writes: HashSet<Address>,
     pub silent: bool,
+    /// Send nothing on its own (no meters), as an amp that has vanished from the network.
+    pub quiet: bool,
     /// Do not answer the next GETPRM of these addresses (once per entry).
     pub drop_reads: Vec<Address>,
     /// SETPRESET payloads as received.
@@ -115,7 +117,10 @@ async fn serve(mut sock: TcpStream, state: &Mutex<State>, cmd: &mut mpsc::Unboun
                 Some(Cmd::Push(bytes)) => vec![bytes],
                 Some(Cmd::Drop) | None => return,
             },
-            _ = tick.tick() => vec![meters.clone()],
+            _ = tick.tick() => match state.lock().unwrap_or_else(|e| e.into_inner()).quiet {
+                true => vec![],
+                false => vec![meters.clone()],
+            },
         };
         for bytes in out {
             if sock.write_all(&bytes).await.is_err() {

@@ -612,6 +612,33 @@ async fn connection_loss_fails_pending_requests() {
     assert!(!amp.client().is_connected());
 }
 
+/// BEH-8, BEH-42: an amp that vanishes without closing the connection (power off, cable pulled) sends
+/// nothing any more, not even meters: the connection is lost after a few heartbeats, and released.
+#[tokio::test]
+async fn an_amp_that_goes_quiet_is_a_lost_connection() {
+    let fake = FakeAmp::start().await;
+    let config = ClientConfig {
+        port: fake.port,
+        heartbeat: Some(Duration::from_millis(100)),
+        ..ClientConfig::default()
+    };
+    let amp = IpxAmp::connect_with_config("127.0.0.1", &config).await.unwrap();
+    let mut events = amp.subscribe();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(amp.client().is_connected(), "meters keep it alive");
+
+    fake.state().quiet = true;
+    let reason = tokio::time::timeout(
+        Duration::from_secs(5),
+        next_event(&mut events, |e| if let AmpEvent::Disconnected(r) = e { Some(r) } else { None }),
+    )
+    .await
+    .expect("a quiet amp is a lost connection");
+    assert!(reason.as_deref().is_some_and(|r| r.contains("no data")), "{reason:?}");
+    assert!(!amp.client().is_connected());
+    assert!(matches!(amp.get(&param("in1.gain")).await, Err(Error::Disconnected(_))));
+}
+
 #[tokio::test]
 async fn local_close_is_clean() {
     let fake = FakeAmp::start().await;

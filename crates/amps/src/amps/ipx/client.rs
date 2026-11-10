@@ -71,6 +71,8 @@ struct Inner {
     meters: StdMutex<Option<Meters>>,
     temperature: AtomicI64,
     timeout: Duration,
+    /// When bytes last came from the amp: the meters alone arrive about 10 times a second.
+    last_rx: StdMutex<Instant>,
 }
 
 impl Inner {
@@ -164,6 +166,17 @@ impl Inner {
         }
     }
 
+    /// The connection is over although the amp did not close it: fail what waits, tell the listeners and
+    /// release the socket, so that the amp can serve another controller.
+    async fn lose(&self, reason: &str) {
+        if self.fail_all(reason) {
+            let _ = self.events.send(ClientEvent::Disconnected(Some(reason.to_string())));
+        }
+        if let Some(mut w) = self.writer.lock().await.take() {
+            let _ = w.shutdown().await;
+        }
+    }
+
     async fn request(&self, main: u16, sub: [u8; 4], payload: &[u8], wait: Duration) -> Result<Frame> {
         let rx = self.register((main, sub))?;
         self.send(main, sub, payload).await?;
@@ -185,6 +198,7 @@ async fn reader(inner: Arc<Inner>, mut rd: OwnedReadHalf, mut parser: FrameParse
         match rd.read(&mut buf).await {
             Ok(0) => break "connection closed by amp".to_string(),
             Ok(n) => {
+                *inner.last_rx.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
                 for f in parser.feed(&buf[..n]) {
                     inner.dispatch(f);
                 }
@@ -198,12 +212,25 @@ async fn reader(inner: Arc<Inner>, mut rd: OwnedReadHalf, mut parser: FrameParse
     }
 }
 
+/// Sends the heartbeat, and watches the amp: one that has vanished from the network (power off, cable
+/// pulled, Wi-Fi gone) closes nothing, but it stops sending meters too. After this many heartbeat periods,
+/// at least a second, without a byte the connection is lost.
+const SILENT_PERIODS: u32 = 3;
+
 async fn heartbeat(inner: Arc<Inner>, period: Duration) {
+    let limit = (period * SILENT_PERIODS).max(Duration::from_secs(1));
     let mut tick = interval_at(Instant::now() + period, period);
     loop {
         tick.tick().await;
+        let silent = inner.last_rx.lock().unwrap_or_else(|e| e.into_inner()).elapsed();
+        if silent > limit {
+            warn!("ipx: no data for {silent:?}");
+            inner.lose(&format!("no data from the amp for {} s", silent.as_secs())).await;
+            return;
+        }
         if let Err(e) = inner.send(Main::SYSCTRL, ctrl_sub(Ctrl::HEARTBEAT), &[]).await {
             warn!("ipx heartbeat failed: {e}");
+            inner.lose(&format!("heartbeat failed: {e}")).await;
             return;
         }
     }
@@ -240,6 +267,7 @@ impl Client {
             meters: StdMutex::new(None),
             temperature: AtomicI64::new(NO_TEMPERATURE),
             timeout: config.timeout,
+            last_rx: StdMutex::new(Instant::now()),
         });
         let mut parser = FrameParser::new();
         for f in parser.feed(&first[..n]) {
