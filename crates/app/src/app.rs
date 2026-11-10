@@ -178,7 +178,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(index, ip): (usize, String)| {
                                     if let Some(id) = ids.get(index).copied() {
-                                        let _ = hub.set_ip(id, &ip);
+                                        refused(preset_errors, id, hub.set_ip(id, &ip));
                                     }
                                 }
                             },
@@ -330,7 +330,7 @@ pub fn App() -> Element {
                                 move |writes: Vec<(Param, Value)>| {
                                     if let Some(id) = ids.get(picked()).copied() {
                                         for (param, value) in writes {
-                                            let _ = hub.set(id, param, value);
+                                            refused(preset_errors, id, hub.set(id, param, value));
                                         }
                                     }
                                 }
@@ -349,7 +349,7 @@ pub fn App() -> Element {
                                         Some(0.0)
                                     };
                                     if let Some(to) = to {
-                                        let _ = hub.set(id, Param::Delay(ch), Value::Float(to));
+                                        refused(preset_errors, id, hub.set(id, Param::Delay(ch), Value::Float(to)));
                                     }
                                 }
                             },
@@ -358,7 +358,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(output, unit, value): (usize, Unit, f64)| {
                                     if let Some(id) = ids.get(picked()).copied() {
-                                        let _ = hub.set_limiter(id, output as u8, unit, value);
+                                        refused(preset_errors, id, hub.set_limiter(id, output as u8, unit, value));
                                     }
                                 }
                             },
@@ -368,7 +368,7 @@ pub fn App() -> Element {
                                 move |(channel, kind, db): (usize, u8, f64)| {
                                     if let Some(id) = ids.get(picked()).copied() {
                                         let ch = if kind == 0 { Channel::Input(channel as u8) } else { Channel::Output(channel as u8) };
-                                        let _ = hub.set(id, Param::Gain(ch), Value::Float(db));
+                                        refused(preset_errors, id, hub.set(id, Param::Gain(ch), Value::Float(db)));
                                     }
                                 }
                             },
@@ -378,7 +378,7 @@ pub fn App() -> Element {
                                 move |(channel, kind, muted): (usize, u8, bool)| {
                                     if let Some(id) = ids.get(picked()).copied() {
                                         let ch = if kind == 0 { Channel::Input(channel as u8) } else { Channel::Output(channel as u8) };
-                                        let _ = hub.set(id, Param::Mute(ch), Value::Bool(muted));
+                                        refused(preset_errors, id, hub.set(id, Param::Mute(ch), Value::Bool(muted)));
                                     }
                                 }
                             },
@@ -426,7 +426,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |(index, name): (usize, String)| {
                                     if let Some(id) = ids.get(index).copied() {
-                                        let _ = hub.rename(id, &name);
+                                        refused(preset_errors, id, hub.rename(id, &name));
                                     }
                                 }
                             },
@@ -450,10 +450,12 @@ pub fn App() -> Element {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
                                 move |index| {
-                                    if let Some(id) = ids.get(index).copied()
-                                        && hub.remove(id).is_ok()
-                                    {
-                                        picked.set(picked_after_removal(picked(), index));
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let removed = hub.remove(id);
+                                        if removed.is_ok() {
+                                            picked.set(picked_after_removal(picked(), index));
+                                        }
+                                        refused(preset_errors, id, removed);
                                     }
                                 }
                             },
@@ -526,6 +528,14 @@ fn said(mut errors: Errors, id: AmpId, done: labrack_core::Result<()>) {
             });
         }
     };
+}
+
+/// Show why the core refused an action of an amp (a duplicate IP, a linked channel 2, a missing right). A
+/// success says nothing: a fader that moves all the time must not clear the toast of another action.
+fn refused(errors: Errors, id: AmpId, done: labrack_core::Result<()>) {
+    if done.is_err() {
+        said(errors, id, done);
+    }
 }
 
 /// Show `what` as in progress for the amp while `work` runs.
@@ -880,7 +890,27 @@ pub fn picked_after_removal(picked: usize, removed: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{corrected_zoom, muted_input_level, picked_after_removal, source_level};
+    use super::{corrected_zoom, muted_input_level, picked_after_removal, refused, source_level};
+    use dioxus::prelude::*;
+    use labrack_core::{Error, Protocol, Store};
+
+    // UX-26, UX-29: what the core refuses shows as an error toast; a success clears nothing
+    #[test]
+    fn a_refusal_is_kept_and_a_success_says_nothing() {
+        fn page() -> Element {
+            let id = Store::in_memory().add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+            let errors = use_signal(std::collections::HashMap::new);
+            use_hook(|| {
+                refused(errors, id, Err(Error::NotOnline));
+                refused(errors, id, Ok(()));
+            });
+            rsx! { for text in errors.read().values() { p { "{text}" } } }
+        }
+        let mut dom = VirtualDom::new(page);
+        dom.rebuild_in_place();
+        let out = dioxus_ssr::render(&dom);
+        assert!(out.contains("<p>"), "the refusal is shown: {out}");
+    }
 
     // BEH-45: removing an amp above the picked one leaves the same amp picked
     #[test]
