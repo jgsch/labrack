@@ -8,6 +8,11 @@ committed.
 
 From the full review of 2026-11-10, in order of priority. Each starts with a failing test.
 
+- The library's `Amp::restore` (the CLI's `labgruppen restore`) still has the two faults the app's file load
+  lost: it refuses the IPX's own dump (the limiters stored at 36.02 dBu, above 35.99; seen 2026-11-10 on
+  the live IPX) and it does not look at the driver of the file (an IPD limiter in dBV is written as Vpk).
+  `amps/src/amp.rs`. Spec: BEH-37, SEC-2
+
 ## Features
 
 ## Chores
