@@ -888,7 +888,9 @@ async fn poll_mutes(
     }
     // an IPD answers one thing at a time: the polling waits until the state is read, and never runs during
     // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
-    wait_loaded(&shared, id).await;
+    if !wait_loaded(&shared, id).await {
+        return;
+    }
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
     // the device mode is changed on the front panel now and then: asked for once a second
     let period = if ipd { shared.timing.mute_poll_interval } else { Duration::from_secs(1) };
@@ -913,9 +915,14 @@ async fn poll_mutes(
 }
 
 /// Wait until the state of the amp is read: an IPD answers one thing at a time, so what is not needed at
-/// once waits for it.
-async fn wait_loaded(shared: &Shared, id: AmpId) {
-    while !lock(&shared.live).get(&id).is_some_and(|amp| amp.loaded) {
+/// once waits for it. Gives up, with `false`, when the amp has no connection (lost, disconnected or removed).
+async fn wait_loaded(shared: &Shared, id: AmpId) -> bool {
+    loop {
+        match lock(&shared.live).get(&id) {
+            Some(amp) if amp.loaded => return true,
+            Some(amp) if amp.session.is_some() => {}
+            _ => return false,
+        }
         sleep(shared.timing.meter_interval).await;
     }
 }

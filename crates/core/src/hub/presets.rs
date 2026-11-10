@@ -64,7 +64,9 @@ impl Hub {
     pub async fn presets(&self, id: AmpId) -> Result<Vec<Preset>> {
         let session = self.session(id)?;
         // an IPD answers one thing at a time and reads these names slowly: after its state
-        super::wait_loaded(&self.0.shared, id).await;
+        if !super::wait_loaded(&self.0.shared, id).await {
+            return Err(Error::NotOnline);
+        }
         let list = session.amp.presets().await?;
         let stored: Vec<Preset> =
             list.into_iter().map(|p| Preset { number: p.index, name: p.name }).collect();

@@ -529,3 +529,25 @@ async fn a_failed_state_read_is_tried_again() {
     wait_loaded(&hub, id).await;
     assert_eq!(fake.state().drop_syncs, 0, "the reads that got no answer were made");
 }
+
+// BEH-43: what waits for the state to be read gives up when the amp is gone, instead of waiting for ever
+#[tokio::test]
+async fn waiting_for_the_state_ends_when_the_amp_is_removed() {
+    let fake = FakeAmp::start().await;
+    fake.state().drop_syncs = 1_000;
+    let (hub, local) = hub_with(Store::in_memory(), timing());
+    local.route("10.0.0.1", fake.port);
+    let id = hub.add_manual("Left", Protocol::Ipx, "10.0.0.1").unwrap();
+    wait_status(&hub, id, Status::Online).await;
+    let asking = tokio::spawn({
+        let hub = hub.clone();
+        async move { hub.presets(id).await }
+    });
+    sleep(Duration::from_millis(300)).await;
+    assert!(!asking.is_finished(), "the state is not read: it waits");
+
+    hub.remove(id).unwrap();
+
+    let got = timeout(Duration::from_secs(3), asking).await.expect("it gives up").unwrap();
+    assert!(got.is_err(), "{got:?}");
+}

@@ -10,8 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Bugs:
 
-- `wait_loaded` never gives up when the amp disconnects or is removed: the task spins forever.
-  `core/src/hub.rs`
 - The app drops the refusals of the core (`let _ =` on `set`, `set_limiter`, `set_ip`, `rename`,
   `remove`): a duplicate IP, a linked channel 2 or a missing right shows nothing. Show them as
   toasts. `app/src/app.rs`. Spec: UX-26, UX-29
