@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::Page;
-use crate::control::{Click, SecondClick};
+use crate::control::{CONFIRM_WINDOW, Click, SecondClick};
 
 /// The title of the app and its subtitle, spread letter by letter over the width of the title (UX-2).
 const SUBTITLE: [&str; 14] = ["D", "S", "P", "", "C", "O", "N", "T", "R", "O", "L", "L", "E", "R"];
@@ -73,7 +73,14 @@ pub fn Header(
                             armed.set(s);
                             on_mute_all.call(());
                         }
-                        Click::Armed | Click::Expired => armed.set(s),
+                        Click::Armed | Click::Expired => {
+                            armed.set(s);
+                            // the label goes back to UNMUTE ALL when the window is over, without another event
+                            spawn(async move {
+                                tokio::time::sleep(CONFIRM_WINDOW + std::time::Duration::from_millis(100)).await;
+                                armed.set(armed());
+                            });
+                        }
                     }
                 },
                 "{label}"
