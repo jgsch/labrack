@@ -302,6 +302,13 @@ fn plan_load(
             skipped.push(format!("{name}: this amplifier does not have it"));
             continue;
         };
+        // the amp stores a hair more than its limiter range (36.02 dBu for the 35.99 dBu of 69 Vpk): its own
+        // file loads with the nearest value in range. Anything further out is refused; the ceilings still
+        // decide below.
+        let value = match (value, matches!(param, Param::Limiter { .. })) {
+            (Value::Float(x), true) => &Value::Float(near_range(*x, spec.min, spec.max)),
+            _ => value,
+        };
         let checked = match dsp::check(&param, &spec, value, ceilings) {
             Ok(checked) => checked,
             Err(e) => {
@@ -342,4 +349,14 @@ fn plan_load(
         )));
     }
     Ok((accepted, skipped))
+}
+
+/// `x`, or the edge of the range when it lies within 1 % of that edge (rounding in what the amp stores).
+fn near_range(x: f64, min: Option<f64>, max: Option<f64>) -> f64 {
+    let near = |edge: f64| (x - edge).abs() <= 0.01 * edge.abs().max(1.0);
+    match (min, max) {
+        (Some(min), _) if x < min && near(min) => min,
+        (_, Some(max)) if x > max && near(max) => max,
+        _ => x,
+    }
 }

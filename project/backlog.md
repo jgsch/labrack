@@ -10,8 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Bugs:
 
-- The IPX refuses its own saved file: the amp stores 36.02 dBu, above `LIMITER_DBU` (35.99).
-  `plan_load` should accept the nearest value in range, as `plan_copy` does. Spec: BEH-37, BEH-5
 - Removing an amp above the one picked on Mix & EQ changes the picked amp (`picked` is a list
   index). `app/src/app.rs`. Spec: BEH-45
 - An IPX in a mode outside the table (`IPX_MODES`) fails the whole snapshot; decode it as

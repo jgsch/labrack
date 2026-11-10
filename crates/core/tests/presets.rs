@@ -670,6 +670,25 @@ async fn load_file_of_the_other_family_leaves_the_limiter_alone() {
     assert_eq!(ipx_value(&fake, "out1.gain"), f(-10.0), "the shared settings are loaded");
 }
 
+// BEH-37, BEH-5: the amp stores a hair more than its range (36.02 dBu for the 35.99 dBu of 69 Vpk): its own
+// file loads, with the nearest value in range
+#[tokio::test]
+async fn load_file_takes_the_limiter_a_hair_above_the_range() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let (_dir, path) = temp_file("amp.json");
+    hub.save_file(id, &path).await.unwrap();
+    edit_file(&path, |p| {
+        p.insert("out1.limiter.threshold_dbu".into(), serde_json::json!(36.02));
+        p.insert("out1.limiter.threshold".into(), serde_json::json!(69.24));
+    });
+
+    let report = hub.load_file(id, &path).await.unwrap();
+
+    assert!(report.skipped.iter().all(|s| !s.starts_with("out1.limiter.th")), "{:?}", report.skipped);
+    let Value::Float(dbu) = ipx_value(&fake, "out1.limiter.threshold_dbu") else { panic!() };
+    assert!((dbu - 35.99).abs() < 1e-3, "the nearest value in range: {dbu}");
+}
+
 #[tokio::test]
 async fn load_file_refuses_files_that_are_not_settings() {
     let (hub, id, fake) = online_ipx(timing()).await;
