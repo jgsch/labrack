@@ -197,6 +197,8 @@ impl Hub {
         Fut: Future<Output = labgruppen::Result<T>>,
     {
         let _gate = session.gate.lock().await;
+        // a MUTE the user asked for that is not written yet: dropping it with the rest must not lose it
+        let asked = session.writer.muting();
         if drop_waiting {
             session.writer.clear();
             self.0.shared.drop_pending(id);
@@ -208,6 +210,8 @@ impl Hub {
         let before = read_mutes(amp).await?;
         let to_mute: Vec<(Param, Value)> =
             (0..2).filter(|&i| !before[i]).map(|i| (OUTPUTS[i].clone(), Value::Bool(true))).collect();
+        // the outputs as they were, and muted if the user asked for it meanwhile (SEC-6: a mute wins)
+        let kept = |now: [bool; 2]| [0, 1].map(|i| before[i] || asked[i] || now[i]);
         for result in amp.set_many(&to_mute).await {
             result.map_err(left_muted)?;
         }
@@ -216,14 +220,13 @@ impl Hub {
             Ok(done) => done,
             // refused before anything was sent: the amp is as it was, so take back only the mute added here
             Err(refused @ (labgruppen::Error::Denied(_) | labgruppen::Error::InvalidValue(_))) => {
-                let undo: Vec<(Param, Value)> = (0..2)
-                    .filter(|&i| !before[i])
-                    .map(|i| (OUTPUTS[i].clone(), Value::Bool(false)))
-                    .collect();
+                let keep = kept(session.writer.muting());
+                let undo: Vec<(Param, Value)> =
+                    (0..2).filter(|&i| !keep[i]).map(|i| (OUTPUTS[i].clone(), Value::Bool(false))).collect();
                 for result in amp.set_many(&undo).await {
                     result.map_err(left_muted)?;
                 }
-                for (param, muted) in OUTPUTS.iter().zip(before) {
+                for (param, muted) in OUTPUTS.iter().zip(keep) {
                     self.0.shared.observed(id, param, &Value::Bool(muted), false);
                 }
                 return Err(refused.into());
@@ -238,7 +241,7 @@ impl Hub {
             End::Muted => read_mutes(amp).await.map_err(left_muted)?,
         };
         let want: [bool; 2] = match end {
-            End::AsBefore => before,
+            End::AsBefore => kept(session.writer.muting()),
             End::Muted => [true, true],
         };
         // mutes before unmutes

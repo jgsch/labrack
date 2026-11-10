@@ -346,6 +346,27 @@ async fn a_failed_link_copy_leaves_the_outputs_muted() {
     set_and_wait(&hub, id, "out2.mute", FALSE).await;
 }
 
+// SEC-6: a bulk change that puts the outputs back "as they were" must not undo a MUTE the user asked
+// for meanwhile: here it is asked for before the copy starts, which drops what waits to be written
+#[tokio::test]
+async fn a_mute_asked_for_around_a_copy_is_not_lost() {
+    let (hub, id, fake) = ipx_ready().await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    set_and_wait(&hub, id, "out2.mute", FALSE).await;
+
+    let copy = {
+        let hub = hub.clone();
+        tokio::spawn(async move { hub.copy_eq(id, Channel::Output(1)).await })
+    };
+    // the copy is first in line for the amp: it takes the gate before the mute can be written
+    hub.set_mute(id, 0, true).unwrap();
+    copy.await.unwrap().unwrap();
+
+    wait_value(&hub, id, "out1.mute", Value::Bool(true)).await;
+    assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "the user's MUTE stands");
+    assert_eq!(ipx_value(&fake, "out2.mute"), FALSE, "the other output is put back as it was");
+}
+
 // ---- IPD ---------------------------------------------------------------------------------------
 
 // BEH-32: the link of an IPD is the app's: it never switches the amp's flag on (that would merge the EQs),

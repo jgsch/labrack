@@ -161,6 +161,19 @@ impl Coalescer {
         }
     }
 
+    /// The output mutes that wait to be written as MUTED.
+    pub fn muting(&self) -> [bool; 2] {
+        let mut muting = [false; 2];
+        for (param, slot) in &self.slots {
+            if let (Param::Mute(Channel::Output(output)), Some(Value::Bool(true))) = (param, &slot.waiting)
+                && let Some(flag) = muting.get_mut(usize::from(*output))
+            {
+                *flag = true;
+            }
+        }
+        muting
+    }
+
     /// The values that may go out at `now` (they count as sent), and how long until the next one may.
     pub fn take_due(&mut self, now: Instant) -> (Vec<(Param, Value)>, Option<Duration>) {
         let mut due = Vec::new();
@@ -204,6 +217,11 @@ impl Writer {
     /// A bulk change replaces the settings these values were meant for.
     pub fn clear(&self) {
         self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
+
+    /// The output mutes the user asked for that the amp has not got yet (see [`Coalescer::muting`]).
+    pub fn muting(&self) -> [bool; 2] {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).muting()
     }
 
     pub fn take_due(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
@@ -477,6 +495,26 @@ mod tests {
         c.push(param("in1.gain"), f(5.0));
         let (due, wait) = c.take_due(t0 + Duration::from_millis(10));
         assert_eq!((due, wait), (vec![(param("in1.gain"), f(5.0))], Some(Duration::from_millis(40))));
+    }
+
+    // SEC-6: what waits as a MUTE can be seen, and only that: not an unmute, not another control
+    #[test]
+    fn waiting_mutes_can_be_seen() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        assert_eq!(c.muting(), [false, false]);
+        c.push(param("out2.mute"), Value::Bool(true));
+        c.push(param("out1.mute"), Value::Bool(false));
+        c.push(param("in1.mute"), Value::Bool(true));
+        c.push(param("out1.gain"), f(1.0));
+        assert_eq!(c.muting(), [false, true]);
+        c.push(param("out1.mute"), Value::Bool(true));
+        assert_eq!(c.muting(), [true, true]);
+        c.take_due(t0);
+        assert_eq!(c.muting(), [false, false], "written: no longer waiting");
+        c.push(param("out1.mute"), Value::Bool(true));
+        c.clear();
+        assert_eq!(c.muting(), [false, false]);
     }
 
     #[test]
