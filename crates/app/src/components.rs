@@ -1,6 +1,7 @@
 //! The controls every page uses (UX-21 to UX-24, UX-26, UX-8, UX-12). They draw; the logic is in
 //! [`crate::control`], so their value rules are tested without a window.
 
+use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 
 use crate::control::{self, Bounds, Click, SecondClick};
@@ -86,8 +87,12 @@ pub fn Fader(
                 },
                 onpointermove: move |event| {
                     if let Some(d) = drag() {
-                        let y = event.data().client_coordinates().y;
-                        set(d.value_at(y, bounds));
+                        let data = event.data();
+                        let held = data.held_buttons().contains(MouseButton::Primary);
+                        match d.value_while(held, data.client_coordinates().y, bounds) {
+                            Some(next) => set(next),
+                            None => drag.set(None),
+                        }
                     }
                 },
                 onpointerup: move |_| drag.set(None),

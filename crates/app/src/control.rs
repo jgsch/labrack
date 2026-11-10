@@ -59,6 +59,12 @@ impl Drag {
     pub fn value_at(self, y: f64, bounds: Bounds) -> f64 {
         bounds.clamp(self.value + (self.y - y) * 0.2)
     }
+
+    /// [`Drag::value_at`] while the button is held; `None` once it is not, which ends the drag. A
+    /// release outside the track sends the fader no pointer-up.
+    pub fn value_while(self, held: bool, y: f64, bounds: Bounds) -> Option<f64> {
+        held.then(|| self.value_at(y, bounds))
+    }
 }
 
 /// A fader moved by a key or the wheel: one step, kept inside the range. `None` when the key does not
@@ -270,6 +276,16 @@ mod tests {
         let low = Drag::start(700.0, -12.0);
         assert_eq!(low.value_at(700.0, GAIN), -12.0);
         assert_eq!(low.value_at(690.0, GAIN), -10.0);
+    }
+
+    // UX-22, SEC-4: a drag ends when the button is no longer held, e.g. it was released outside the
+    // track, where the fader gets no pointer-up; the next pass of the mouse moves nothing
+    #[test]
+    fn a_drag_ends_when_the_button_is_released_elsewhere() {
+        let drag = Drag::start(400.0, -6.0);
+        assert_eq!(drag.value_while(true, 395.0, GAIN), Some(-5.0));
+        assert_eq!(drag.value_while(false, 395.0, GAIN), None);
+        assert_eq!(drag.value_while(false, 400.0, GAIN), None);
     }
 
     // SEC-2: a drag never leaves the range of the model

@@ -10,8 +10,6 @@ From the full review of 2026-11-10, in order of priority. Each starts with a fai
 
 Safety:
 
-- A fader drag stays armed when the button is released outside the track: the next pass of the mouse
-  moves the gain. Stop the drag when no button is held. `app/src/components.rs`. Spec: UX-22, SEC-4
 - An IPX that drops off the network stays ONLINE until TCP gives up (no FIN, the heartbeat expects no
   reply). Treat meters that stop arriving, or a heartbeat that cannot be written, as a lost
   connection. `amps/src/amps/ipx/client.rs`, `core/src/hub.rs`. Spec: BEH-8, BEH-42
