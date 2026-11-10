@@ -137,6 +137,40 @@ pub fn needs_confirmation(current: f64, next: f64, from: f64) -> bool {
     next - current.max(from) > RAISE_ASK
 }
 
+/// What a figure is, for counting a raise in dB (UX-24): a level is already dB, a peak voltage is
+/// 20 dB per decade, a power 10 dB per decade.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Scale {
+    #[default]
+    Db,
+    Volts,
+    Watts,
+}
+
+/// By how many dB taking `next` over `current` raises the level; from nothing it is infinite.
+pub fn raise_db(current: f64, next: f64, scale: Scale) -> f64 {
+    let per_decade = match scale {
+        Scale::Db => return next - current,
+        Scale::Volts => 20.0,
+        Scale::Watts => 10.0,
+    };
+    if next <= 0.0 {
+        f64::NEG_INFINITY
+    } else if current <= 0.0 {
+        f64::INFINITY
+    } else {
+        per_decade * (next / current).log10()
+    }
+}
+
+/// [`needs_confirmation`] for a figure of `scale`.
+pub fn needs_confirmation_in(current: f64, next: f64, from: f64, scale: Scale) -> bool {
+    match scale {
+        Scale::Db => needs_confirmation(current, next, from),
+        _ => raise_db(current, next, scale) > RAISE_ASK,
+    }
+}
+
 /// A confirmation that takes two clicks on the same control (UX-24, SEC-5).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SecondClick {
@@ -386,6 +420,21 @@ mod tests {
         assert!(needs_confirmation(-12.0, -5.9, any));
         assert!(!needs_confirmation(-2.0, -8.0, any), "a cut never asks");
         assert!(!needs_confirmation(0.0, 0.0, any));
+    }
+
+    // UX-24: a limiter typed in volts or watts asks when it raises the level by more than 6 dB
+    #[test]
+    fn a_big_raise_in_volts_or_watts_asks_first() {
+        let any = f64::NEG_INFINITY;
+        assert!(needs_confirmation_in(10.0, 20.0, any, Scale::Volts), "+6.02 dB");
+        assert!(!needs_confirmation_in(10.0, 19.9, any, Scale::Volts));
+        assert!(needs_confirmation_in(100.0, 400.0, any, Scale::Watts), "+6.02 dB");
+        assert!(!needs_confirmation_in(100.0, 390.0, any, Scale::Watts));
+        assert!(!needs_confirmation_in(69.0, 10.0, any, Scale::Volts), "a cut never asks");
+        assert!(needs_confirmation_in(0.0, 50.0, any, Scale::Watts), "from nothing is a raise");
+        assert!(!needs_confirmation_in(50.0, 0.0, any, Scale::Watts));
+        assert!((raise_db(10.0, 20.0, Scale::Volts) - 6.0206).abs() < 1e-3);
+        assert!((raise_db(100.0, 200.0, Scale::Watts) - 3.0103).abs() < 1e-3);
     }
 
     // UX-24: an EQ band counts a raise from flat, so easing a cut off does not ask

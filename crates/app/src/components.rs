@@ -4,7 +4,7 @@
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 
-use crate::control::{self, Bounds, Click, SecondClick};
+use crate::control::{self, Bounds, Click, Scale, SecondClick};
 
 /// A vertical fader with its dB scale, its box and its label, as on the Mix & EQ pages: a click never
 /// moves the cap, dragging moves it from where the drag started, keys and the wheel step it (UX-22).
@@ -168,6 +168,9 @@ pub fn ValueField(
     /// A raise is counted from this level at least: 0 for an EQ band, where a cut eased off is no boost.
     #[props(default = f64::NEG_INFINITY)]
     ask_from: f64,
+    /// What the figure is: the raise that asks first is counted in dB of level (UX-24).
+    #[props(default)]
+    scale: Scale,
     /// Decimals shown: one for levels, two for a Q.
     #[props(default = 1)]
     digits: usize,
@@ -178,8 +181,18 @@ pub fn ValueField(
     let error = use_signal(String::new);
     let mut asked = use_signal(|| None::<f64>);
     let shown = draft().unwrap_or_else(|| control::number_to(value, digits));
-    let field =
-        Committed { draft, error, asked, value, bounds, unit: unit.clone(), ask_raise, ask_from, on_change };
+    let field = Committed {
+        draft,
+        error,
+        asked,
+        value,
+        bounds,
+        unit: unit.clone(),
+        ask_raise,
+        ask_from,
+        scale,
+        on_change,
+    };
 
     rsx! {
         div { class: "value-field",
@@ -207,7 +220,13 @@ pub fn ValueField(
             }
             if let Some(next) = asked() {
                 div { class: "confirm-dialog", role: "alertdialog", "aria-label": "Confirm the raise",
-                    span { "Raise by {control::number(next - value)} {unit}?" }
+                    span {
+                        if scale == Scale::Db {
+                            "Raise by {control::number(next - value)} {unit}?"
+                        } else {
+                            "Raise by {control::number(control::raise_db(value, next, scale))} dB?"
+                        }
+                    }
                     button {
                         class: "confirm yes",
                         onclick: move |_| {
@@ -240,6 +259,7 @@ struct Committed {
     unit: String,
     ask_raise: bool,
     ask_from: f64,
+    scale: Scale,
     on_change: EventHandler<f64>,
 }
 
@@ -264,7 +284,10 @@ impl Committed {
                 });
             }
             Ok(next) if next == self.value => error.set(String::new()),
-            Ok(next) if self.ask_raise && control::needs_confirmation(self.value, next, self.ask_from) => {
+            Ok(next)
+                if self.ask_raise
+                    && control::needs_confirmation_in(self.value, next, self.ask_from, self.scale) =>
+            {
                 error.set(String::new());
                 asked.set(Some(next));
             }

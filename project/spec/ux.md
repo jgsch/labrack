@@ -111,6 +111,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   same button (→ CONFIRM UNMUTE ALL). Raising a level by more than 6 dB by typing opens a
   confirmation dialog. An EQ band's gain counts the raise from 0 dB at least: easing a cut off
   (-12 to -1 dB) does not ask.
+  A limiter threshold typed in volts or watts asks by the same rule, counted in dB of level (20·log10 of
+  the voltage ratio, 10·log10 of the power ratio) and worded in dB; the load (Ω) never asks.
 - **UX-25** Search switches use a toggle with a status line; a disabled SCAN NOW is dimmed.
 - **UX-26** Error text is red and appears beside the control that caused it. The error of a typed
   value floats over the page (it moves nothing) and goes after 3 s.

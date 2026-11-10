@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use labgruppen::{Channel, EQ_TYPES, EqField, MixerField, Param, Value, XOVER_TYPES, XoverField};
 use labrack_core::{Limiter, Side, Unit};
 
-use crate::control::{self, Bounds};
+use crate::control::{self, Bounds, Scale};
 use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
 use crate::{Fader, ValueField};
@@ -172,6 +172,17 @@ impl Default for MixeqView {
 pub const MIX_GAIN: Bounds = Bounds { min: -48.0, max: 12.0 };
 
 /// The four boxes of a limiter, in the mockup's order: what they set, their name and their unit.
+/// What a limiter box is, for the raise that asks first (UX-24): any threshold raises the level,
+/// the load (Ω) only moves the watts.
+pub fn limiter_scale(unit: Unit) -> Option<Scale> {
+    match unit {
+        Unit::Dbu => Some(Scale::Db),
+        Unit::Vpk => Some(Scale::Volts),
+        Unit::Watt => Some(Scale::Watts),
+        Unit::Ohm => None,
+    }
+}
+
 pub const LIMITER_BOXES: [(Unit, &str, &str); 4] = [
     (Unit::Ohm, "Load", "Ω"),
     (Unit::Vpk, "V peak", "V"),
@@ -344,7 +355,8 @@ pub fn LimiterCard(
                                     value: figures.in_unit(unit),
                                     bounds: limiter.bounds[i],
                                     unit: suffix,
-                                    ask_raise: unit == Unit::Dbu,
+                                    ask_raise: limiter_scale(unit).is_some(),
+                                    scale: limiter_scale(unit).unwrap_or_default(),
                                     on_change: move |value| on_change.call((unit, value)),
                                 }
                             } else {
@@ -817,6 +829,15 @@ pub fn MixeqPage(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // UX-24: the limiter asks before a big raise in volts and watts too, not for the load
+    #[test]
+    fn every_limiter_threshold_box_asks_and_the_load_does_not() {
+        assert_eq!(limiter_scale(Unit::Dbu), Some(Scale::Db));
+        assert_eq!(limiter_scale(Unit::Vpk), Some(Scale::Volts));
+        assert_eq!(limiter_scale(Unit::Watt), Some(Scale::Watts));
+        assert_eq!(limiter_scale(Unit::Ohm), None);
+    }
 
     // UX-16: six tabs, always the same
     #[test]
