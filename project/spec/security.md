@@ -30,7 +30,9 @@ The app controls the volume of a sound system. A wrong value can damage speakers
     unmuted moment at all.
   - A preset stored by another tool may have unmuted outputs. The amp applies a recall at once,
     mutes included, so an output it unmutes passes audio with the preset's settings until the app has
-    muted it again, one round trip (not measured). The app cannot prevent it.
+    muted it again, one round trip (measured on an IPD 2400 over Wi-Fi: 0.4 to 0.6 s with a read of the mutes in between, so
+    the app writes the two mutes at once after an IPD recall, without reading them first). The app
+    cannot prevent it.
   - File load never applies output mutes from the file.
   - What still waits to be written when a recall or a load starts is dropped, not written over the
     new settings.

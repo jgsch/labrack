@@ -37,8 +37,12 @@ pub struct LoadReport {
 /// Where the outputs are left after a bulk change.
 #[derive(Clone, Copy)]
 pub(super) enum End {
-    /// Muted, whatever they were and whatever the change did (SEC-6).
+    /// Muted, whatever they were and whatever the change did (SEC-6). The change cannot unmute them
+    /// (a store, a file), so what the amp holds is read to write only what is needed.
     Muted,
+    /// Muted, and the change may have unmuted them (a recalled preset): both are written at once,
+    /// without asking the amp first, which an IPD answers in seconds while the output sounds (SEC-6).
+    MutedAtOnce,
     /// As they were before the change.
     AsBefore,
 }
@@ -86,7 +90,9 @@ impl Hub {
         let session = self.session(id)?;
         self.permit(id, |rights| rights.load_preset)?;
         self.check_slot(&session, slot)?;
-        self.bulk(id, &session, End::Muted, true, |amp| async move { amp.recall_preset(slot).await }).await?;
+        // an IPX answers a read at once; an IPD takes seconds
+        let end = if session.is_ipx() { End::Muted } else { End::MutedAtOnce };
+        self.bulk(id, &session, end, true, |amp| async move { amp.recall_preset(slot).await }).await?;
 
         // what the amp says it holds now, not what was asked for
         let loaded = session.amp.status().await.ok().and_then(|s| s.preset);
@@ -239,14 +245,15 @@ impl Hub {
         };
 
         // a change that is no preset or file leaves the mutes as this function set them: no need to ask the
-        // amp again, which an IPD answers in seconds
+        // amp again
         let after = match end {
             End::AsBefore => [true, true],
+            End::MutedAtOnce => [false, false],
             End::Muted => read_mutes(amp).await.map_err(left_muted)?,
         };
         let want: [bool; 2] = match end {
             End::AsBefore => kept(session.writer.muting()),
-            End::Muted => [true, true],
+            End::Muted | End::MutedAtOnce => [true, true],
         };
         // mutes before unmutes
         let fix = |muted: bool| -> Vec<(Param, Value)> {

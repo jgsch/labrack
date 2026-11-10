@@ -315,9 +315,20 @@ async fn recall_leaves_every_output_muted_and_mutes_first_on_the_ipd() {
     ipd_elsewhere_set(&sim, "out1.mute", TRUE).await;
     ipd_elsewhere_set(&sim, "out1.gain", f(0.0)).await;
     let before = sim.writes().len();
+    let mute_reads = |sim: &SimServer| {
+        sim.reads()
+            .iter()
+            .filter(|k| [Key::new(S_MUTE, M_MUTE, 0x80, 0), Key::new(S_MUTE, M_MUTE, 0x81, 0)].contains(k))
+            .count()
+    };
+    let reads_before = mute_reads(&sim);
 
     hub.recall_preset(id, 7).await.unwrap();
 
+    // the mutes are asked for once before the change and once more by the reload of the state; afterwards
+    // they are written without asking, because an IPD answers slowly and an unmuted output sounds
+    // meanwhile (SEC-6)
+    assert!(mute_reads(&sim) - reads_before <= 4, "no read of the mutes between the change and their write");
     assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, TRUE));
     assert_eq!(ipd_value(&sim, "out1.gain").await, f(-7.5), "the preset was applied");
     let writes = sim.writes()[before..].to_vec();
