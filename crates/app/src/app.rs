@@ -450,8 +450,10 @@ pub fn App() -> Element {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
                                 move |index| {
-                                    if let Some(id) = ids.get(index).copied() {
-                                        let _ = hub.remove(id);
+                                    if let Some(id) = ids.get(index).copied()
+                                        && hub.remove(id).is_ok()
+                                    {
+                                        picked.set(picked_after_removal(picked(), index));
                                     }
                                 }
                             },
@@ -869,9 +871,26 @@ pub fn corrected_zoom(dpr: f64, scale: f64) -> Option<f64> {
     ((zoom - 1.0).abs() > 0.01).then_some(zoom)
 }
 
+/// The index of the amp picked on Mix & EQ once the amp at `removed` is gone: the amps below it move up
+/// one place, so the picked one stays the same amp (BEH-45). When the picked amp itself is removed, the
+/// index stays: the next amp takes its place.
+pub fn picked_after_removal(picked: usize, removed: usize) -> usize {
+    if removed < picked { picked - 1 } else { picked }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{corrected_zoom, muted_input_level, source_level};
+    use super::{corrected_zoom, muted_input_level, picked_after_removal, source_level};
+
+    // BEH-45: removing an amp above the picked one leaves the same amp picked
+    #[test]
+    fn removing_an_amp_above_the_picked_one_keeps_it_picked() {
+        assert_eq!(picked_after_removal(2, 0), 1, "above: the picked amp moved up");
+        assert_eq!(picked_after_removal(2, 1), 1);
+        assert_eq!(picked_after_removal(2, 2), 2, "the picked one itself: the next takes its place");
+        assert_eq!(picked_after_removal(2, 3), 2, "below: nothing moves");
+        assert_eq!(picked_after_removal(0, 0), 0);
+    }
 
     // UX-19: a muted input still shows the sound that arrives: the loudest source that is on, through the
     // mixer and the input gain; sources switched off in the mixer or without a meter count for nothing
