@@ -141,6 +141,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .badge.ipd{background:rgba(203,166,247,0.16);color:var(--mauve);border:1px solid var(--mauve)}
 .badge.ipx{background:rgba(116,199,236,0.16);color:var(--sapphire);border:1px solid var(--sapphire)}
 .known-ip{flex:0 0 130px;font-size:12px;font-weight:600;color:var(--text)}
+.known-ceiling{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;font-size:9px;letter-spacing:0.08em;color:var(--muted)}
+.known-ceiling input{width:72px;height:32px;box-sizing:border-box;padding:0 8px;border-radius:4px;background:var(--panel);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:13px;font-weight:600}
+.known-ceiling input:focus{border-color:var(--border-strong)}
 .known-source{flex:0 0 64px;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .known-remove{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:transparent;color:var(--muted);border:1px solid var(--border-strong)}
 /* Mix & EQ (UX-16, UX-17, UX-19). Inputs are sapphire, outputs lavender (UX-7). */

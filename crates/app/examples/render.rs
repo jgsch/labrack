@@ -150,6 +150,8 @@ fn search_demo() -> Element {
                 protocol: "IPD".into(),
                 ip: "192.168.1.21".into(),
                 source: "AUTO".into(),
+                max_gain_db: None,
+                max_limiter_dbu: None,
             },
             KnownAmp {
                 index: 1,
@@ -157,6 +159,8 @@ fn search_demo() -> Element {
                 protocol: "IPX".into(),
                 ip: "192.168.1.31".into(),
                 source: "AUTO".into(),
+                max_gain_db: None,
+                max_limiter_dbu: None,
             },
             KnownAmp {
                 index: 2,
@@ -164,6 +168,8 @@ fn search_demo() -> Element {
                 protocol: "IPD".into(),
                 ip: "192.168.1.24".into(),
                 source: "MANUAL".into(),
+                max_gain_db: None,
+                max_limiter_dbu: None,
             },
         ],
         ..labrack_app::SearchView::default()

@@ -4,6 +4,8 @@
 
 use dioxus::prelude::*;
 
+use crate::control;
+
 /// One row of Known amplifiers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct KnownAmp {
@@ -14,6 +16,21 @@ pub struct KnownAmp {
     pub ip: String,
     /// AUTO or MANUAL.
     pub source: String,
+    /// The user ceilings (SEC-3): the highest output gain in dB, the highest limiter threshold in dBu.
+    pub max_gain_db: Option<f64>,
+    pub max_limiter_dbu: Option<f64>,
+}
+
+/// A ceiling typed in its box: nothing or `none` is no ceiling (SEC-3).
+pub fn ceiling_from_text(text: &str) -> Result<Option<f64>, String> {
+    let text = text.trim();
+    if text.is_empty() || text.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    match text.replace(',', ".").parse::<f64>() {
+        Ok(v) if v.is_finite() => Ok(Some(v)),
+        _ => Err(format!("{text} is not a number: type a level in dB or leave the box empty for no ceiling")),
+    }
 }
 
 /// What the page shows.
@@ -102,6 +119,9 @@ pub fn SearchPage(
     /// The amp at the first index goes to the second one (BEH-45).
     #[props(default)]
     on_move: EventHandler<(usize, usize)>,
+    /// A ceiling box of the amp at the index was changed: (index, max gain text, max limiter text) (SEC-3).
+    #[props(default)]
+    on_ceilings: EventHandler<(usize, String, String)>,
 ) -> Element {
     let count = view.amps.len();
     let mut name = use_signal(String::new);
@@ -219,6 +239,30 @@ pub fn SearchPage(
                         span { class: if amp.protocol == "IPD" { "badge ipd" } else { "badge ipx" }, "{amp.protocol}" }
                         span { class: "known-ip", "{amp.ip}" }
                         span { class: "known-source", "{amp.source}" }
+                        label { class: "known-ceiling",
+                            "MAX GAIN dB"
+                            input {
+                                r#type: "text",
+                                inputmode: "decimal",
+                                autocomplete: "off",
+                                placeholder: "none",
+                                "aria-label": "Highest output gain of amplifier {amp.index + 1}",
+                                value: amp.max_gain_db.map(control::number).unwrap_or_default(),
+                                onchange: move |event| on_ceilings.call((amp.index, event.value(), amp.max_limiter_dbu.map(control::number).unwrap_or_default())),
+                            }
+                        }
+                        label { class: "known-ceiling",
+                            "MAX LIMITER dBu"
+                            input {
+                                r#type: "text",
+                                inputmode: "decimal",
+                                autocomplete: "off",
+                                placeholder: "none",
+                                "aria-label": "Highest limiter threshold of amplifier {amp.index + 1}",
+                                value: amp.max_limiter_dbu.map(control::number).unwrap_or_default(),
+                                onchange: move |event| on_ceilings.call((amp.index, amp.max_gain_db.map(control::number).unwrap_or_default(), event.value())),
+                            }
+                        }
                         button {
                             class: "known-remove",
                             "aria-label": "Remove amplifier {amp.index + 1}",
@@ -267,7 +311,32 @@ mod tests {
             protocol: protocol.into(),
             ip: format!("192.168.1.{}", 20 + index),
             source: source.into(),
+            max_gain_db: None,
+            max_limiter_dbu: None,
         }
+    }
+
+    // SEC-3: a ceiling box takes a number, or nothing for none
+    #[test]
+    fn a_ceiling_is_a_number_or_nothing() {
+        assert_eq!(ceiling_from_text(""), Ok(None));
+        assert_eq!(ceiling_from_text(" None "), Ok(None));
+        assert_eq!(ceiling_from_text("-6"), Ok(Some(-6.0)));
+        assert_eq!(ceiling_from_text("3,5"), Ok(Some(3.5)));
+        assert!(ceiling_from_text("loud").is_err());
+        assert!(ceiling_from_text("inf").is_err());
+        assert!(ceiling_from_text("NaN").is_err());
+    }
+
+    // SEC-3, UX-15: each known amplifier has its two ceiling boxes, filled with the ceilings it has
+    #[test]
+    fn each_known_amplifier_shows_its_ceilings() {
+        let mut amp = known(0, "IPX", "MANUAL");
+        amp.max_gain_db = Some(-6.0);
+        let out = page_html(SearchView { amps: vec![amp], ..SearchView::default() }, "");
+        assert!(out.contains("Highest output gain of amplifier 1"), "{out}");
+        assert!(out.contains("Highest limiter threshold of amplifier 1"), "{out}");
+        assert!(out.contains("value=\"-6\"") && out.contains("placeholder=\"none\""), "{out}");
     }
 
     // UX-14, UX-25: both switches, with a status line that says what they are doing

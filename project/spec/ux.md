@@ -56,6 +56,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-15** Below, Known amplifiers: one row per amp with index, an editable name field, a protocol
   badge (IPD mauve, IPX sapphire), IP, source (AUTO / MANUAL) and REMOVE. After the index, an up and a
   down arrow move the row (`BEH-45`); the first row cannot go up and the last cannot go down.
+  Before REMOVE, two boxes hold the user ceilings of the amp (`SEC-3`): MAX GAIN dB and MAX LIMITER dBu.
+  An empty box (shown as `none`) is no ceiling; a number sets it; text that is not a number is refused
+  with an error toast and changes nothing.
 
 ## Mix & EQ pages
 

@@ -481,6 +481,25 @@ pub fn App() -> Element {
                                     }
                                 }
                             },
+                            on_ceilings: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, gain, limiter): (usize, String, String)| {
+                                    if let Some(id) = ids.get(index).copied() {
+                                        let parsed = crate::search::ceiling_from_text(&gain)
+                                            .and_then(|g| Ok((g, crate::search::ceiling_from_text(&limiter)?)));
+                                        let done = parsed
+                                            .map_err(labrack_core::Error::Invalid)
+                                            .and_then(|(g, l)| {
+                                                hub.set_ceilings(
+                                                    id,
+                                                    labrack_core::Ceilings { max_output_gain_db: g, max_limiter_dbu: l },
+                                                )
+                                            });
+                                        refused(preset_errors, id, done);
+                                    }
+                                }
+                            },
                             on_remove: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
@@ -721,6 +740,8 @@ pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
                 name: amp.name.clone(),
                 protocol: if amp.protocol == labrack_core::Protocol::Ipd { "IPD" } else { "IPX" }.into(),
                 ip: amp.ip.clone(),
+                max_gain_db: amp.ceilings.max_output_gain_db,
+                max_limiter_dbu: amp.ceilings.max_limiter_dbu,
                 source: match amp.source {
                     labrack_core::Source::Auto => "AUTO",
                     labrack_core::Source::Manual => "MANUAL",
