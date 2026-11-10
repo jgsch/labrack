@@ -8,11 +8,6 @@ committed.
 
 From the full review of 2026-11-10, in order of priority. Each starts with a failing test.
 
-Unverified (test on the hardware first):
-
-- IPX recall: the mutes are read straight after the recall, which has no reply. If the amp applies
-  it late, an output may be unmuted while shown MUTED. Spec: SEC-6
-
 ## Features
 
 ## Chores

@@ -204,6 +204,7 @@ The firmware upgrade and key commands should not be sent without understanding t
 - Timeouts used by the client: 2 s per request, 5 s for DEV_PRM_SYNC and GETPRESET.
 - Writing a crossover or EQ band `type` does not switch that filter on (IPX 1200, firmware 2.3.4.0, 2026-11-10: tried on a disabled EQ band and on the disabled low-pass of output 2; both stayed off and only the type changed). An older note said it did. Writing `enabled` last when restoring settings is harmless and keeps the filter off until it is complete.
 - Link (verified on the IPX 1200): setting the output link flag copies channel 1's settings to channel 2 once (gain, limiter dBu). After that the channels stay independent: writes to either channel are not mirrored, for inputs and outputs alike. A client that wants linked channels to follow each other must write both.
+- RECALLPRESET has no reply, but the amp has applied it before it answers the next frame: five recalls on an IPX 1200 (firmware 2.3.4.0, 2026-11-10), each read back with a GETPRM of both output mutes sent at once, gave the preset's mutes at the first read (about 26 ms later) every time. A client may read the mutes straight after a recall.
 - An occasional GETPRM gets no reply (seen over Wi-Fi during a restore); retry before reporting a failure.
 - TCP is a byte stream; frames can split or coalesce.
 - FiR-X models use FIR_MODE and extra FIR commands; not covered.
