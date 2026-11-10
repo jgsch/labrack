@@ -140,6 +140,8 @@ pub struct MixeqView {
     /// The Mixer's two rows, and the range of its levels (the model's: the IPD tops out at 0 dB).
     pub mixer: Vec<MixRow>,
     pub mixer_bounds: Bounds,
+    /// What the OUT faders take: the model's range ended by the user's gain ceiling (SEC-3).
+    pub output_bounds: Bounds,
     /// The open EQ tab's, when one is open.
     pub eq: Option<EqView>,
     pub presets: PresetView,
@@ -163,6 +165,7 @@ impl Default for MixeqView {
             rows: Vec::new(),
             mixer: Vec::new(),
             mixer_bounds: Bounds { min: -48.0, max: 0.0 },
+            output_bounds: MIX_GAIN,
             eq: None,
             presets: PresetView::default(),
             asking: None,
@@ -683,6 +686,8 @@ pub fn LevelsPage(
                                 strip: named(&row.output, "OUT 1 + 2"),
                                 second: view.rows[1].output.clone(),
                                 out: true,
+                                bounds: view.output_bounds,
+                                scale: Some(MIX_GAIN),
                                 on_gain: move |db| on_gain.call((0, 1, db)),
                                 on_mute: move |m| on_mute.call((0, 1, m)),
                                 on_mute_second: move |m| on_mute.call((1, 1, m)),
@@ -696,6 +701,8 @@ pub fn LevelsPage(
                             LevelCard {
                                 strip: row.output.clone(),
                                 out: true,
+                                bounds: view.output_bounds,
+                                scale: Some(MIX_GAIN),
                                 on_gain: move |db| on_gain.call((channel, 1, db)),
                                 on_mute: move |muted| on_mute.call((channel, 1, muted)),
                             }
@@ -883,6 +890,15 @@ mod tests {
             }],
             ..MixeqView::default()
         }
+    }
+
+    // SEC-3: the OUT fader and box end at the user's gain ceiling, the ruler stays the Levels'
+    #[test]
+    fn the_out_fader_ends_at_the_ceiling() {
+        let out = page_html(MixeqView { output_bounds: Bounds::new(-48.0, -6.0), ..view(false) });
+        assert!(out.contains("aria-valuemax=\"-6\""), "{out}");
+        assert!(out.contains("aria-valuemax=\"12\""), "the IN fader keeps the model's range");
+        assert!(out.contains(">+12<"), "the ruler is not shortened");
     }
 
     thread_local! {

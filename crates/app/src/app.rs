@@ -846,6 +846,14 @@ pub fn mixeq_view(
     let (min, max) = labgruppen::shared_range(&level).unwrap_or((-48.0, 0.0));
     let mixer_bounds =
         Bounds::new(range.and_then(|r| r.min).unwrap_or(min), range.and_then(|r| r.max).unwrap_or(max));
+    // the OUT faders end at the model's maximum or the user's ceiling, whichever is lower (SEC-3)
+    let out_gain = Param::Gain(Channel::Output(0));
+    let output_range = hub.range(id, &out_gain);
+    let (gmin, gmax) = labgruppen::shared_range(&out_gain).unwrap_or((-48.0, 12.0));
+    let output_bounds = Bounds::new(
+        output_range.and_then(|r| r.min).unwrap_or(gmin),
+        output_range.and_then(|r| r.max).unwrap_or(gmax),
+    );
     let linked_inputs = hub.linked(id, Side::Inputs);
     let linked_outputs = hub.linked(id, Side::Outputs);
     let eq = tab
@@ -860,6 +868,7 @@ pub fn mixeq_view(
         rows,
         mixer,
         mixer_bounds,
+        output_bounds,
         eq,
         presets: PresetView::default(),
         asking: None,
