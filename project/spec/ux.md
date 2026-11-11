@@ -115,7 +115,7 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   same button (→ CONFIRM UNMUTE ALL), and so does REMOVE on the Search page (→ CONFIRM REMOVE): the
   ceilings of the amp (`SEC-3`) go with its row. Raising a level by more than 6 dB by typing opens a
   confirmation dialog. ALL OFF and RESET of an EQ take a second click within 3 s (→ CONFIRM ALL OFF,
-  CONFIRM RESET), and switching an output's HPF off asks (SWITCH OFF / CANCEL). A click that unmutes an
+  CONFIRM RESET), and switching an output's HPF or any EQ band off asks (SWITCH OFF / CANCEL). A click that unmutes an
   output within 600 ms of a click that muted it is ignored (a double-click on MUTE ends muted). An EQ band's gain counts the raise from 0 dB at least: easing a cut off
   (-12 to -1 dB) does not ask.
   A limiter threshold typed in volts or watts asks by the same rule, counted in dB of level (20·log10 of

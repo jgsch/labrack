@@ -55,6 +55,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .confirm-dialog{position:absolute;top:100%;margin-top:6px;z-index:10;display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:6px;background:var(--panel);border:1px solid var(--border-strong);font-size:12px;white-space:nowrap}
 .confirm-dialog .confirm{min-height:32px;padding:0 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.06em}
 .confirm-dialog .yes{background:var(--lavender);color:var(--base);border:1px solid var(--lavender)}
+.eq-row > .confirm-dialog,.eq-extra-row > .confirm-dialog{left:0;flex-direction:row;align-items:center}
 .confirm-dialog .no{background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .meter{display:flex;flex-direction:column;gap:5px;min-width:0}
 .meter-level{position:relative;height:14px;background:linear-gradient(to right,var(--green) 0%,var(--green) 60%,var(--yellow) 60%,var(--yellow) 85%,var(--red) 85%,var(--red) 100%)}
@@ -225,7 +226,7 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-handle{position:absolute;display:flex;align-items:center;justify-content:center;width:22px;height:22px;margin:-11px 0 0 -11px;box-sizing:border-box;border-radius:50%;font-size:11px;font-weight:600;background:var(--base);color:var(--c);border:2px solid var(--c)}
 .eq-extra{display:flex;flex-direction:column;gap:2px;background:var(--base);border:1px solid #7f849c;border-radius:4px;padding:8px 14px}
 .eq-extra.in{border-color:#3f6a85}
-.eq-extra-row{display:grid;grid-template-columns:84px 116px minmax(0,1fr);gap:8px;align-items:center}
+.eq-extra-row{position:relative;display:grid;grid-template-columns:84px 116px minmax(0,1fr);gap:8px;align-items:center}
 .eq-extra-row.off > :not(.value-field),.eq-extra-row.off .value-box{opacity:0.65}
 .eq-extra-name{display:flex;align-items:center;min-height:44px;cursor:pointer;font-size:15px;font-weight:600}
 .eq-extra-name.plain{cursor:default}
@@ -240,7 +241,7 @@ select:focus-visible,input:focus-visible{outline:2px solid var(--text);outline-o
 .eq-head h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;letter-spacing:0.08em;text-transform:uppercase}
 .eq-actions{display:flex;gap:8px}
 .button.eq-action{padding:0 14px;font-size:12px;letter-spacing:0}
-.eq-row{display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.eq-row{position:relative;display:grid;grid-template-columns:40px 22px 124px 96px 78px 66px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
 /* dim the controls, not the row: a floating error of the row must stay solid and on top */
 .eq-row.off > :not(.value-field),.eq-row.off .value-box{opacity:0.65}
 .eq-row.eq-columns{padding:4px 0;border-bottom:2px solid var(--c);font-size:11px;letter-spacing:0.06em;color:var(--muted);text-transform:uppercase}

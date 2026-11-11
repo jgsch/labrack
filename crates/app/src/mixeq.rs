@@ -490,14 +490,46 @@ fn BandRow(
     let n = band + 1;
     let param = move |field| Param::Eq { ch: channel, band, field };
     let set = move |field, v| on_set.call(vec![(param(field), v)]);
+    // switching a band off changes the sound at once, a cut that was in the way included: it asks first (UX-24)
+    let mut asking = use_signal(|| false);
+    // a box that was unticked and then refused is drawn again from the amp's state
+    let mut redraw = use_signal(|| 0u32);
     rsx! {
         div { class: if value.on { "eq-row" } else { "eq-row off" },
             label { class: "eq-on",
                 input {
+                    key: "{redraw}",
                     r#type: "checkbox",
                     checked: value.on,
                     "aria-label": "Band {n} enabled",
-                    onchange: move |e| set(EqField::Enabled, Value::Bool(e.checked())),
+                    onchange: move |e| {
+                        if e.checked() {
+                            set(EqField::Enabled, Value::Bool(true));
+                        } else {
+                            asking.set(true);
+                        }
+                    },
+                }
+            }
+            if asking() {
+                div { class: "confirm-dialog", role: "alertdialog", "aria-label": "Confirm band {n} off",
+                    span { "Switch band {n} off?" }
+                    button {
+                        class: "confirm yes",
+                        onclick: move |_| {
+                            asking.set(false);
+                            set(EqField::Enabled, Value::Bool(false));
+                        },
+                        "SWITCH OFF"
+                    }
+                    button {
+                        class: "confirm no",
+                        onclick: move |_| {
+                            asking.set(false);
+                            redraw += 1;
+                        },
+                        "CANCEL"
+                    }
                 }
             }
             span { class: "eq-n", "{n}" }
