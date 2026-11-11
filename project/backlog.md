@@ -6,9 +6,30 @@ committed.
 
 ## Bugs
 
+- Ceilings, the IPD load and the app's link are kept per list row, which is keyed by IP. An amp that gets a
+  new address (DHCP) is a new row without ceilings, and no default ceilings exist. Key them to the device
+  (IPX serial, IPD MAC) or warn when an amp has none. Spec: SEC-3, BEH-40
+- A value finer than the amp stores (Q 0.74 on an IPD, which holds 0.7) is reported as confirmed and the
+  box shows the requested value until the state is read again. Shown value should be the amp's echo.
+  Spec: BEH-43
+- `Shared::load` keeps whichever value arrived first and `read_state_again` does not wait for the previous
+  read: a read begun before a recall can install old values and mark the state loaded. Also the shield is only
+  an overlay, so the keyboard still reaches the controls under it. Spec: BEH-43, SEC-4, UX-29
+- The IPD model name can arrive after connect (seen once: `IPD` instead of `IPD2400`); until then the limiter
+  range is the IPD 1200's and a default-named amp is named `IPD`. Wait for the name, or re-evaluate. Spec: BEH-5, BEH-20
+- The task started by `read_state_again` (presets.rs) is not ended with the connection; change events lost to
+  a lagged channel (`pump`, hub.rs) are dropped without a re-read. Spec: BEH-43
+- A scan probes IPX amps the user released with DISCONNECT, briefly taking their single controller slot.
+  Skip addresses of known amps with `connected = false`. Spec: BEH-9, BEH-18
+
 ## Features
 
 ## Chores
+
+- Spec decisions to reconsider (they match the spec today): ticking an EQ band on, or changing its type, can
+  raise the sound by up to 12 dB without asking; lowering an HPF frequency or softening its slope does not ask
+  while switching it off does; the output gain ceiling does not count input gain or EQ boosts; a device mode
+  change re-routes the inputs and then puts the outputs back unmuted if they were. Spec: UX-24, SEC-3, SEC-5
 
 Open questions to resolve; each blocks or shapes the requirements listed.
 
