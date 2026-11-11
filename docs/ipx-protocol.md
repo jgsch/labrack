@@ -119,7 +119,7 @@ Watts is derived: Vpk^2 / (2 * ohms). Quirk (verified live): a single GETPRM of 
 
 dBu relation (matches every value seen, to 4 decimals): `dBu = 10 * log10(W * ohms / 0.6)` (0.7746 V squared is 0.6). The values written by the vendor app fit it from the watts figure the user typed: preset dBu 36.02 is 600 W into 4 ohm (while Vpk was stored as 69 and Watts as 595); live out1 35.9851 is 69 Vpk (595.125 W); live out2 34.7712 is 450 W (60 Vpk), although its Vpk and Watts now read 69 and 595, so something changed them without updating dBu.
 
-The amp's front panel shows and sets dBu only (checked on an IPX 1200 and an IPD 2400; the IPD converts its stored dBV for the display), which suggests the dBu field is the one that counts. Which field the DSP limits on is still not known: it needs a signal above the threshold and the gain reduction meter. Writing all four fields consistently makes the question moot.
+The amp's front panel shows and sets dBu only (checked on an IPX 1200 and an IPD 2400; the IPD converts its stored dBV for the display), which suggests the dBu field is the one that counts. Measured on an IPX 1200 with music playing (2026-11-11, in1 gain +12 dB, out1 gain +6 dB, output level about -4 dB): lowering only the dBu threshold (35.99 to 19.22) made the gain reduction meter move (1.5 to 1.6 dB) and the output level drop; lowering only the Vpk (69 to 10.02) or only the watts (595 to 20) did nothing. So the DSP limits on the dBu field; Vpk, ohms and watts are not what it limits on, and the app derives them from the dBu. The range of the dBu write is 19.22 to 35.99; a dBu of 36.02 read from the amp (its out1/out2 default) cannot be written back, and a restore clamps it to 35.99. The impedance alone was not tested.
 Amp-side value ranges were not determined; values outside the app's limits were not tried.
 
 EQ type: 0 bell, 1 notch, 2 allpass, 3 low shelf, 4 high shelf, 5 band pass, 6 high pass, 7 low pass.
@@ -173,8 +173,8 @@ Total 0x152 dwords = 0x548 bytes. The same audio config appears in a GETPRESET r
 | 2-3 | "output signal" ch A/B (-150 when muted) | read -150 dB constantly on an IPX 1200 with the outputs unmuted and the amp playing (2026-11-05): not used for the output level |
 | 4-5 | post input (after mixer and input gain): the levels of IN 1 and IN 2 | verified on an IPX 1200 (2026-11-05): analog 2 at -25.1 dB into both mixers with input gain -8 dB reads -33.1 dB on both |
 | 6-7 | amp / output-stage meter: the output level | follows the signal and the output gain of each channel on a live IPX 1200 (-45 to -56 dB with input 2 at -20 dB; out1 gain -10 dB lower moved A by 10 dB, 2026-11-05) |
-| 8-9 | gain reduction (compressor/limiter) set 1 | inferred |
-| 10-11 | gain reduction set 2 | inferred |
+| 8-9 | gain reduction set 1 (`gain_reduction_a`) | stayed at -0.01 dB while the output limiter acted (2026-11-11): not the output limiter; the input or compressor stage is untested |
+| 10-11 | gain reduction set 2 (`gain_reduction_b`): the output limiter | verified on an IPX 1200 (2026-11-11): reads about -0.01 dB when idle and 1.5 to 1.6 dB (positive) while the out1 limiter acted, read on the first value of the pair (out1); the second value (out2) was not driven |
 
 TEMPERATURE (env 22) is pushed as one i32; ALL_TEMPERATURES (env 28) returns an i32 array (unit/sensor map not verified).
 

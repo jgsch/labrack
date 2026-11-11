@@ -32,13 +32,10 @@ Open questions to resolve; each blocks or shapes the requirements listed.
   ceilings plus 2.22 dB: about 138 Vpk (42.05 dBu) for the 4800 and 98 Vpk (39.04 dBu) for the 2400;
   read it, do not trust it. The range depends on the amp model, and the app has to
   know the model to use it. Spec: BEH-5, SEC-3
-- IPX gain reduction: the meters have two sets (`gain_reduction_a` / `_b`), both "inferred" in
-  docs/ipx-protocol.md; which one is the output limiter is unknown, so the Levels limiter meter has
-  nothing to show for the IPX yet. The IPD has `gain_reduction_out`. Spec: BEH-28
-- IPX limiter: which of the four stored figures does the DSP limit on? An amp's out2 held a dBu that
-  its Vpk does not give. The amps' front panels show and set dBu only, so the app takes the dBu as the
-  threshold and derives the other figures from it; a threshold edit writes all four. A test with a
-  signal above the threshold and the gain reduction meter would settle it. Spec: BEH-5
+- IPX gain reduction: show the Levels limiter meter for the IPX. `gain_reduction_b` (meter indices
+  10-11) is the output limiter, verified on out1 of an IPX 1200 (docs/ipx-protocol.md); wire it in.
+  Still unchecked: that the second value is out2, and what `gain_reduction_a` shows (the compressor
+  or the input limiter). The IPD has `gain_reduction_out`. Spec: BEH-28
 - IPX discovery address: a live IPX 1200 reports its own IP as 192.168.5.200 in its status while it
   answers on 192.168.1.87. Discovery uses the IP text inside the IPX broadcast; if that is the
   amp's configured address, it can be unreachable from where the amp is heard. Prefer the sender
