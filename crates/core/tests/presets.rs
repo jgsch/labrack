@@ -958,7 +958,11 @@ async fn an_unmute_asked_for_during_a_recall_is_refused() {
 
     let got = hub.set_mute(id, 0, false);
     assert!(matches!(got, Err(Error::Busy)), "{got:?}");
-    hub.unmute_all(); // refused for this amp, and says nothing
+    hub.unmute_all(); // refused for this amp
+    // and the refusal can be told: which amp, and why
+    let refused = hub.set_all_muted(false);
+    assert!(matches!(refused.as_slice(), [(i, Error::Busy)] if *i == id), "{refused:?}");
+    assert!(hub.set_all_muted(true).is_empty(), "muting is never refused");
     assert!(hub.set_mute(id, 1, true).is_ok(), "muting is never held back");
 
     recall.await.unwrap().unwrap();

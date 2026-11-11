@@ -131,14 +131,7 @@ pub fn App() -> Element {
                         }
                         // the state was read (connect, recall, file): a value above a ceiling is said (SEC-3)
                         Ok(Update::Loaded(id)) => {
-                            let above = hub.above_ceilings(id);
-                            if above.is_empty() {
-                                ceiling_warnings.write().remove(&id);
-                            } else {
-                                let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone());
-                                let text = crate::presets::above_text(&name.unwrap_or_default(), &above);
-                                ceiling_warnings.write().insert(id, text);
-                            }
+                            warn_above_ceilings(&hub, id, ceiling_warnings);
                             changes += 1;
                         }
                         Ok(Update::Status(id, labrack_core::Status::Online) | Update::Preset(id)) => {
@@ -153,7 +146,17 @@ pub fn App() -> Element {
                             said(preset_errors, id, Err(labrack_core::Error::Invalid(text)));
                             changes += 1;
                         }
-                        Ok(_) | Err(RecvError::Lagged(_)) => changes += 1,
+                        // updates were missed, perhaps the Loaded of an amp: every amp that is read is checked
+                        // again, so that the ceiling toast is never missed (SEC-3)
+                        Err(RecvError::Lagged(_)) => {
+                            for amp in hub.amps() {
+                                if hub.loaded(amp.id) {
+                                    warn_above_ceilings(&hub, amp.id, ceiling_warnings);
+                                }
+                            }
+                            changes += 1;
+                        }
+                        Ok(_) => changes += 1,
                         Err(RecvError::Closed) => break,
                     }
                 }
@@ -185,10 +188,9 @@ pub fn App() -> Element {
                 on_mute_all: {
                     let hub = hub.clone();
                     move |muted: bool| {
-                        if muted {
-                            hub.mute_all();
-                        } else {
-                            hub.unmute_all();
+                        // an amp that refuses (busy with a bulk change) is told, not skipped in silence
+                        for (id, why) in hub.set_all_muted(muted) {
+                            refused(preset_errors, id, Err(why));
                         }
                     }
                 },
@@ -549,6 +551,18 @@ pub fn App() -> Element {
                 },
             }
         }
+    }
+}
+
+/// Tell what the amp holds above its ceilings, or forget the toast when nothing is (SEC-3).
+fn warn_above_ceilings(hub: &Hub, id: AmpId, mut warnings: Errors) {
+    let above = hub.above_ceilings(id);
+    if above.is_empty() {
+        warnings.write().remove(&id);
+    } else {
+        let name = hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone());
+        let text = crate::presets::above_text(&name.unwrap_or_default(), &above);
+        warnings.write().insert(id, text);
     }
 }
 

@@ -35,10 +35,14 @@ impl Hub {
 
     fn mute_every(&self, muted: bool) -> usize {
         let online = self.online();
-        for id in &online {
-            let _ = self.mute_amp(*id, muted);
-        }
+        self.set_all_muted(muted);
         online.len()
+    }
+
+    /// MUTE ALL or UNMUTE ALL on the amps that are ONLINE, saying which amps refused and why: an amp that
+    /// is busy with a bulk change refuses an unmute (SEC-6), and the user should hear of it.
+    pub fn set_all_muted(&self, muted: bool) -> Vec<(AmpId, crate::Error)> {
+        self.online().into_iter().filter_map(|id| self.mute_amp(id, muted).err().map(|e| (id, e))).collect()
     }
 
     /// Both outputs of the amp are muted, as far as the app knows: the label of its button.
