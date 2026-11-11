@@ -45,6 +45,9 @@ The app controls the volume of a sound system. A wrong value can damage speakers
     only the mute it added.
   - An unmute asked for while a bulk change runs on the amp is refused, not queued: it would be written
     after the change. Turning a mute on is never refused.
+  - A bulk change reads the output mutes before it drops anything that waits, so a failure to read them
+    loses nothing; from the end of a recall or a file load until the state is read again, only turning a
+    mute on is accepted (`BEH-43`).
   - Link copy mutes first too, and puts the outputs back as they were: it changes no scene.
   A muted output is never the dangerous state.
 - **SEC-7** **Never unmute automatically:** not after a reconnect, a preset recall, a file load, a

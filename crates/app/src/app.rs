@@ -61,6 +61,12 @@ pub fn App() -> Element {
     let busy: Busy = use_signal(HashMap::new);
     // the action that mutes the outputs, waiting for the user's yes (UX-24)
     let mut asking = use_signal(|| None::<(AmpId, Ask)>);
+    // when a click last muted each output: the click right after it does not unmute (SEC-5)
+    let mut mute_clicks = use_signal(MuteClicks::default);
+    let clock = use_hook(|| {
+        let started = std::time::Instant::now();
+        move || started.elapsed()
+    });
 
     // WebKitGTK can be told a scale that is not the screen's, and everything shrinks to a fraction of
     // its size (seen on niri at a fractional scale: a device pixel ratio of -2/96). The page reports
@@ -223,7 +229,9 @@ pub fn App() -> Element {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
                                 move |(index, output, muted)| {
-                                    if let Some(id) = ids.get(index).copied() {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && mute_clicks.write().allowed(id, &[Channel::Output(output)], muted, clock())
+                                    {
                                         refused(preset_errors, id, hub.set_mute(id, output, muted));
                                     }
                                 }
@@ -232,7 +240,9 @@ pub fn App() -> Element {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
                                 move |(index, muted): (usize, bool)| {
-                                    if let Some(id) = ids.get(index).copied() {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && mute_clicks.write().allowed(id, &[Channel::Output(0), Channel::Output(1)], muted, clock())
+                                    {
                                         refused(preset_errors, id, hub.mute_amp(id, muted));
                                     }
                                 }
@@ -415,7 +425,9 @@ pub fn App() -> Element {
                                 move |(channel, kind, muted): (usize, u8, bool)| {
                                     if let Some(id) = ids.get(picked()).copied() {
                                         let ch = if kind == 0 { Channel::Input(channel as u8) } else { Channel::Output(channel as u8) };
-                                        refused(preset_errors, id, hub.set(id, Param::Mute(ch), Value::Bool(muted)));
+                                        if mute_clicks.write().allowed(id, &[ch], muted, clock()) {
+                                            refused(preset_errors, id, hub.set(id, Param::Mute(ch), Value::Bool(muted)));
+                                        }
                                     }
                                 }
                             },
@@ -551,6 +563,24 @@ pub fn App() -> Element {
                 },
             }
         }
+    }
+}
+
+/// When a click last muted each channel of each amp (SEC-5, SEC-7).
+#[derive(Default)]
+struct MuteClicks(HashMap<(AmpId, Channel), std::time::Duration>);
+
+impl MuteClicks {
+    /// Whether a click that asks for `muted` on `channels` of the amp may act at `now`, and note a mute.
+    /// An unmute is ignored when any of the channels was muted by a click a moment ago.
+    fn allowed(&mut self, id: AmpId, channels: &[Channel], muted: bool, now: std::time::Duration) -> bool {
+        if muted {
+            for ch in channels {
+                self.0.insert((id, *ch), now);
+            }
+            return true;
+        }
+        channels.iter().all(|ch| crate::control::unmute_allowed(self.0.get(&(id, *ch)).copied(), now))
     }
 }
 
@@ -996,6 +1026,30 @@ mod tests {
         dom.rebuild_in_place();
         let out = dioxus_ssr::render(&dom);
         assert!(out.contains("<p>"), "the refusal is shown: {out}");
+    }
+
+    // SEC-5: an unmute right after a click that muted the same channel is ignored; a mute never is
+    #[test]
+    fn a_double_click_on_mute_ends_muted() {
+        use super::MuteClicks;
+        use labgruppen::Channel::{Input, Output};
+        use std::time::Duration;
+        let id = Store::in_memory().add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+        let mut clicks = MuteClicks::default();
+        let t = Duration::from_secs(5);
+        assert!(clicks.allowed(id, &[Output(0)], true, t));
+        assert!(!clicks.allowed(id, &[Output(0)], false, t + Duration::from_millis(200)));
+        assert!(
+            clicks.allowed(id, &[Output(0)], true, t + Duration::from_millis(250)),
+            "muting is never held"
+        );
+        assert!(clicks.allowed(id, &[Output(1)], false, t + Duration::from_millis(200)), "another output");
+        assert!(clicks.allowed(id, &[Input(0)], false, t + Duration::from_millis(200)), "an input");
+        assert!(
+            !clicks.allowed(id, &[Output(0), Output(1)], false, t + Duration::from_millis(300)),
+            "the amp"
+        );
+        assert!(clicks.allowed(id, &[Output(0)], false, t + Duration::from_secs(1)), "on purpose, later");
     }
 
     // BEH-45: removing an amp above the picked one leaves the same amp picked

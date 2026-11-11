@@ -102,6 +102,9 @@ pub fn Fader(
                 },
                 onpointerup: move |_| drag.set(None),
                 onpointercancel: move |_| drag.set(None),
+                // the track gets no pointer-up when the button is released elsewhere: a drag that left it is over,
+                // or coming back with the button held would resume from where it started (SEC-4)
+                onpointerleave: move |_| drag.set(None),
                 onkeydown: move |event| {
                     // a held key repeats 30 times a second: one press, one step (SEC-4)
                     if event.is_auto_repeating() {
@@ -306,6 +309,9 @@ pub fn ConfirmButton(
     label: String,
     /// Shown while the second click is armed.
     confirm_label: String,
+    /// The class of the button, `confirm-armed` is added while it asks.
+    #[props(default = "button".to_string())]
+    class: String,
     #[props(default)] on_click: EventHandler<()>,
 ) -> Element {
     let mut armed = use_signal(SecondClick::default);
@@ -318,7 +324,7 @@ pub fn ConfirmButton(
     let is_armed = state.armed(now());
     rsx! {
         button {
-            class: if is_armed { "button confirm-armed" } else { "button" },
+            class: if is_armed { "{class} confirm-armed" } else { "{class}" },
             "aria-pressed": "{is_armed}",
             onclick: move |_| {
                 let mut s = armed();

@@ -220,6 +220,15 @@ impl SecondClick {
     }
 }
 
+/// A click that unmutes an output this soon after a click that muted it is ignored: the second click of a
+/// nervous double-click on MUTE would otherwise undo it (SEC-5, SEC-7). The user can unmute right after.
+pub const UNMUTE_GUARD: Duration = Duration::from_millis(600);
+
+/// Whether a click that unmutes may act at `now`, given when the output was last muted by a click.
+pub fn unmute_allowed(last_muted: Option<Duration>, now: Duration) -> bool {
+    last_muted.is_none_or(|at| now.saturating_sub(at) >= UNMUTE_GUARD)
+}
+
 /// The bottom of a level meter, in dB.
 pub const METER_FLOOR: f64 = -60.0;
 /// The top of the gain reduction bar, in dB of reduction.
@@ -464,6 +473,16 @@ mod tests {
         // another control, or anything else, cancels it
         c.cancel();
         assert!(!c.armed(Duration::from_millis(5000)));
+    }
+
+    // SEC-5, SEC-7: the second click of a double-click on MUTE does not unmute
+    #[test]
+    fn a_click_right_after_a_mute_does_not_unmute() {
+        let at = Duration::from_secs(10);
+        assert!(unmute_allowed(None, at), "never muted by a click");
+        assert!(!unmute_allowed(Some(at), at), "the same instant");
+        assert!(!unmute_allowed(Some(at), at + Duration::from_millis(599)));
+        assert!(unmute_allowed(Some(at), at + Duration::from_millis(600)));
     }
 
     // UX-8, UX-12: the meter is green, then yellow, then red; the gain reduction bar is separate

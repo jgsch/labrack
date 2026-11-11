@@ -104,7 +104,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   relative to where the drag started (0.2 dB per pixel); arrow keys and the mouse wheel step
   0.5 dB, Page Up / Page Down 3 dB. A held key does not repeat (one press, one step). One drag raises
   a level by 6 dB at most from where it started (lowering is free; let go and drag again to go on),
-  and the wheel raises at most once every 200 ms (`SEC-4`).
+  and the wheel raises at most once every 200 ms (`SEC-4`). A drag ends when the pointer leaves the
+  track: coming back with the button held does not resume it.
 - **UX-23** Typed values apply on Enter or when the field loses focus, never while typing (typing
   −20 passes through −2).
 - **UX-24** Dangerous actions are confirmed. An action that mutes the outputs of an amp (preset
@@ -113,7 +114,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   stay muted until the user unmutes them (`SEC-6`). UNMUTE ALL takes a second click within 3 s on the
   same button (→ CONFIRM UNMUTE ALL), and so does REMOVE on the Search page (→ CONFIRM REMOVE): the
   ceilings of the amp (`SEC-3`) go with its row. Raising a level by more than 6 dB by typing opens a
-  confirmation dialog. An EQ band's gain counts the raise from 0 dB at least: easing a cut off
+  confirmation dialog. ALL OFF and RESET of an EQ take a second click within 3 s (→ CONFIRM ALL OFF,
+  CONFIRM RESET), and switching an output's HPF off asks (SWITCH OFF / CANCEL). A click that unmutes an
+  output within 600 ms of a click that muted it is ignored (a double-click on MUTE ends muted). An EQ band's gain counts the raise from 0 dB at least: easing a cut off
   (-12 to -1 dB) does not ask.
   A limiter threshold typed in volts or watts asks by the same rule, counted in dB of level (20·log10 of
   the voltage ratio, 10·log10 of the power ratio) and worded in dB; the load (Ω) never asks.

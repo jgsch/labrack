@@ -8,7 +8,7 @@ use labrack_core::{Limiter, Side, Unit};
 use crate::control::{self, Bounds, Scale};
 use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
-use crate::{Fader, ValueField};
+use crate::{ConfirmButton, Fader, ValueField};
 
 /// The six tabs of UX-16. They never change: a link does not merge EQs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -416,15 +416,47 @@ fn FilterRow(
     let name = if high { "HPF" } else { "LPF" };
     let long = if high { "High-pass" } else { "Low-pass" };
     let param = move |field| eq::filter_param(channel, high, field);
+    // switching the high-pass off removes what protects the drivers from the lows: it asks first (UX-24)
+    let mut asking = use_signal(|| false);
+    // a box that was unticked and then refused is drawn again from the amp's state
+    let mut redraw = use_signal(|| 0u32);
     rsx! {
         div { class: if filter.on { "eq-extra-row" } else { "eq-extra-row off" },
             label { class: "eq-extra-name",
                 input {
+                    key: "{redraw}",
                     r#type: "checkbox",
                     checked: filter.on,
-                    onchange: move |e| on_set.call(vec![(param(XoverField::Enabled), Value::Bool(e.checked()))]),
+                    onchange: move |e| {
+                        if !e.checked() && high {
+                            asking.set(true);
+                        } else {
+                            on_set.call(vec![(param(XoverField::Enabled), Value::Bool(e.checked()))]);
+                        }
+                    },
                 }
                 "{name}"
+            }
+            if asking() {
+                div { class: "confirm-dialog", role: "alertdialog", "aria-label": "Confirm the high-pass off",
+                    span { "Switch the high-pass off?" }
+                    button {
+                        class: "confirm yes",
+                        onclick: move |_| {
+                            asking.set(false);
+                            on_set.call(vec![(param(XoverField::Enabled), Value::Bool(false))]);
+                        },
+                        "SWITCH OFF"
+                    }
+                    button {
+                        class: "confirm no",
+                        onclick: move |_| {
+                            asking.set(false);
+                            redraw += 1;
+                        },
+                        "CANCEL"
+                    }
+                }
             }
             ValueField {
                 label: "{long} frequency in hertz, for example 80 or 1k",
@@ -616,8 +648,19 @@ pub fn EqPage(
                     div { class: "eq-head",
                         h3 { "10-band EQ" }
                         div { class: "eq-actions",
-                            button { class: "button eq-action", onclick: move |_| on_set.call(eq::all_off(ch)), "ALL OFF" }
-                            button { class: "button eq-action", onclick: move |_| on_set.call(eq::reset(ch)), "RESET" }
+                            // they switch off or flatten ten bands at once: a second click within 3 s (UX-24)
+                            ConfirmButton {
+                                class: "button eq-action",
+                                label: "ALL OFF",
+                                confirm_label: "CONFIRM ALL OFF",
+                                on_click: move |_| on_set.call(eq::all_off(ch)),
+                            }
+                            ConfirmButton {
+                                class: "button eq-action",
+                                label: "RESET",
+                                confirm_label: "CONFIRM RESET",
+                                on_click: move |_| on_set.call(eq::reset(ch)),
+                            }
                             button {
                                 class: "button eq-action",
                                 "aria-label": "{copy_label}",
