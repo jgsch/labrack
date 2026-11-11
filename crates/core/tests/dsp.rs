@@ -546,3 +546,23 @@ async fn a_mute_is_written_before_most_of_a_big_batch() {
     let at = writes.iter().position(|k| *k == mute).expect("the mute was written");
     assert!(at < queued / 2, "the mute was write {at} of {queued}");
 }
+
+// SEC-6, SEC-7: an IPX write whose read-back is lost is reported as failed, but the amp may have taken it:
+// the state is read again, so that an output the amp unmuted is not shown as muted
+#[tokio::test]
+async fn a_write_whose_read_back_is_lost_does_not_leave_a_stale_state() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    assert_eq!(hub.value(id, &param("out1.mute")), Some(Value::Bool(true)));
+    let mut rx = hub.subscribe();
+    fake.state().silent = true; // reads are not answered, writes are still applied
+    hub.set_mute(id, 0, false).unwrap();
+    timeout(Duration::from_secs(20), async {
+        while !matches!(rx.recv().await.unwrap(), Update::WriteFailed(i, ..) if i == id) {}
+    })
+    .await
+    .expect("the failure is reported");
+    fake.state().silent = false;
+    assert_eq!(ipx_value(&fake, "out1.mute"), Value::Bool(false), "the amp took the unmute");
+    wait_value(&hub, id, "out1.mute", Value::Bool(false)).await;
+    assert!(!hub.amp_muted(id));
+}

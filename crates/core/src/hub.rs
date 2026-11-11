@@ -964,7 +964,11 @@ async fn write_loop(
                     shared.settle(id, &param, &value);
                     match result {
                         Ok(()) => shared.observed(id, &param, &value, true),
-                        Err(e) => shared.emit(Update::WriteFailed(id, param, e.to_string())),
+                        Err(e) => {
+                            // the amp may have taken it all the same (an IPX read-back that was lost): look
+                            tokio::spawn(read_again(shared.clone(), id, amp.clone(), param.clone()));
+                            shared.emit(Update::WriteFailed(id, param, e.to_string()));
+                        }
                     }
                 }
                 continue;
@@ -980,6 +984,19 @@ async fn write_loop(
             }
             None => writer.wake.notified().await,
         }
+    }
+}
+
+/// A write was reported as failed, but the amp may hold the value: read it, so that the state is what the
+/// amp has and not what it had (an output unmuted behind a MUTE that still shows, SEC-6). Tried a few times;
+/// it ends with the connection, whose amp then refuses the read.
+async fn read_again(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>, param: Param) {
+    for _ in 0..10 {
+        if let Ok(Ok(value)) = timeout(Duration::from_secs(3), amp.get(&param)).await {
+            shared.observed(id, &param, &value, false);
+            return;
+        }
+        sleep(Duration::from_secs(1)).await;
     }
 }
 
