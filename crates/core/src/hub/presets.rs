@@ -254,6 +254,8 @@ impl Hub {
         Fut: Future<Output = labgruppen::Result<T>>,
     {
         let _running = Running::start(&session.bulk);
+        // a read of the mutes under way may not show what this changes
+        session.writer.bump();
         let _gate = session.gate.lock().await;
         let amp = &session.amp;
         let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());

@@ -431,12 +431,20 @@ impl Drop for Client {
 
 type Items = Vec<(Key, Option<Raw>)>;
 
+/// A write that mutes goes out before the others, whatever their keys: a MUTE must not wait behind the
+/// writes queued before it, which an MK1 takes one per command (SEC-4, SEC-6). The order of the rest stays.
+fn mute_first(keys: &mut [Key], sets: &BTreeMap<Key, PendingSet>) {
+    let mutes = |key: &Key| key.struct_id == S_MUTE && sets.get(key).is_some_and(|ps| ps.raw == Raw::Int(1));
+    keys.sort_by_key(|key| !mutes(key));
+}
+
 fn next_items(shared: &Shared) -> Items {
     let budget = fragment_budget(shared.mk2);
     let now = Instant::now();
     let (mut items, mut size) = (Items::new(), 4usize);
     let mut st = shared.lock();
-    let keys: Vec<Key> = st.sets.keys().copied().collect();
+    let mut keys: Vec<Key> = st.sets.keys().copied().collect();
+    mute_first(&mut keys, &st.sets);
     for key in keys {
         let Some(ps) = st.sets.get_mut(&key) else { continue };
         if ps.tries >= ps.max_tries {
@@ -654,5 +662,49 @@ fn dispatch(shared: &Shared, reply: Reply) {
     }
     if meters_changed {
         let _ = shared.events.send(ClientEvent::Meters);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pending(raw: i64) -> PendingSet {
+        PendingSet {
+            raw: Raw::Int(raw),
+            tries: 0,
+            last: None,
+            max_tries: 1,
+            any_echo: false,
+            read_back: None,
+            done: None,
+        }
+    }
+
+    // SEC-4, SEC-6: a mute is sent before gain, mixer, delay, filter, EQ and limiter writes; an unmute is not
+    #[test]
+    fn a_mute_is_sent_before_the_other_writes() {
+        let mute = Key::new(S_MUTE, M_MUTE, 0x81, 0);
+        let unmute = Key::new(S_MUTE, M_MUTE, 0x80, 0);
+        let others = [
+            Key::new(S_GAIN, M_GAIN, 0, 0),
+            Key::new(S_MIXER, M_GAIN, 0, 1),
+            Key::new(S_PEQ, M_Q, 0, 3),
+            Key::new(S_LIMITER, M_THRESHOLD, 0x80, 0),
+        ];
+        let mut sets = BTreeMap::new();
+        for key in others {
+            sets.insert(key, pending(5));
+        }
+        sets.insert(mute, pending(1));
+        sets.insert(unmute, pending(0));
+        let mut keys: Vec<Key> = sets.keys().copied().collect();
+        mute_first(&mut keys, &sets);
+        assert_eq!(keys[0], mute);
+        assert_eq!(keys.len(), 6);
+        let rest: Vec<Key> = keys[1..].to_vec();
+        let mut expected: Vec<Key> = sets.keys().copied().filter(|k| *k != mute).collect();
+        expected.sort();
+        assert_eq!(rest, expected, "the order of the others is kept");
     }
 }

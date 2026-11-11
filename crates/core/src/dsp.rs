@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use labgruppen::{Channel, Kind, LimiterField, Param, ParamSpec, Value, limiter};
@@ -243,11 +244,18 @@ impl Coalescer {
 pub(crate) struct Writer {
     coalescer: Mutex<Coalescer>,
     pub wake: Notify,
+    /// Counts the mutes written and the bulk changes started: a read of the mutes that began under another
+    /// count may hold the old state and is not shown (SEC-6).
+    mute_epoch: AtomicU64,
 }
 
 impl Writer {
     pub fn new(interval: Duration) -> Writer {
-        Writer { coalescer: Mutex::new(Coalescer::new(interval)), wake: Notify::new() }
+        Writer {
+            coalescer: Mutex::new(Coalescer::new(interval)),
+            wake: Notify::new(),
+            mute_epoch: AtomicU64::new(0),
+        }
     }
 
     /// Values that belong together are queued together, so they go out in one batch.
@@ -278,7 +286,22 @@ impl Writer {
     /// The next values to write, at most [`WRITE_CHUNK`], a mute first. Whoever writes them gives the amp
     /// up between two chunks, so that a MUTE waits for one chunk and not for a whole queue.
     pub fn take_chunk(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
-        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_some(Instant::now(), WRITE_CHUNK)
+        let taken =
+            self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_some(Instant::now(), WRITE_CHUNK);
+        if taken.0.iter().any(|(param, _)| matches!(param, Param::Mute(_))) {
+            self.bump();
+        }
+        taken
+    }
+
+    /// Something that changes the mutes happens: a read of them that is under way is out of date.
+    pub fn bump(&self) {
+        self.mute_epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The count a read of the mutes starts under; see [`Writer::bump`].
+    pub fn epoch(&self) -> u64 {
+        self.mute_epoch.load(Ordering::SeqCst)
     }
 }
 
@@ -626,6 +649,22 @@ mod tests {
         let left = if first[0].0 == param("in1.gain") { "in2.gain" } else { "in1.gain" };
         c.push(param(left), f(2.0));
         assert_eq!(c.take_some(t0, 1).0, [(param(left), f(2.0))]);
+    }
+
+    // SEC-6: a read of the mutes that overlapped a mute write is out of date; one that did not is not
+    #[test]
+    fn a_mute_written_during_a_read_makes_the_read_out_of_date() {
+        let w = Writer::new(STEP);
+        let started = w.epoch();
+        w.push_all([(param("out1.gain"), f(1.0))]);
+        w.take_chunk();
+        assert_eq!(w.epoch(), started, "a gain is no mute");
+        w.push_all([(param("out1.mute"), Value::Bool(false))]);
+        w.take_chunk();
+        assert_ne!(w.epoch(), started);
+        let again = w.epoch();
+        w.bump();
+        assert_ne!(w.epoch(), again, "a bulk change counts too");
     }
 
     #[test]

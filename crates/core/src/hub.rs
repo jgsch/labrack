@@ -800,19 +800,20 @@ async fn session(
                 }
                 let writer = Arc::new(Writer::new(timing.write_interval));
                 let gate = Arc::new(tokio::sync::Mutex::new(()));
+                let bulk = Arc::new(AtomicUsize::new(0));
                 let session = Session {
                     amp: link.amp.clone(),
                     writer: writer.clone(),
                     gate: gate.clone(),
-                    bulk: Arc::default(),
+                    bulk: bulk.clone(),
                 };
                 shared.attach(id, session, link.access.take());
                 shared.apply(id, Event::Connected);
                 // the helpers end with the connection: what they still hold is dropped, never sent later
                 let mut helpers = JoinSet::new();
                 helpers.spawn(load_state(shared.clone(), id, link.amp.clone(), writer.clone()));
-                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer, gate.clone()));
-                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone(), gate.clone()));
+                helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer.clone(), gate.clone()));
+                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone(), writer.clone(), bulk.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -897,7 +898,8 @@ async fn poll_mutes(
     shared: Arc<Shared>,
     id: AmpId,
     amp: Arc<dyn labgruppen::Amp>,
-    gate: Arc<tokio::sync::Mutex<()>>,
+    writer: Arc<Writer>,
+    bulk: Arc<AtomicUsize>,
 ) {
     let ipd = amp.info().driver == "ipd";
     let with_mode = amp.params().contains(&Param::Mode);
@@ -905,7 +907,9 @@ async fn poll_mutes(
         return;
     }
     // an IPD answers one thing at a time: the polling waits until the state is read, and never runs during
-    // a bulk change, which holds the gate (it would make both slow, and the bulk change time out)
+    // a bulk change (it would make both slow, and the bulk change time out). It does not hold the gate: a MUTE
+    // would wait for a read that takes the IPD up to a second. A read that overlapped a mute write or a bulk
+    // change may hold the old state and is dropped: a stale "muted" after an unmute is the dangerous one.
     if !wait_loaded(&shared, id).await {
         return;
     }
@@ -923,8 +927,14 @@ async fn poll_mutes(
             asked.push(Param::Mode);
         }
         round += 1;
-        let _gate = gate.lock().await;
-        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&asked)).await {
+        if bulk.load(Ordering::SeqCst) > 0 {
+            continue;
+        }
+        let epoch = writer.epoch();
+        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&asked)).await
+            && writer.epoch() == epoch
+            && bulk.load(Ordering::SeqCst) == 0
+        {
             for (param, value) in asked.iter().zip(values) {
                 shared.observed(id, param, &value, false);
             }
