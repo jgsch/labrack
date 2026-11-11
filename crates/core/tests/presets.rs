@@ -425,7 +425,10 @@ async fn nothing_is_stored_when_the_outputs_cannot_be_muted() {
     fake.state().reject_writes.insert(addr("out2.mute"));
 
     let got = hub.store_preset(id, 12, "Church").await;
-    assert!(matches!(got, Err(Error::LeftMuted(_))), "{got:?}");
+    // nothing was changed, and the error does not claim that the outputs stay muted
+    assert!(matches!(&got, Err(Error::NotMuted(_))), "{got:?}");
+    assert!(!got.unwrap_err().to_string().contains("stay muted"));
+    assert_eq!(hub.value(id, &param("out1.mute")), Some(TRUE), "the one that was muted is shown muted");
     assert!(fake.state().store_payloads.is_empty());
     assert_eq!(hub.amps()[0].preset.as_ref().map(|p| p.number), Some(2), "the loaded preset is as it was");
 }
@@ -477,7 +480,7 @@ async fn when_muting_fails_nothing_is_recalled() {
     fake.state().reject_writes.insert(addr("out2.mute"));
 
     let got = hub.recall_preset(id, 7).await;
-    assert!(matches!(got, Err(Error::LeftMuted(_))), "{got:?}");
+    assert!(matches!(got, Err(Error::NotMuted(_))), "{got:?}");
     assert!(fake.state().recalled.is_empty(), "no recall after a mute that did not hold");
     assert_eq!(ipx_value(&fake, "out1.mute"), TRUE);
 
@@ -1004,4 +1007,61 @@ async fn an_unmute_waiting_when_a_store_starts_is_dropped() {
     hub.store_preset(id, 7, "Probe").await.unwrap();
     sleep(Duration::from_millis(1500)).await;
     assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "the output was unmuted after the store");
+}
+
+// BEH-43, SEC-6: from the end of a recall until the state is read again nothing but a mute is accepted: the
+// controls hold no known value, and an unmute there would undo "leave the outputs muted". The window used
+// to open between the change and the reload, while the app still read the loaded preset from the amp.
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_but_a_mute_is_accepted_between_a_recall_and_the_reload() {
+    let (hub, id, sim) = online_ipd().await;
+    ipd_elsewhere_set(&sim, "out1.mute", FALSE).await;
+    ipd_elsewhere_set(&sim, "out2.mute", FALSE).await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(-7.5)).await;
+    ipd_elsewhere_store(&sim, 7, "Loud").await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(-40.0)).await;
+    wait_value(&hub, id, "out1.mute", FALSE).await;
+
+    let recall = tokio::spawn({
+        let hub = hub.clone();
+        async move { hub.recall_preset(id, 7).await }
+    });
+    // the bulk change has started once an unmute is refused
+    while !matches!(hub.set_mute(id, 1, false), Err(Error::Busy)) {
+        tokio::task::yield_now().await;
+    }
+    let mut accepted = Vec::new();
+    while !recall.is_finished() {
+        for (what, got) in
+            [("unmute", hub.set_mute(id, 0, false)), ("gain", hub.set(id, param("out1.gain"), f(-39.5)))]
+        {
+            // finished is final: if it is not finished after the call, it was not when the call was made
+            if got.is_ok() && !recall.is_finished() {
+                accepted.push(what);
+            }
+        }
+        sleep(Duration::from_millis(1)).await;
+    }
+    recall.await.unwrap().unwrap();
+    assert!(accepted.is_empty(), "accepted before the recall was over: {accepted:?}");
+    wait_loaded(&hub, id).await;
+    assert_eq!((ipd_value(&sim, "out1.mute").await, ipd_value(&sim, "out2.mute").await), (TRUE, TRUE));
+    assert_eq!(ipd_value(&sim, "out1.gain").await, f(-7.5), "the recalled gain was not overwritten");
+}
+
+// SEC-6: a MUTE the user asked for that waits for its turn is not lost when a bulk change cannot even read
+// the mutes: nothing was changed, so what waited is written as if the change had not been tried
+#[tokio::test]
+async fn a_waiting_mute_survives_a_bulk_change_that_cannot_start() {
+    let slow = labrack_core::Timing { write_interval: Duration::from_millis(700), ..timing() };
+    let (hub, id, fake) = online_ipx(slow).await;
+    set_and_wait(&hub, id, "out1.mute", FALSE).await;
+    hub.set(id, param("out1.mute"), TRUE).unwrap(); // waits for its turn
+    fake.state().drop_reads.push(addr("out1.mute")); // the read of the mutes fails
+
+    let got = hub.recall_preset(id, 7).await;
+    assert!(got.is_err(), "{got:?}");
+
+    sleep(Duration::from_millis(1500)).await;
+    assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "the mute the user asked for was lost");
 }

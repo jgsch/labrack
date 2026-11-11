@@ -109,7 +109,18 @@ impl Hub {
         self.check_slot(&session, slot)?;
         // an IPX answers a read at once; an IPD takes seconds
         let end = if session.is_ipx() { End::Muted } else { End::MutedAtOnce };
-        self.bulk(id, &session, end, true, |amp| async move { amp.recall_preset(slot).await }).await?;
+        // the state is forgotten inside the change, while the bulk guard is held: no gap in which the controls
+        // hold values of the old settings and accept a write (BEH-43, SEC-6)
+        let shared = self.0.shared.clone();
+        self.bulk(id, &session, end, true, |amp| async move {
+            let done = amp.recall_preset(slot).await;
+            // a failure reads the state again by itself, and a refusal changed nothing
+            if done.is_ok() {
+                shared.begin_reload(id);
+            }
+            done
+        })
+        .await?;
 
         // what the amp says it holds now, not what was asked for
         let loaded = session.amp.status().await.ok().and_then(|s| s.preset);
@@ -170,9 +181,11 @@ impl Hub {
         let mirrors = [self.amp_keeps_equal(id, Side::Inputs), self.amp_keeps_equal(id, Side::Outputs)];
         let (accepted, skipped) = plan_load(&session, &snapshot, &ceilings, linked, mirrors)?;
 
+        let shared = self.0.shared.clone();
         let report = self
             .bulk(id, &session, End::Muted, true, |amp| async move {
                 let report = amp.restore(&accepted, false).await?;
+                shared.begin_reload(id);
                 match report.failed.first() {
                     Some((name, why)) => Err(labgruppen::Error::NotConfirmed(format!(
                         "{} of {} settings were not taken, first {name}: {why}",
@@ -219,9 +232,10 @@ impl Hub {
 
     /// Run `change` on an amp with its outputs muted (SEC-6).
     ///
-    /// 1. wait for the amp's writes to finish and, if `drop_waiting`, drop the values still waiting:
-    ///    they were meant for settings that are about to be replaced;
-    /// 2. read the mutes, and mute the outputs that are not muted;
+    /// 1. wait for the amp's writes to finish, and read the mutes (if that fails nothing else happens);
+    ///    then, if `drop_waiting`, drop the values still waiting: they were meant for settings that are
+    ///    about to be replaced;
+    /// 2. mute the outputs that are not muted;
     /// 3. `change`;
     /// 4. read the mutes again and put them right: see [`End`].
     ///
@@ -241,6 +255,11 @@ impl Hub {
     {
         let _running = Running::start(&session.bulk);
         let _gate = session.gate.lock().await;
+        let amp = &session.amp;
+        let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());
+
+        // nothing is written, and nothing that waits is dropped, if the mutes cannot even be read
+        let before = read_mutes(amp).await?;
         // a MUTE the user asked for that is not written yet: dropping it with the rest must not lose it
         let asked = session.writer.muting();
         if drop_waiting {
@@ -251,17 +270,25 @@ impl Hub {
             session.writer.drop_unmutes();
             self.0.shared.drop_pending(id);
         }
-        let amp = &session.amp;
-        let left_muted = |e: labgruppen::Error| Error::LeftMuted(e.to_string());
-
-        // nothing is written if the mutes cannot even be read
-        let before = read_mutes(amp).await?;
         let to_mute: Vec<(Param, Value)> =
             (0..2).filter(|&i| !before[i]).map(|i| (OUTPUTS[i].clone(), Value::Bool(true))).collect();
         // the outputs as they were, and muted if the user asked for it meanwhile (SEC-6: a mute wins)
         let kept = |now: [bool; 2]| [0, 1].map(|i| before[i] || asked[i] || now[i]);
-        for result in amp.set_many(&to_mute).await {
-            result.map_err(left_muted)?;
+        // the change has not started: if the outputs cannot all be muted, nothing was changed, and the ones
+        // that were muted are shown as they are (not "the outputs stay muted": that is only true after a change)
+        let mut not_muted = None;
+        for (item, result) in to_mute.iter().zip(amp.set_many(&to_mute).await) {
+            match result {
+                Ok(()) => self.0.shared.observed(id, &item.0, &Value::Bool(true), false),
+                Err(e) => not_muted = not_muted.or(Some(e)),
+            }
+        }
+        if let Some(e) = not_muted {
+            // what the user asked to mute is still to be muted
+            session
+                .writer
+                .push_all((0..2).filter(|&i| asked[i]).map(|i| (OUTPUTS[i].clone(), Value::Bool(true))));
+            return Err(Error::NotMuted(e.to_string()));
         }
 
         let done = match change(amp.clone()).await {

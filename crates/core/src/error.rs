@@ -35,6 +35,9 @@ pub enum Error {
     /// A bulk change failed after the outputs were muted for it: they stay muted.
     #[error("{0}. The outputs that were muted for it stay muted.")]
     LeftMuted(String),
+    /// The outputs could not all be muted before a bulk change, so it was not started (SEC-6).
+    #[error("{0}. Nothing was changed, but the outputs could not all be muted.")]
+    NotMuted(String),
     #[error("Cannot read or write the config file: {0}")]
     Io(#[from] std::io::Error),
     #[error("The config file is not valid: {0}")]
