@@ -957,7 +957,7 @@ async fn write_loop(
         let next = {
             // a bulk change holds the gate and drops what waited: take the batch only once it is ours
             let _gate = gate.lock().await;
-            let (due, next) = writer.take_due();
+            let (due, next) = writer.take_chunk();
             if !due.is_empty() {
                 let results = amp.set_many(&due).await;
                 for ((param, value), result) in due.into_iter().zip(results) {

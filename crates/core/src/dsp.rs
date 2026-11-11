@@ -133,6 +133,9 @@ pub(crate) fn above_ceiling(
     })
 }
 
+/// The most values written to an amp in one go while others wait for it (SEC-4, SEC-6).
+pub(crate) const WRITE_CHUNK: usize = 8;
+
 /// Keeps the latest value per parameter and says when it may go out: the first at once, then not
 /// before `interval` after the previous one (SEC-4). Times are passed in, so it is tested without a
 /// clock.
@@ -198,21 +201,39 @@ impl Coalescer {
     }
 
     /// The values that may go out at `now` (they count as sent), and how long until the next one may.
+    #[cfg(test)]
     pub fn take_due(&mut self, now: Instant) -> (Vec<(Param, Value)>, Option<Duration>) {
-        let mut due = Vec::new();
+        self.take_some(now, usize::MAX)
+    }
+
+    /// [`Coalescer::take_due`], at most `limit` values: a mute goes first, then the others. What is due
+    /// and was left stays waiting (and may still be replaced by a newer value); the wait is then zero.
+    pub fn take_some(&mut self, now: Instant, limit: usize) -> (Vec<(Param, Value)>, Option<Duration>) {
+        let mut ready: Vec<(bool, Param)> = Vec::new();
         let mut next: Option<Duration> = None;
-        for (param, slot) in &mut self.slots {
+        for (param, slot) in &self.slots {
             match slot.due_in(self.interval, now) {
                 Some(Duration::ZERO) => {
-                    due.extend(slot.waiting.take().map(|v| (param.clone(), v)));
-                    slot.last_sent = Some(now);
+                    let mute = matches!(param, Param::Mute(_)) && slot.waiting == Some(Value::Bool(true));
+                    ready.push((!mute, param.clone()));
                 }
                 Some(wait) => next = Some(next.map_or(wait, |n| n.min(wait))),
                 None => {}
             }
         }
         // a mute goes first: it does not wait for the settings that are due with it (SEC-6)
-        due.sort_by_key(|(param, value)| !(matches!(param, Param::Mute(_)) && *value == Value::Bool(true)));
+        ready.sort_by_key(|(not_mute, _)| *not_mute);
+        if ready.len() > limit {
+            ready.truncate(limit);
+            next = Some(Duration::ZERO);
+        }
+        let mut due = Vec::new();
+        for (_, param) in ready {
+            if let Some(slot) = self.slots.get_mut(&param) {
+                due.extend(slot.waiting.take().map(|v| (param.clone(), v)));
+                slot.last_sent = Some(now);
+            }
+        }
         (due, next)
     }
 }
@@ -254,8 +275,10 @@ impl Writer {
         self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).muting()
     }
 
-    pub fn take_due(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
-        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_due(Instant::now())
+    /// The next values to write, at most [`WRITE_CHUNK`], a mute first. Whoever writes them gives the amp
+    /// up between two chunks, so that a MUTE waits for one chunk and not for a whole queue.
+    pub fn take_chunk(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
+        self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_some(Instant::now(), WRITE_CHUNK)
     }
 }
 
@@ -562,6 +585,47 @@ mod tests {
         c.push(param("out1.mute"), Value::Bool(true));
         c.clear();
         assert_eq!(c.muting(), [false, false]);
+    }
+
+    // SEC-4, SEC-6: a batch is cut into chunks and a mute is in the first one, so a MUTE waits for one
+    // chunk and not for every write that was queued before it
+    #[test]
+    fn a_chunk_takes_the_mute_first_and_leaves_the_rest_waiting() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        for band in 0..6 {
+            c.push(param(&format!("in1.eq.{band}.gain")), f(1.0));
+        }
+        c.push(param("out1.mute"), Value::Bool(true));
+
+        let (first, wait) = c.take_some(t0, 3);
+        assert_eq!(first.len(), 3);
+        assert_eq!(first[0], (param("out1.mute"), Value::Bool(true)));
+        assert_eq!(wait, Some(Duration::ZERO), "the rest is due at once");
+        let (second, wait) = c.take_some(t0, 3);
+        assert_eq!(second.len(), 3);
+        assert_eq!(wait, Some(Duration::ZERO));
+        let (third, wait) = c.take_some(t0, 3);
+        assert_eq!(third.len(), 1);
+        assert_eq!(wait, None);
+        let mut all: Vec<_> =
+            first.into_iter().chain(second).chain(third).map(|(p, _)| p.to_string()).collect();
+        all.sort();
+        all.dedup();
+        assert_eq!(all.len(), 7, "every value went out once");
+    }
+
+    // SEC-4: what was left waiting by a chunk can still be replaced by a newer value
+    #[test]
+    fn a_value_left_waiting_is_replaced_by_a_newer_one() {
+        let t0 = Instant::now();
+        let mut c = Coalescer::new(STEP);
+        c.push(param("in1.gain"), f(1.0));
+        c.push(param("in2.gain"), f(1.0));
+        let (first, _) = c.take_some(t0, 1);
+        let left = if first[0].0 == param("in1.gain") { "in2.gain" } else { "in1.gain" };
+        c.push(param(left), f(2.0));
+        assert_eq!(c.take_some(t0, 1).0, [(param(left), f(2.0))]);
     }
 
     #[test]

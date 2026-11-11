@@ -23,7 +23,8 @@ The app controls the volume of a sound system. A wrong value can damage speakers
   dBu field, and a value outside the model's range is told as well.
 - **SEC-4** **Small steps.** Faders follow `UX-22` and `UX-23`. While a fader moves, only the
   latest value is sent, at most every 50 ms per parameter. A gesture cannot jump a level: no key
-  auto-repeat, at most 6 dB up per drag, one wheel raise per 200 ms.
+  auto-repeat, at most 6 dB up per drag, one wheel raise per 200 ms. Values that wait are written in chunks of at most 8, a mute first, and the amp
+  is given up between two chunks: a MUTE waits for one chunk, not for a whole queue.
 - **SEC-5** **Confirm dangerous actions:** UNMUTE ALL, and every action that mutes the outputs of
   an amp: preset recall, storing a preset, loading a file, linking channels, copying an EQ, changing the device mode (see `UX-24`).
 - **SEC-6** **Bulk changes mute first and leave the outputs muted.** Preset recall, file load and

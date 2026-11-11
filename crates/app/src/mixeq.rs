@@ -793,6 +793,13 @@ pub fn LevelsPage(
     }
 }
 
+/// What tells one panel of the page from another. Dioxus keeps the state of a component whose props change,
+/// so a question that is open (SWITCH OFF band 3?, RAISE?) or a button that is armed (CONFIRM RESET) would
+/// stay open on the next amp or tab and act on it: the key makes it a new panel (UX-24).
+fn panel_key(selected: usize, tab: MixTab) -> String {
+    format!("{selected}-{}", tab.label())
+}
+
 /// The Mix & EQ page: the amplifier, the tab row (UX-16, UX-17) and the tab itself.
 #[component]
 pub fn MixeqPage(
@@ -829,13 +836,10 @@ pub fn MixeqPage(
         view.presets.slots.iter().filter(|(_, name)| name.is_some()).count()
     );
     let busy = view.busy.is_some() || view.unread;
+    let key = panel_key(view.selected, tab);
     rsx! {
         div { class: "mixeq",
-            // while an action runs on the amp nothing of the page can be clicked, so that it is not started
-            // twice (UX-29); the header, with MUTE ALL, is outside it
-            if busy {
-                div { class: "busy-shield", "aria-hidden": "true" }
-            }
+            // the amp picker is outside the shield: whichever amp is picked, another can be picked
             div { class: "amp-picker",
                 for (index, amp) in view.amps.iter().enumerate() {
                     button {
@@ -856,57 +860,64 @@ pub fn MixeqPage(
                     }
                 }
             }
-            if !view.amps.is_empty() {
-                PresetBar {
-                    // the slot picked and the name typed belong to the amp
-                    key: "{bar_key}",
-                    view: view.presets.clone(),
-                    on_recall,
-                    on_store,
-                    on_open,
-                    on_save_file,
+            div { class: "mixeq-body",
+                // while an action runs on the amp nothing of the page can be clicked, so that it is not started
+                // twice (UX-29); the header, with MUTE ALL, and the amp picker are outside it
+                if busy {
+                    div { class: "busy-shield", "aria-hidden": "true" }
                 }
-            }
-            if let Some(ask) = view.asking.clone() {
-                ConfirmDialog {
-                    amp: amp_name.clone(),
-                    ask,
-                    on_confirm: move |_| on_answer.call(true),
-                    on_cancel: move |_| on_answer.call(false),
-                }
-            }
-            div { class: "tab-row", role: "group", "aria-label": "Sections",
-                for t in MixTab::ALL {
-                    button {
-                        class: format!("mix-tab {}{}", if t.side() == Side::Inputs { "in" } else { "out" }, if t == tab { " on" } else { "" }),
-                        "aria-pressed": "{t == tab}",
-                        onclick: move |_| on_tab.call(t),
-                        "{t.label()}"
+                if !view.amps.is_empty() {
+                    PresetBar {
+                        // the slot picked and the name typed belong to the amp
+                        key: "{bar_key}",
+                        view: view.presets.clone(),
+                        on_recall,
+                        on_store,
+                        on_open,
+                        on_save_file,
                     }
                 }
-                if tab == MixTab::Levels {
-                    for (side, linked, name, side_class) in [
-                        (Side::Inputs, view.linked_inputs, "INPUTS", "in"),
-                        (Side::Outputs, view.linked_outputs, "OUTPUTS", "out"),
-                    ] {
+                if let Some(ask) = view.asking.clone() {
+                    ConfirmDialog {
+                        amp: amp_name.clone(),
+                        ask,
+                        on_confirm: move |_| on_answer.call(true),
+                        on_cancel: move |_| on_answer.call(false),
+                    }
+                }
+                div { class: "tab-row", role: "group", "aria-label": "Sections",
+                    for t in MixTab::ALL {
                         button {
-                            key: "{name}",
-                            class: if linked { "link-button on {side_class}" } else { "link-button" },
-                            "aria-pressed": "{linked}",
-                            "aria-label": if linked { "Split the {name} 1 and 2" } else { "Link the {name} 1 and 2" },
-                            onclick: move |_| on_link.call((side, !linked)),
-                            if linked { "⛓ {name} LINKED" } else { "⛓ LINK {name}" }
+                            class: format!("mix-tab {}{}", if t.side() == Side::Inputs { "in" } else { "out" }, if t == tab { " on" } else { "" }),
+                            "aria-pressed": "{t == tab}",
+                            onclick: move |_| on_tab.call(t),
+                            "{t.label()}"
+                        }
+                    }
+                    if tab == MixTab::Levels {
+                        for (side, linked, name, side_class) in [
+                            (Side::Inputs, view.linked_inputs, "INPUTS", "in"),
+                            (Side::Outputs, view.linked_outputs, "OUTPUTS", "out"),
+                        ] {
+                            button {
+                                key: "{name}",
+                                class: if linked { "link-button on {side_class}" } else { "link-button" },
+                                "aria-pressed": "{linked}",
+                                "aria-label": if linked { "Split the {name} 1 and 2" } else { "Link the {name} 1 and 2" },
+                                onclick: move |_| on_link.call((side, !linked)),
+                                if linked { "⛓ {name} LINKED" } else { "⛓ LINK {name}" }
+                            }
                         }
                     }
                 }
-            }
-            match tab {
-                MixTab::Levels => rsx! { LevelsPage { view: view.clone(), on_gain, on_mute, on_limiter } },
-                MixTab::Mixer => rsx! { MixerPage { rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
-                _ => match view.eq.clone() {
-                    Some(eq) => rsx! { EqPage { eq, on_set, on_delay, on_copy } },
-                    None => rsx! { section { class: "tab-panel {side_class}" } },
-                },
+                match tab {
+                    MixTab::Levels => rsx! { LevelsPage { key: "{key}", view: view.clone(), on_gain, on_mute, on_limiter } },
+                    MixTab::Mixer => rsx! { MixerPage { key: "{key}", rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
+                    _ => match view.eq.clone() {
+                        Some(eq) => rsx! { EqPage { key: "{key}", eq, on_set, on_delay, on_copy } },
+                        None => rsx! { section { class: "tab-panel {side_class}" } },
+                    },
+                }
             }
         }
     }
@@ -997,6 +1008,35 @@ mod tests {
         assert!(!out.contains("busy-shield"), "{out}");
         let out = page_html(MixeqView { busy: Some("Linking the inputs…".into()), ..view(false) });
         assert!(out.contains("busy-shield"), "{out}");
+    }
+
+    // UX-29: the shield covers what is set, not the amp picker: an amp that is not read, or one that is busy,
+    // does not lock the page on it
+    #[test]
+    fn the_amp_picker_is_outside_the_shield() {
+        for v in [
+            MixeqView { unread: true, ..view(false) },
+            MixeqView { busy: Some("Copying the EQ…".into()), ..view(false) },
+        ] {
+            let out = page_html(v);
+            let picker = out.find("amp-picker").expect("the picker");
+            let shield = out.find("busy-shield").expect("the shield");
+            let body = out.find("mixeq-body").expect("the part under the shield");
+            assert!(picker < body && body < shield, "the shield is inside the part after the picker: {out}");
+        }
+    }
+
+    // UX-24: a question or an armed button belongs to one amp and one tab; another amp or tab is a new panel
+    #[test]
+    fn a_panel_is_new_for_another_amp_or_tab() {
+        let keys: Vec<String> = MixTab::ALL.iter().map(|t| panel_key(0, *t)).collect();
+        for (i, a) in keys.iter().enumerate() {
+            for b in &keys[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+        assert_ne!(panel_key(0, MixTab::Out1), panel_key(1, MixTab::Out1));
+        assert_eq!(panel_key(2, MixTab::In1), panel_key(2, MixTab::In1));
     }
 
     // SEC-4: until the amp's state is read the shield covers the page, as while an action runs

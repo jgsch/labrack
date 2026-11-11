@@ -516,3 +516,33 @@ async fn nothing_but_a_mute_is_taken_while_the_state_is_read_again_after_a_recal
     assert!(hub.set_mute(id, 1, true).is_ok());
     sim.set_latency(Duration::ZERO);
 }
+
+async fn set_and_wait(hub: &labrack_core::Hub, id: labrack_core::AmpId, name: &str, value: Value) {
+    hub.set(id, param(name), value.clone()).unwrap();
+    wait_value(hub, id, name, value).await;
+}
+
+// SEC-4, SEC-6: a MUTE does not wait for the whole batch of writes that was queued before it
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mute_is_written_before_most_of_a_big_batch() {
+    let (hub, id, sim) = online_ipd().await;
+    set_and_wait(&hub, id, "out2.mute", Value::Bool(false)).await;
+    sim.set_latency(Duration::from_millis(200));
+    let before = sim.writes().len();
+    let mut queued = 0;
+    for band in 0..10 {
+        for field in ["gain", "q", "freq"] {
+            let name = format!("in1.eq.{band}.{field}");
+            let value = hub.value(id, &param(&name)).unwrap();
+            hub.set(id, param(&name), value).unwrap();
+            queued += 1;
+        }
+    }
+    sleep(Duration::from_millis(30)).await;
+    hub.set_mute(id, 1, true).unwrap();
+    wait_value(&hub, id, "out2.mute", Value::Bool(true)).await;
+    let mute = ipd_slot(&param("out2.mute")).unwrap().key;
+    let writes = sim.writes()[before..].to_vec();
+    let at = writes.iter().position(|k| *k == mute).expect("the mute was written");
+    assert!(at < queued / 2, "the mute was write {at} of {queued}");
+}

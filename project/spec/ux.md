@@ -117,7 +117,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   confirmation dialog. ALL OFF and RESET of an EQ take a second click within 3 s (→ CONFIRM ALL OFF,
   CONFIRM RESET), and switching an output's HPF or any EQ band off asks (SWITCH OFF / CANCEL). A click that unmutes an
   output within 600 ms of a click that muted it is ignored (a double-click on MUTE ends muted). An EQ band's gain counts the raise from 0 dB at least: easing a cut off
-  (-12 to -1 dB) does not ask.
+  (-12 to -1 dB) does not ask. A question that is open or a button that is armed belongs to one amp and
+  one tab: picking another amp or tab closes it.
   A limiter threshold typed in volts or watts asks by the same rule, counted in dB of level (20·log10 of
   the voltage ratio, 10·log10 of the power ratio) and worded in dB; the load (Ω) never asks.
 - **UX-25** Search switches use a toggle with a status line; a disabled SCAN NOW is dimmed.
@@ -128,5 +129,5 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   outputs…", "Copying the EQ…", recall, store, load) while an action on an amp runs, which cannot
   be started again meanwhile; and the error of an action, in red, wrapped (at most 360 px wide),
   gone after 12 s or when clicked. Errors are not written in the preset bar. They are large enough
-  to be read from a distance. While an action runs, the Mix & EQ page cannot be clicked (the header,
-  with MUTE ALL, can).
+  to be read from a distance. While an action runs, or while the picked amp is not read, the Mix & EQ
+  page cannot be clicked (the header, with MUTE ALL, and the amp picker can).
