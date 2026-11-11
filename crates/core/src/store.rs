@@ -43,6 +43,7 @@ pub struct Preset {
 
 /// User safety ceilings (SEC-3). `None`: no ceiling.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Ceilings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_gain_db: Option<f64>,

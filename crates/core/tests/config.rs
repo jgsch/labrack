@@ -203,6 +203,24 @@ fn a_ceiling_or_a_load_that_is_not_valid_is_an_error() {
     }
 }
 
+// BEH-40, SEC-3: a misspelled key is an error, not a missing ceiling: `max_output_gain = -6` would otherwise
+// load as "no ceiling" and the next save would drop it
+#[test]
+fn a_key_the_app_does_not_know_is_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let amp =
+        "[[amp]]\nname = \"A\"\nprotocol = \"ipd\"\nip = \"10.0.0.1\"\nsource = \"auto\"\nconnected = true\n";
+    for extra in [
+        "[amp.ceilings]\nmax_output_gain = -6.0\n",
+        "[amp.ceilings]\nmax_limiter_db = 30.0\n",
+        "load_ohm = [4.0, 4.0]\n",
+    ] {
+        fs::write(&path, format!("{amp}{extra}")).unwrap();
+        assert!(matches!(Store::open(&path).err(), Some(Error::Parse(_))), "{extra:?}");
+    }
+}
+
 // BEH-40
 #[test]
 fn a_file_with_an_unknown_protocol_is_an_error() {

@@ -18,6 +18,7 @@ pub(crate) struct File {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Entry {
     name: String,
     protocol: Protocol,
