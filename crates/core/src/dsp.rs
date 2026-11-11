@@ -211,6 +211,8 @@ impl Coalescer {
                 None => {}
             }
         }
+        // a mute goes first: it does not wait for the settings that are due with it (SEC-6)
+        due.sort_by_key(|(param, value)| !(matches!(param, Param::Mute(_)) && *value == Value::Bool(true)));
         (due, next)
     }
 }

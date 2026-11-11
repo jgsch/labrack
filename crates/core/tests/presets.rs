@@ -1069,3 +1069,20 @@ async fn a_waiting_mute_survives_a_bulk_change_that_cannot_start() {
     sleep(Duration::from_millis(1500)).await;
     assert_eq!(ipx_value(&fake, "out1.mute"), TRUE, "the mute the user asked for was lost");
 }
+
+// SEC-6: in a batch that goes out together, a MUTE is written first: it does not wait for the settings that
+// happen to be due at the same time (a write of the IPX is read back, one after the other)
+#[tokio::test]
+async fn a_mute_goes_out_before_the_other_settings_of_its_batch() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let before = fake.state().setprm.len();
+    // no await between them: the writer takes them as one batch
+    for band in 0..8 {
+        hub.set(id, param(&format!("in1.eq.{band}.gain")), f(1.0)).unwrap();
+    }
+    hub.set(id, param("in2.delay"), f(3.0)).unwrap();
+    hub.set(id, param("out1.mute"), TRUE).unwrap();
+    wait_value(&hub, id, "in2.delay", f(3.0)).await;
+    let order = fake.state().setprm[before..].to_vec();
+    assert_eq!(order.first(), Some(&addr("out1.mute")), "{order:?}");
+}
