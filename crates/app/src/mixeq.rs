@@ -203,7 +203,7 @@ pub const LIMITER_BOXES: [(Unit, &str, &str); 4] = [
 ];
 
 /// The gain reduction scale of a limiter, in dB of reduction (UX-19: as long as the faders).
-const GR_MARKS: [f64; 5] = [0.0, 3.0, 6.0, 9.0, 12.0];
+const GR_MARKS: [f64; 5] = [0.0, 12.0, 24.0, 36.0, 48.0];
 
 /// An IN or OUT card, or a source of the Mixer: the fader with its meter, and the dB box and MUTE of
 /// the same size beside it (UX-18, UX-19). `out` draws it in the outputs' colour; a muted OUT is dimmed
@@ -335,8 +335,8 @@ pub fn LimiterCard(
     gr_second: Option<f64>,
     #[props(default)] on_change: EventHandler<(Unit, f64)>,
 ) -> Element {
-    let mut bars = vec![control::gr_fill(limiter.gr_db) * 100.0];
-    bars.extend(gr_second.map(|db| control::gr_fill(db) * 100.0));
+    let mut bars = vec![control::limiter_gr_fill(limiter.gr_db) * 100.0];
+    bars.extend(gr_second.map(|db| control::limiter_gr_fill(db) * 100.0));
     let pair = bars.len() > 1;
     let label = limiter.label.clone();
     rsx! {
@@ -353,7 +353,7 @@ pub fn LimiterCard(
                     }
                     div { class: "gr-scale",
                         for db in GR_MARKS {
-                            span { style: "top: {db / control::GR_TOP * 100.0}%", "{control::signed(-db)}" }
+                            span { style: "top: {db / control::LIMITER_GR * 100.0}%", "{control::signed(-db)}" }
                         }
                     }
                 }
@@ -1270,6 +1270,20 @@ mod tests {
         );
     }
 
+    // UX-19: the limiter's gain reduction is labelled from 0 to 48 dB down, the range the amps show, every 12 dB
+    #[test]
+    fn the_limiter_scale_runs_to_48_db() {
+        assert_eq!(GR_MARKS, [0.0, 12.0, 24.0, 36.0, 48.0]);
+        let v = MixeqView { rows: two_rows(), ..view(true) };
+        let out = page_html(v);
+        for mark in ["0", "−12", "−24", "−36", "−48"] {
+            assert!(out.contains(&format!(">{mark}<")), "{mark}: {out}");
+        }
+        assert!(!out.contains(">−3<") && !out.contains(">−9<"), "{out}");
+        // half of the scale is half the bar: a 24 dB reduction
+        assert_eq!(control::limiter_gr_fill(24.0), 0.5);
+    }
+
     fn two_rows() -> Vec<LevelRow> {
         let strip = |label: &str, level_db: f64, muted: bool| Strip {
             label: label.into(),
@@ -1396,7 +1410,7 @@ mod tests {
             assert!(out.contains(&format!("class=\"box-name\">{name}<")), "{name}: {out}");
         }
         assert!(out.contains("value=\"31.3\""), "the dBu: {out}");
-        assert!(out.contains("height: 25%"), "3 dB of the 12 dB gain reduction scale: {out}");
+        assert!(out.contains("height: 6.25%"), "3 dB of the 48 dB gain reduction scale: {out}");
         assert!(out.contains("Mute OUT 1"));
     }
 }

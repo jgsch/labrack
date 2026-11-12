@@ -231,8 +231,10 @@ pub fn unmute_allowed(last_muted: Option<Duration>, now: Duration) -> bool {
 
 /// The bottom of a level meter, in dB.
 pub const METER_FLOOR: f64 = -60.0;
-/// The top of the gain reduction bar, in dB of reduction.
+/// The top of the gain reduction bar under a level meter, in dB of reduction.
 pub const GR_TOP: f64 = 12.0;
+/// The bottom of a limiter's gain reduction bar, in dB of reduction: the range the amps' limiters work in.
+pub const LIMITER_GR: f64 = 48.0;
 
 /// How much of a meter is lit, 0 to 1 (UX-8, UX-12). Silent and below the floor light nothing.
 pub fn meter_fill(level_db: f64) -> f64 {
@@ -244,10 +246,19 @@ pub fn meter_fill(level_db: f64) -> f64 {
 
 /// How much of the peach gain reduction bar is lit, 0 to 1.
 pub fn gr_fill(gr_db: f64) -> f64 {
+    gr_fill_to(gr_db, GR_TOP)
+}
+
+/// How much of a limiter card's gain reduction bar is lit, 0 to 1, over its whole 0 to 48 dB (`UX-19`).
+pub fn limiter_gr_fill(gr_db: f64) -> f64 {
+    gr_fill_to(gr_db, LIMITER_GR)
+}
+
+fn gr_fill_to(gr_db: f64, top: f64) -> f64 {
     if !gr_db.is_finite() || gr_db <= 0.0 {
         return 0.0;
     }
-    (gr_db / GR_TOP).clamp(0.0, 1.0)
+    (gr_db / top).clamp(0.0, 1.0)
 }
 
 /// The colour of the lit part of a meter at `fill`: green below 60 %, yellow to 85 %, red above (UX-8).
@@ -505,6 +516,14 @@ mod tests {
         assert_eq!(gr_fill(-3.0), 0.0);
         assert_eq!(gr_fill(6.0), 0.5);
         assert_eq!(gr_fill(20.0), 1.0);
+
+        // UX-19: the limiter's bar covers the whole range of a reduction, 0 to 48 dB
+        assert_eq!(limiter_gr_fill(0.0), 0.0);
+        assert_eq!(limiter_gr_fill(12.0), 0.25);
+        assert_eq!(limiter_gr_fill(24.0), 0.5);
+        assert_eq!(limiter_gr_fill(48.0), 1.0);
+        assert_eq!(limiter_gr_fill(60.0), 1.0);
+        assert_eq!(limiter_gr_fill(f64::NAN), 0.0);
     }
 
     // UX-19: the fader's scale is labelled every 12 dB, as on the mockup, whatever the model's range
