@@ -59,6 +59,21 @@ impl Hub {
         !online.is_empty() && online.into_iter().all(|id| self.amp_muted(id))
     }
 
+    /// The amps that should be connected and are not ONLINE (connecting, reconnecting, busy, unreachable, a bad
+    /// IP): MUTE ALL did not reach their outputs, and the user should hear of it. An amp the user released
+    /// (DISCONNECT) is not one.
+    pub fn not_reached(&self) -> Vec<AmpId> {
+        let online = self.online();
+        self.0
+            .shared
+            .store()
+            .amps()
+            .iter()
+            .filter(|amp| amp.connected && !online.contains(&amp.id))
+            .map(|amp| amp.id)
+            .collect()
+    }
+
     /// The amps that are ONLINE, in list order.
     fn online(&self) -> Vec<AmpId> {
         let live = lock(&self.0.shared.live);

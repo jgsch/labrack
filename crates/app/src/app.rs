@@ -198,6 +198,18 @@ pub fn App() -> Element {
                         for (id, why) in hub.set_all_muted(muted) {
                             refused(preset_errors, id, Err(why));
                         }
+                        // an amp that is not ONLINE has not been muted: its outputs may be playing (SEC-6)
+                        if muted {
+                            for id in hub.not_reached() {
+                                let amp = hub.amps().into_iter().find(|a| a.id == id);
+                                let status = hub.status(id).map_or("", |s| s.label());
+                                let text = crate::presets::not_reached_text(
+                                    &amp.map(|a| a.name).unwrap_or_default(),
+                                    status,
+                                );
+                                refused(preset_errors, id, Err(labrack_core::Error::Invalid(text)));
+                            }
+                        }
                     }
                 },
             }
@@ -754,6 +766,7 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
                 let shown = hub.shown(amp.id, &param);
                 view.muted[output] = shown == Some(Value::Bool(true));
                 view.mute_known[output] = shown.is_some();
+                view.mute_pending[output] = hub.is_pending(amp.id, &param);
             }
             view.amp_muted = hub.amp_muted(amp.id);
             view.preset = amp.preset.as_ref().map(|p| loaded_text(p.number, &p.name));
@@ -813,8 +826,13 @@ pub fn mixeq_view(
     let meters = hub.meters(id).unwrap_or_default();
     let at = |list: &[f64], i: usize, none: f64| list.get(i).copied().unwrap_or(none);
     let gr = meters.extra.get("gain_reduction_out").cloned().unwrap_or_default();
-    let strip =
-        |label: String, ch: Channel, level_db: f64| Strip { label, db: gain(ch), level_db, muted: mute(ch) };
+    let strip = |label: String, ch: Channel, level_db: f64| Strip {
+        label,
+        db: gain(ch),
+        level_db,
+        muted: mute(ch),
+        mute_pending: hub.is_pending(id, &Param::Mute(ch)),
+    };
     // an amp blanks the meter of a muted input; the sound that arrives is estimated from the connectors
     let raw = meters.extra.get("raw_input").cloned().unwrap_or_default();
     let input_level = |i: u8| {
@@ -880,7 +898,13 @@ pub fn mixeq_view(
                     let muted =
                         hub.shown(id, &param(MixerField::Mute)).and_then(|v| v.as_bool()).unwrap_or(false);
                     let level_db = source_level(sources.get(src).copied(), db);
-                    Strip { label: (*name).into(), db, level_db, muted }
+                    Strip {
+                        label: (*name).into(),
+                        db,
+                        level_db,
+                        muted,
+                        mute_pending: hub.is_pending(id, &param(MixerField::Mute)),
+                    }
                 })
                 .collect(),
         })

@@ -73,6 +73,8 @@ pub struct Strip {
     pub db: f64,
     pub level_db: f64,
     pub muted: bool,
+    /// The mute shown is asked for and the amp has not confirmed it (SEC-6).
+    pub mute_pending: bool,
 }
 
 /// The LIMITER card: its gain reduction and its four linked figures (BEH-5), `None` until they are
@@ -249,10 +251,10 @@ pub fn LevelCard(
                     ValueField { label: "{strip.label}", value: strip.db, bounds, on_change: move |db| on_gain.call(db) }
                     if let Some(second) = second {
                         div { class: "mute-pair",
-                            for (n, m, handler) in [(1, muted, on_mute), (2, second.muted, on_mute_second)] {
+                            for (n, m, pending, handler) in [(1, muted, strip.mute_pending, on_mute), (2, second.muted, second.mute_pending, on_mute_second)] {
                                 button {
                                     key: "{n}",
-                                    class: if m { "card-button muted" } else { "card-button" },
+                                    class: if pending { "card-button pending" } else if m { "card-button muted" } else { "card-button" },
                                     "aria-pressed": "{m}",
                                     "aria-label": if m { "Unmute {strip.label} channel {n}" } else { "Mute {strip.label} channel {n}" },
                                     onclick: move |_| handler.call(!m),
@@ -263,7 +265,7 @@ pub fn LevelCard(
                         }
                     } else {
                         button {
-                            class: if muted { "card-button muted" } else { "card-button" },
+                            class: if strip.mute_pending { "card-button pending" } else if muted { "card-button muted" } else { "card-button" },
                             "aria-pressed": "{muted}",
                             "aria-label": if muted { "Unmute {strip.label}" } else { "Mute {strip.label}" },
                             onclick: move |_| on_mute.call(!muted),
@@ -960,7 +962,13 @@ mod tests {
     }
 
     fn view(linked_inputs: bool) -> MixeqView {
-        let strip = |label: &str| Strip { label: label.into(), db: -6.0, level_db: -20.0, muted: false };
+        let strip = |label: &str| Strip {
+            label: label.into(),
+            db: -6.0,
+            level_db: -20.0,
+            muted: false,
+            mute_pending: false,
+        };
         MixeqView {
             amps: vec![AmpCard { name: "FOH".into(), level_db: -20.0, gr_db: 0.0 }],
             linked_inputs,
@@ -1192,6 +1200,7 @@ mod tests {
                         db: -6.0,
                         level_db: -30.0,
                         muted: *name != "ANALOG 1",
+                        mute_pending: false,
                     })
                     .collect(),
             })
@@ -1211,12 +1220,37 @@ mod tests {
         assert!(out.contains("tab-panel in"));
     }
 
+    // SEC-6: a MUTE the amp has not confirmed looks pending on the Levels cards too, not muted
+    #[test]
+    fn a_pending_mute_is_not_drawn_as_muted_on_a_card() {
+        let strip = |pending| Strip {
+            label: "OUT 1".into(),
+            db: 0.0,
+            level_db: -20.0,
+            muted: true,
+            mute_pending: pending,
+        };
+        let card = |s: Strip| {
+            let mut dom =
+                VirtualDom::new_with_props(|s: Strip| rsx! { LevelCard { strip: s, out: true } }, s);
+            dom.rebuild_in_place();
+            dioxus_ssr::render(&dom)
+        };
+        assert!(card(strip(false)).contains("card-button muted"));
+        let pending = card(strip(true));
+        assert!(
+            pending.contains("card-button pending") && !pending.contains("card-button muted"),
+            "{pending}"
+        );
+    }
+
     fn two_rows() -> Vec<LevelRow> {
         let strip = |label: &str, level_db: f64, muted: bool| Strip {
             label: label.into(),
             db: -6.0,
             level_db,
             muted,
+            mute_pending: false,
         };
         let limiter = |n: u8, gr_db: f64| LimiterStrip {
             label: format!("LIMITER {n}"),

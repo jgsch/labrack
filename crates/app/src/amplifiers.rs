@@ -34,6 +34,8 @@ pub struct AmpView {
     /// The amp has told the mute of each output. An IPD takes seconds after ONLINE to do it; until then
     /// the output is not shown as unmuted (SEC-7).
     pub mute_known: [bool; 2],
+    /// The mute shown is asked for and the amp has not confirmed it: it is not in force yet.
+    pub mute_pending: [bool; 2],
     /// The loaded preset, and whether the app saw a change since (BEH-11, BEH-38).
     pub preset: Option<String>,
     pub modified: bool,
@@ -60,6 +62,7 @@ impl AmpView {
             ],
             muted: [false, false],
             mute_known: [false, false],
+            mute_pending: [false, false],
             preset: None,
             modified: false,
             mode: None,
@@ -103,6 +106,7 @@ pub fn AmplifierPanel(
     let muted = view.muted;
     let level_muted = view.muted;
     let mute_known = view.mute_known;
+    let mute_pending = view.mute_pending;
     let online = view.online;
     let mode = view.mode.clone();
     rsx! {
@@ -179,6 +183,8 @@ pub fn AmplifierPanel(
                                         "no signal"
                                     } else if !mute_known[output] {
                                         "mute unknown"
+                                    } else if mute_pending[output] {
+                                        if level_muted[output] { "MUTING…" } else { "UNMUTING…" }
                                     } else if level_muted[output] {
                                         "MUTED · GR {control::number(level.gr)}"
                                     } else {
@@ -188,7 +194,9 @@ pub fn AmplifierPanel(
                             }
                             crate::Meter { level_db: if online && !level_muted[output] { level.db } else { control::METER_FLOOR }, gain_reduction_db: level.gr }
                             button {
-                                class: if muted[output] {
+                                class: if mute_pending[output] {
+                                    "m-button pending"
+                                } else if muted[output] {
                                     "m-button muted"
                                 } else if !mute_known[output] {
                                     "m-button unknown"
@@ -341,6 +349,20 @@ mod tests {
         assert!(out.contains("aria-pressed=\"true\""), "{out}");
         assert!(out.contains("m-button muted"), "{out}");
         assert!(out.contains("Mute output 2 of Subs"), "the other output offers to mute: {out}");
+    }
+
+    // SEC-6: a MUTE the amp has not confirmed is not shown as in force
+    #[test]
+    fn a_mute_the_amp_has_not_confirmed_says_so() {
+        let mut view = AmpView::new(0, "Subs", "IPX", "192.168.1.31", Status::Online);
+        view.muted = [true, false];
+        view.mute_known = [true, true];
+        view.mute_pending = [true, false];
+        let out = panel_html(view);
+        assert_eq!(out.matches("MUTING…").count(), 1, "{out}");
+        assert!(out.contains("m-button pending"), "{out}");
+        assert!(!out.contains("m-button muted"), "{out}");
+        assert!(!out.contains("MUTED"), "{out}");
     }
 
     // SEC-7: until the amp has told a mute, the output is not shown as unmuted

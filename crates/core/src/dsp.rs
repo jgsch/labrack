@@ -247,6 +247,9 @@ pub(crate) struct Writer {
     /// Counts the mutes written and the bulk changes started: a read of the mutes that began under another
     /// count may hold the old state and is not shown (SEC-6).
     mute_epoch: AtomicU64,
+    /// Counts every batch written and the bulk changes started: a read of a level that began under another
+    /// count may hold the old value and is not shown (SEC-4).
+    write_epoch: AtomicU64,
 }
 
 impl Writer {
@@ -255,6 +258,7 @@ impl Writer {
             coalescer: Mutex::new(Coalescer::new(interval)),
             wake: Notify::new(),
             mute_epoch: AtomicU64::new(0),
+            write_epoch: AtomicU64::new(0),
         }
     }
 
@@ -266,6 +270,26 @@ impl Writer {
         }
         drop(coalescer);
         self.wake.notify_one();
+    }
+
+    /// [`Writer::push_all`], unless `allowed` says no. It is asked while the queue is locked, which a bulk change
+    /// also takes to drop what waits: a value is either queued before that drop, or refused after the bulk change
+    /// counted itself (SEC-6). True when the values were queued.
+    pub fn push_all_if(
+        &self,
+        values: impl IntoIterator<Item = (Param, Value)>,
+        allowed: impl FnOnce() -> bool,
+    ) -> bool {
+        let mut coalescer = self.coalescer.lock().unwrap_or_else(|e| e.into_inner());
+        if !allowed() {
+            return false;
+        }
+        for (param, value) in values {
+            coalescer.push(param, value);
+        }
+        drop(coalescer);
+        self.wake.notify_one();
+        true
     }
 
     /// A bulk change replaces the settings these values were meant for.
@@ -288,8 +312,11 @@ impl Writer {
     pub fn take_chunk(&self) -> (Vec<(Param, Value)>, Option<Duration>) {
         let taken =
             self.coalescer.lock().unwrap_or_else(|e| e.into_inner()).take_some(Instant::now(), WRITE_CHUNK);
+        if !taken.0.is_empty() {
+            self.write_epoch.fetch_add(1, Ordering::SeqCst);
+        }
         if taken.0.iter().any(|(param, _)| matches!(param, Param::Mute(_))) {
-            self.bump();
+            self.mute_epoch.fetch_add(1, Ordering::SeqCst);
         }
         taken
     }
@@ -297,6 +324,12 @@ impl Writer {
     /// Something that changes the mutes happens: a read of them that is under way is out of date.
     pub fn bump(&self) {
         self.mute_epoch.fetch_add(1, Ordering::SeqCst);
+        self.write_epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// The count a read of a level starts under; see [`Writer::write_epoch`].
+    pub fn write_epoch(&self) -> u64 {
+        self.write_epoch.load(Ordering::SeqCst)
     }
 
     /// The count a read of the mutes starts under; see [`Writer::bump`].
@@ -665,6 +698,33 @@ mod tests {
         let again = w.epoch();
         w.bump();
         assert_ne!(w.epoch(), again, "a bulk change counts too");
+    }
+
+    // SEC-6: a value pushed under a guard that says no is not queued, and the guard is asked under the lock
+    // that a bulk change takes to drop what waits
+    #[test]
+    fn a_guarded_push_queues_nothing_when_the_guard_says_no() {
+        let w = Writer::new(STEP);
+        assert!(!w.push_all_if([(param("out1.mute"), Value::Bool(false))], || false));
+        assert_eq!(w.take_chunk().0, vec![]);
+        assert!(w.push_all_if([(param("out1.mute"), Value::Bool(false))], || true));
+        assert_eq!(w.take_chunk().0.len(), 1);
+    }
+
+    // SEC-4: a read of a gain that overlapped any write is out of date; a read of the mutes only a mute write
+    #[test]
+    fn any_write_makes_a_read_of_the_levels_out_of_date() {
+        let w = Writer::new(STEP);
+        let started = (w.epoch(), w.write_epoch());
+        w.push_all([(param("out1.gain"), f(1.0))]);
+        w.take_chunk();
+        assert_eq!(w.epoch(), started.0, "a gain is no mute");
+        assert_ne!(w.write_epoch(), started.1);
+        let again = w.write_epoch();
+        w.take_chunk();
+        assert_eq!(w.write_epoch(), again, "nothing was written");
+        w.bump();
+        assert_ne!(w.write_epoch(), again, "a bulk change counts too");
     }
 
     #[test]

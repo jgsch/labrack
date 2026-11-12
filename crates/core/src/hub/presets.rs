@@ -107,6 +107,7 @@ impl Hub {
         let session = self.session(id)?;
         self.permit(id, |rights| rights.load_preset)?;
         self.check_slot(&session, slot)?;
+        self.require_loaded(id)?;
         // an IPX answers a read at once; an IPD takes seconds
         let end = if session.is_ipx() { End::Muted } else { End::MutedAtOnce };
         // the state is forgotten inside the change, while the bulk guard is held: no gap in which the controls
@@ -136,6 +137,7 @@ impl Hub {
         let session = self.session(id)?;
         self.permit(id, |rights| rights.save_preset)?;
         self.check_slot(&session, slot)?;
+        self.require_loaded(id)?;
         // a name the amp cannot hold is refused before the outputs are muted for it
         session.amp.check_preset_name(name)?;
         // the preset is stored with the outputs muted, and they stay muted. What waits to be written
@@ -173,6 +175,8 @@ impl Hub {
         let session = self.session(id)?;
         // a file sets inputs and outputs, so it needs the right for both
         self.permit(id, |rights| rights.input_channel && rights.output_channel)?;
+        // the links it plans with, and the values it checks, are the amp's only once the state is read
+        self.require_loaded(id)?;
         let text = tokio::fs::read_to_string(path).await?;
         let snapshot: Snapshot =
             serde_json::from_str(&text).map_err(|e| Error::Invalid(format!("Not a settings file: {e}")))?;
@@ -200,6 +204,15 @@ impl Hub {
         self.0.shared.set_modified(id, true);
         self.read_state_again(id, &session);
         Ok(LoadReport { applied: report.applied, skipped })
+    }
+
+    /// Until the state is read, and while it is read again after a recall or a file load, only a mute is taken
+    /// (BEH-43).
+    fn require_loaded(&self, id: AmpId) -> Result<()> {
+        match self.loaded(id) {
+            true => Ok(()),
+            false => Err(Error::NotLoaded),
+        }
     }
 
     fn check_slot(&self, session: &Session, slot: u32) -> Result<()> {

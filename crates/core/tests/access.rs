@@ -146,6 +146,7 @@ async fn each_right_opens_its_own_controls() {
     let (hub, id, sim) = ipd_at(USER, LOAD | SAVE).await;
     assert!(matches!(hub.set(id, param("in1.gain"), f(0.0)), Err(Error::AccessDenied(_))));
     hub.recall_preset(id, 2).await.unwrap();
+    wait_loaded(&hub, id).await; // the state is read again after a recall
     hub.store_preset(id, 5, "Stage").await.unwrap();
     assert_eq!(ipd_value(&sim, "out1.mute").await, Value::Bool(true), "and they leave the outputs muted");
 

@@ -502,6 +502,12 @@ impl Hub {
         amp.pending.get(param).or_else(|| amp.values.get(param)).cloned()
     }
 
+    /// [`Hub::shown`] is a value the amp has not confirmed yet: a view can say so (a MUTE that is not in force
+    /// until the amp has it).
+    pub fn is_pending(&self, id: AmpId, param: &Param) -> bool {
+        lock(&self.0.shared.live).get(&id).is_some_and(|amp| amp.pending.contains_key(param))
+    }
+
     /// The DSP state of the amp; empty when it is not ONLINE.
     pub fn values(&self, id: AmpId) -> HashMap<Param, Value> {
         lock(&self.0.shared.live).get(&id).map(|amp| amp.values.clone()).unwrap_or_default()
@@ -543,12 +549,39 @@ impl Hub {
         let spec = session.amp.spec(&param).ok_or(Error::NotControllable)?;
         let checked = dsp::check(&param, &spec, &value, &ceilings)?;
         let targets = self.route(id, &session, &param)?;
-        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
-            amp.pending.extend(targets.iter().map(|target| (target.clone(), checked.clone())));
-        }
-        session.writer.push_all(targets.into_iter().map(|target| (target, checked.clone())));
+        // turning a mute on is never refused, whatever runs on the amp (SEC-6)
+        let mute_on = matches!(param, Param::Mute(_)) && checked == Value::Bool(true);
+        self.queue(id, &session, targets, checked, !mute_on)?;
         self.0.shared.emit(Update::Pending(id, param));
         Ok(())
+    }
+
+    /// Show `value` for `targets` and queue it for writing. With `refuse_bulk` it is refused (`Error::Busy`)
+    /// when a bulk change has started: that is decided under the lock of the queue, which a bulk change takes to
+    /// drop what waits, so a value is never queued behind a bulk change that has dropped the others (SEC-6).
+    fn queue(
+        &self,
+        id: AmpId,
+        session: &Session,
+        targets: Vec<Param>,
+        value: Value,
+        refuse_bulk: bool,
+    ) -> Result<()> {
+        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
+            amp.pending.extend(targets.iter().map(|target| (target.clone(), value.clone())));
+        }
+        let queued =
+            session.writer.push_all_if(targets.iter().map(|target| (target.clone(), value.clone())), || {
+                !refuse_bulk || session.bulk.load(Ordering::SeqCst) == 0
+            });
+        if queued {
+            return Ok(());
+        }
+        // not shown: it will not be written
+        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
+            amp.pending.retain(|key, shown| !(targets.contains(key) && *shown == value));
+        }
+        Err(Error::Busy)
     }
 
     /// The user ceilings of an amp (SEC-3). Nothing is written to the amp: a control that is above
@@ -813,7 +846,14 @@ async fn session(
                 let mut helpers = JoinSet::new();
                 helpers.spawn(load_state(shared.clone(), id, link.amp.clone(), writer.clone()));
                 helpers.spawn(write_loop(shared.clone(), id, link.amp.clone(), writer.clone(), gate.clone()));
-                helpers.spawn(poll_mutes(shared.clone(), id, link.amp.clone(), writer.clone(), bulk.clone()));
+                helpers.spawn(poll_mutes(
+                    shared.clone(),
+                    id,
+                    link.amp.clone(),
+                    writer.clone(),
+                    bulk.clone(),
+                    gate.clone(),
+                ));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -900,6 +940,7 @@ async fn poll_mutes(
     amp: Arc<dyn labgruppen::Amp>,
     writer: Arc<Writer>,
     bulk: Arc<AtomicUsize>,
+    gate: Arc<tokio::sync::Mutex<()>>,
 ) {
     let ipd = amp.info().driver == "ipd";
     let with_mode = amp.params().contains(&Param::Mode);
@@ -914,6 +955,10 @@ async fn poll_mutes(
         return;
     }
     let outputs = [Param::Mute(Channel::Output(0)), Param::Mute(Channel::Output(1))];
+    // an IPD tells nothing of a gain or a limiter threshold changed at the front panel: one of them is asked for
+    // each time the mode is, so that a fader never starts from a level the amp does not have (SEC-4, BEH-38)
+    let levels = if ipd { watched_levels() } else { Vec::new() };
+    let mut next_level = 0usize;
     // the device mode is changed on the front panel now and then: asked for once a second
     let period = if ipd { shared.timing.mute_poll_interval } else { Duration::from_secs(1) };
     let mode_every = (Duration::from_secs(1).as_millis() / period.as_millis().max(1)).max(1);
@@ -926,20 +971,47 @@ async fn poll_mutes(
         if with_mode && round.is_multiple_of(mode_every) {
             asked.push(Param::Mode);
         }
+        let level = (!levels.is_empty() && round.is_multiple_of(mode_every)).then(|| {
+            next_level = (next_level + 1) % levels.len();
+            levels[next_level].clone()
+        });
         round += 1;
         if bulk.load(Ordering::SeqCst) > 0 {
             continue;
         }
-        let epoch = writer.epoch();
-        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&asked)).await
+        // no write is on its way when a level is read: the answer would be older than the write
+        if level.is_some() && gate.try_lock().is_err() {
+            continue;
+        }
+        let (epoch, written) = (writer.epoch(), writer.write_epoch());
+        let wanted: Vec<Param> = asked.iter().cloned().chain(level.clone()).collect();
+        if let Ok(Ok(values)) = timeout(Duration::from_secs(2), amp.get_many(&wanted)).await
             && writer.epoch() == epoch
             && bulk.load(Ordering::SeqCst) == 0
         {
-            for (param, value) in asked.iter().zip(values) {
+            // a level read that overlapped a write, or one that is being written now, is dropped
+            let levels_current = writer.write_epoch() == written && gate.try_lock().is_ok();
+            for (param, value) in wanted.iter().zip(values) {
+                if levels.contains(param) && !levels_current {
+                    continue;
+                }
                 shared.observed(id, param, &value, false);
             }
         }
     }
+}
+
+/// The levels an IPD is asked for in turn (see [`poll_mutes`]): the gains and the output limiter thresholds.
+fn watched_levels() -> Vec<Param> {
+    let mut levels = Vec::new();
+    for ch in [Channel::Output(0), Channel::Output(1), Channel::Input(0), Channel::Input(1)] {
+        levels.push(Param::Gain(ch));
+    }
+    for output in 0..2 {
+        levels
+            .push(Param::Limiter { ch: Channel::Output(output), field: labgruppen::LimiterField::Threshold });
+    }
+    levels
 }
 
 /// Wait until the state of the amp is read: an IPD answers one thing at a time, so what is not needed at

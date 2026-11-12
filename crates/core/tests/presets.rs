@@ -166,6 +166,27 @@ async fn mute_all_acts_on_the_amps_that_are_online() {
     assert_eq!(other.writes(), 0);
 }
 
+// BEH-25, SEC-6: MUTE ALL acts on the amps that are ONLINE; the ones that should be connected and are not are
+// named, so that the user knows their outputs were not muted. An amp the user released is not one of them.
+#[tokio::test]
+async fn the_amps_mute_all_did_not_reach_are_named() {
+    let fake = FakeAmp::start().await;
+    let (hub, local) = hub();
+    local.route("10.0.0.1", fake.port);
+    let a = hub.add_manual("A", Protocol::Ipx, "10.0.0.1").unwrap();
+    let b = hub.add_manual("B", Protocol::Ipx, "10.0.0.2").unwrap();
+    let c = hub.add_manual("C", Protocol::Ipx, "10.0.0.3").unwrap();
+    wait_loaded(&hub, a).await;
+    wait_status(&hub, b, Status::Unreachable).await;
+    hub.disconnect(c).unwrap();
+    wait_status(&hub, c, Status::Disconnected).await;
+    assert_eq!(hub.not_reached(), vec![b]);
+    let later = FakeAmp::start().await;
+    local.route("10.0.0.2", later.port);
+    wait_loaded(&hub, b).await;
+    assert!(hub.not_reached().is_empty());
+}
+
 // BEH-25: MUTE ALL and UNMUTE ALL reach the two outputs of an amp and nothing else: no input, no mixer
 #[tokio::test(flavor = "multi_thread")]
 async fn mute_all_writes_the_two_output_mutes_only() {
@@ -998,6 +1019,52 @@ async fn a_setting_asked_for_during_a_recall_is_refused() {
     sim.set_latency(Duration::ZERO);
     wait_loaded(&hub, id).await;
     assert_eq!(ipd_value(&sim, "out1.gain").await, f(-20.0), "the recalled gain was not overwritten");
+}
+
+// BEH-43, SEC-4: between a recall and the end of the reload the state is not known: only a mute is taken,
+// whatever the control. A limiter, a recall, a store or a file load would start from values that are not the amp's.
+#[tokio::test(flavor = "multi_thread")]
+async fn nothing_but_a_mute_is_taken_while_the_state_is_read_again() {
+    let (hub, id, sim) = online_ipd().await;
+    ipd_elsewhere_set(&sim, "out1.gain", f(-20.0)).await;
+    ipd_elsewhere_store(&sim, 7, "Quiet").await;
+    let (_dir, path) = temp_file("settings.json");
+    hub.save_file(id, &path).await.unwrap();
+    sim.set_latency(Duration::from_millis(40));
+    hub.recall_preset(id, 7).await.unwrap();
+    // the window that matters: the threshold has been read, the rest of the state has not
+    let partly = async {
+        while hub.limiter(id, 0).is_none() {
+            sleep(Duration::from_millis(1)).await;
+        }
+    };
+    timeout(Duration::from_secs(20), partly).await.expect("the limiter is read");
+    assert!(!hub.loaded(id), "the state is read again");
+
+    let limiter = hub.set_limiter(id, 0, labrack_core::Unit::Dbu, 25.0);
+    assert!(matches!(limiter, Err(Error::NotLoaded)), "{limiter:?}");
+    assert!(matches!(hub.set(id, param("out1.gain"), f(-30.0)), Err(Error::NotLoaded)));
+    assert!(matches!(hub.recall_preset(id, 7).await, Err(Error::NotLoaded)));
+    assert!(matches!(hub.store_preset(id, 8, "Other").await, Err(Error::NotLoaded)));
+    assert!(matches!(hub.load_file(id, &path).await, Err(Error::NotLoaded)));
+    assert!(hub.set_mute(id, 0, true).is_ok(), "muting is never held back");
+
+    sim.set_latency(Duration::ZERO);
+    wait_loaded(&hub, id).await;
+    assert!(hub.set_limiter(id, 0, labrack_core::Unit::Dbu, 25.0).is_ok(), "taken once the state is read");
+}
+
+// BEH-38, SEC-4: the IPD tells nothing of a front panel change, so the gains and the limiter thresholds are
+// asked for in turn: a fader never starts from a level the amp does not have
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gain_changed_elsewhere_on_an_ipd_is_seen() {
+    let (hub, id, sim) = online_ipd().await;
+    assert!(!hub.modified(id));
+    for (name, value) in [("out1.gain", -20.0), ("in2.gain", -9.0), ("out2.limiter.threshold", 25.0)] {
+        ipd_elsewhere_set(&sim, name, f(value)).await;
+        wait_value(&hub, id, name, f(value)).await;
+    }
+    assert!(hub.modified(id), "a change from elsewhere is seen");
 }
 
 // SEC-6: an unmute that waits for its turn when a store starts is dropped, not written after the store

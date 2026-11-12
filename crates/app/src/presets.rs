@@ -44,6 +44,11 @@ pub fn above_text(name: &str, above: &[labrack_core::Above]) -> String {
     format!("{name}: {}. Check it before unmuting.", list.join("; "))
 }
 
+/// What MUTE ALL says of an amp it could not reach: its outputs were not muted.
+pub fn not_reached_text(amp: &str, status: &str) -> String {
+    format!("{amp} is {status}: MUTE ALL did not reach it, its outputs are not muted by it.")
+}
+
 /// What the toast says of a write the amp did not take: the control goes back to what the amp holds.
 pub fn write_failed_text(amp: &str, param: &labgruppen::Param, why: &str) -> String {
     format!("{amp}: {param} was not taken by the amplifier ({why}). It shows what the amplifier holds.")
@@ -322,6 +327,14 @@ mod tests {
         let text = write_failed_text("FOH", &"out1.mute".parse().unwrap(), "write not confirmed");
         assert!(text.starts_with("FOH: out1.mute was not taken"), "{text}");
         assert!(text.contains("write not confirmed") && text.contains("holds"), "{text}");
+    }
+
+    // SEC-6: MUTE ALL says which amp it did not reach and why
+    #[test]
+    fn mute_all_names_the_amp_it_did_not_reach() {
+        let text = not_reached_text("FOH", "UNREACHABLE · RETRYING");
+        assert!(text.starts_with("FOH is UNREACHABLE"), "{text}");
+        assert!(text.contains("MUTE ALL did not reach it"), "{text}");
     }
 
     // SEC-3: the toast names the amp, the output, the value and the ceiling

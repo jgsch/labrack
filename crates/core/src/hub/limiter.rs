@@ -117,6 +117,11 @@ impl Hub {
         if session.bulk.load(std::sync::atomic::Ordering::SeqCst) > 0 {
             return Err(Error::Busy);
         }
+        // until the state is read the limiter shown is not the amp's, and an edit would start from it (BEH-43). An
+        // IPD takes a new load before: that is the app's own, nothing is written
+        if !self.loaded(id) && (session.is_ipx() || unit != Unit::Ohm) {
+            return Err(Error::NotLoaded);
+        }
         // the second output follows the first while the pair is linked
         if output == 1 && self.linked(id, Side::Outputs) {
             return Err(Error::Linked);
@@ -203,11 +208,11 @@ impl Hub {
                 routed.push((target, value.clone()));
             }
         }
-        // shown before the amp confirms it, as any control (`Hub::shown`)
-        if let Some(amp) = lock(&self.0.shared.live).get_mut(&id) {
-            amp.pending.extend(routed.iter().cloned());
+        // shown before the amp confirms it, as any control (`Hub::shown`); refused if a bulk change started
+        // meanwhile (SEC-6)
+        for (target, value) in routed {
+            self.queue(id, &session, vec![target], value, true)?;
         }
-        session.writer.push_all(routed);
         self.0.shared.emit(crate::Update::Pending(id, param(output, LimiterField::Threshold)));
         Ok(())
     }

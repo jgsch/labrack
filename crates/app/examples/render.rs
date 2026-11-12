@@ -222,6 +222,7 @@ fn levels_page(linked_inputs: bool, linked_outputs: bool) -> Element {
         label: label.into(),
         db: 0.0,
         level_db,
+        mute_pending: false,
         muted: false,
     };
     let limiter = |label: &str, gr_db: f64| labrack_app::LimiterStrip {
@@ -324,6 +325,7 @@ fn mixer_demo() -> Element {
                 label: (*name).into(),
                 db: if src == open { 0.0 } else { -48.0 },
                 level_db: if src == open { level_db } else { -120.0 },
+                mute_pending: false,
                 muted: src != open,
             })
             .collect(),
