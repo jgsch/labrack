@@ -392,6 +392,21 @@ async fn access_is_the_level_and_the_rights() {
     amp.close().await;
 }
 
+/// BEH-47, BEH-48: an IPD is not locked from the app; its User password is changed, and only the new one logs in
+#[tokio::test(flavor = "multi_thread")]
+async fn the_user_password_is_changed_and_an_ipd_is_not_locked() {
+    let (srv, amp) = connect(true).await;
+    assert!(matches!(amp.set_locked(true).await, Err(labgruppen::Error::Unsupported(_))));
+
+    amp.change_password("Fresh#7").await.unwrap();
+    // locked at the front panel: the old password no longer unlocks, the new one does
+    srv.set_access(5, 0);
+    assert!(amp.login("Password").await.unwrap().locked);
+    let a = amp.login("Fresh#7").await.unwrap();
+    assert_eq!((a.user.as_str(), a.locked), ("User", false));
+    amp.close().await;
+}
+
 /// BEH-15, BEH-16: a login takes the level the password belongs to and returns what that level may do;
 /// a wrong password changes nothing. The password is never read from the amp, and the amp's masked
 /// echo is all that is kept of it.

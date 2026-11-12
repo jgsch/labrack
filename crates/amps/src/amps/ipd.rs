@@ -282,6 +282,10 @@ impl Amp for IpdAmp {
         self.access().await?.ok_or_else(|| Error::Protocol("no access after the login".into()))
     }
 
+    async fn change_password(&self, new: &str) -> Result<()> {
+        self.client.set_password(USER_LEVEL, new).await
+    }
+
     async fn status(&self) -> Result<Status> {
         // CURRENT_USER also brings AMP_READINGS, ACCESS_RIGHTS the model number, SW_VERSION the model name.
         let pn = Key::new(S_PRESET, M_PRESET_NUMBER, 0, 0);
@@ -399,6 +403,15 @@ impl Amp for IpdAmp {
 
     fn meters(&self) -> Meters {
         common_meters(&self.client.meters())
+    }
+
+    async fn temperature(&self) -> Result<Option<i32>> {
+        // asked for again: the cached reading is the one from the connect. The amp sends it along with the
+        // current user and now and then skips it, which is a missing answer, not an error
+        match self.client.get_raw(global(M_AMP_READINGS), Some(Duration::from_millis(1500))).await? {
+            Raw::Int(r) => Ok(Some(decode_amp_readings(r as u32).1 as i32)),
+            _ => Ok(None),
+        }
     }
 
     fn subscribe(&self) -> broadcast::Receiver<AmpEvent> {

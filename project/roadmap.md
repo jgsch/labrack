@@ -8,17 +8,16 @@ Use Phases until v1 ships, then Now / Next / Later.
 ### Phase 1: v1, replace the vendor app [ ]
 
 - Goal: control IPD and IPX amplifiers from LAB.RACK safely, as specified.
-- Spec: BEH-1 to BEH-45, UX-1 to UX-29, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
+- Spec: BEH-1 to BEH-48, UX-1 to UX-33, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
 - Status (2026-11-10): every page of the app is built and runs against the real IPD 2400 and IPX 1200.
-  What is left is the UI of `ipd-access` and `v1-verification`.
+  What is left is `v1-verification`.
 - Changes (`project/changes/active/`), in dependency order:
   1. `core-amp-list`, then `core-connections` and `core-discovery` (done, archived)
   2. `core-dsp-control`, then `core-mute-presets`, `core-limiter`, `core-link` (done, archived)
-  3. `ipd-access`, core part: user level, rights, login (done; the change stays active for its UI task)
+  3. `ipd-access`: user level, rights, login, and its UI (done, archived)
   4. `app-shell` (done, archived), then `app-controls` (done, archived)
   5. `app-amplifiers-page`, `app-search-page`, `app-mix-eq` and `link-levels-copy-eq` (done, archived),
-     then the UI of `ipd-access` (level on the amp panel, disabled controls, login dialog), which
-     waits for nothing now
+     (done, archived)
   6. `v1-verification` (active)
 - Already in place: ARCH-9, ARCH-10, ARCH-11 (formatting in the mise tasks), ARCH-12
   (`re/flake.nix`).

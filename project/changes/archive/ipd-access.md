@@ -25,12 +25,13 @@ No spec change; implements:
 - [x] Core: login intent (`Hub::login`); the password is passed to the amp for that call only
 - [x] Test: config, updates, errors and the settings file never contain the password; the amp is
       never asked for one (`crates/core/tests/access.rs`)
-- [ ] UI: level on the amp panel, disabled controls, login dialog (after `app-amplifiers-page`)
+- [x] UI: level on the amp panel, LOGIN dialog, disabled unmute, LOAD and SAVE, and a locked Mix & EQ tab
+      (`UX-30` to `UX-32`; `crates/app/src/login.rs`, `amplifiers.rs`, `mixeq.rs`, `presets.rs`, `app.rs`)
 
 ## Done when
 
 - [x] Tests for BEH-13 to BEH-16 pass in `core` (mutation-checked: every guard removed in turn fails one)
-- [ ] The UI shows the level, disables what the rights forbid and offers the login
+- [x] The UI shows the level, disables what the rights forbid and offers the login (UI tests; checked on a rendered page)
 
 ## Notes
 
@@ -47,5 +48,13 @@ No spec change; implements:
   stores it. The IPD echo of the password is masked by the amp, so the client's cache holds no
   password either (the simulator masks it too). The library's `IpdAmp::login` now returns `Access`.
 - Read on a real IPD 2400 (2026-11-04, reads only): User, all five rights.
+- **UI decisions (the user asked to go on, no mockup board exists):** the level reads `LEVEL USER` on the status
+  line (orange when a login is needed); LOGIN stands before DISCONNECT; a tab whose channels the rights forbid
+  is shielded under a `LOCKED` line while the tabs still switch; a login that leaves the level and rights as
+  they were says so in a toast. Not run against an IPD that is really locked: the user's IPD 2400 is at User
+  with every right, so only the simulator and rendered pages were checked.
+- **IPX:** `BEH-13` said an IPX has no user levels. Its configuration has a lock (`DEVCFG` field 1, 0 on the
+  user's IPX 1200), a mode and rights per level (`docs/ipx-protocol.md`), and the driver parses them. Whether it
+  refuses writes when locked is not known (backlog).
 - Open question (backlog): does the firmware block writes at User / Locked, and does the level
   survive a reconnect?

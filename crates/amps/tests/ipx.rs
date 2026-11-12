@@ -423,13 +423,45 @@ async fn snapshot_matches_single_reads_and_restores() {
     assert_eq!(amp.snapshot().await.unwrap().params, snap.params);
 }
 
-/// BEH-13: user levels are an IPD feature; an IPX has none to show, and no login.
+/// BEH-13, BEH-47: an IPX has a lock, not levels: `Unlocked` with every right, or `Locked` with none; the amp is
+/// locked and unlocked with a write of the lock flag (DEVCFG field 1), read back; it has no login.
 #[tokio::test]
-async fn an_ipx_has_no_user_level_and_no_login() {
+async fn an_ipx_is_locked_and_unlocked_without_a_password() {
     let fake = FakeAmp::start().await;
     let amp = fake.connect().await;
-    assert_eq!(amp.access().await.unwrap(), None);
+    let lock_dword = || {
+        let o = 0x62C + 4;
+        i32::from_le_bytes(fake.state().sync[o..o + 4].try_into().unwrap())
+    };
+    let a = amp.access().await.unwrap().expect("an IPX says its lock");
+    assert_eq!((a.user.as_str(), a.locked, a.needs_login()), ("Unlocked", false, false));
+    assert!(a.rights.complete());
+
+    let a = amp.set_locked(true).await.unwrap();
+    assert_eq!((lock_dword(), a.user.as_str(), a.locked), (1, "Locked", true));
+    assert!(
+        !(a.rights.input_channel || a.rights.output_channel || a.rights.load_preset || a.rights.save_preset)
+    );
+    assert_eq!(amp.access().await.unwrap().unwrap(), a);
+
+    // a lock set at the front panel is seen
+    fake.state().sync[0x62C + 4..0x62C + 8].copy_from_slice(&0i32.to_le_bytes());
+    assert!(!amp.access().await.unwrap().unwrap().locked);
+    let a = amp.set_locked(false).await.unwrap();
+    assert_eq!((lock_dword(), a.locked), (0, false));
+
+    // no password, no login
     assert!(matches!(amp.login("Password").await, Err(Error::Unsupported(_))));
+    assert!(matches!(amp.change_password("Password").await, Err(Error::Unsupported(_))));
+}
+
+/// BEH-47: a lock the amp does not take is an error, not a success
+#[tokio::test]
+async fn a_lock_the_ipx_does_not_take_is_an_error() {
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    fake.state().reject_writes.insert(Address::new(Env::DEVCFG, 0, 0, 1));
+    assert!(matches!(amp.set_locked(true).await, Err(Error::NotConfirmed(_))));
 }
 
 #[tokio::test]

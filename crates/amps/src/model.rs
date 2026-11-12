@@ -518,12 +518,22 @@ impl AccessRights {
     }
 
     /// Every right the app uses.
+    pub fn all() -> Self {
+        Self::from_raw(0x1 | 0x2 | 0x4 | 0x8 | 0x40000)
+    }
+
+    /// None of them.
+    pub fn none() -> Self {
+        Self::from_raw(0)
+    }
+
+    /// Whether every right the app uses is there.
     pub fn complete(&self) -> bool {
         self.input_channel && self.output_channel && self.load_preset && self.save_preset && self.unit_name
     }
 }
 
-/// The user level of an amp and what it may do (IPD only, see [`crate::Amp::access`]).
+/// The user level of an amp and what it may do ([`crate::Amp::access`]); an IPX has `Locked` or `Unlocked`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Access {
     /// The level by name: AllDSP, Factory, Developer, Admin, User, Locked, or `unknown(n)`.

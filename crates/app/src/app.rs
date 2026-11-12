@@ -61,6 +61,10 @@ pub fn App() -> Element {
     let busy: Busy = use_signal(HashMap::new);
     // the action that mutes the outputs, waiting for the user's yes (UX-24)
     let mut asking = use_signal(|| None::<(AmpId, Ask)>);
+    // the amp whose login dialog is open (UX-31)
+    let mut logging_in = use_signal(|| None::<AmpId>);
+    // the amp whose new-password dialog is open (UX-33)
+    let mut changing_password = use_signal(|| None::<AmpId>);
     // when a click last muted each output: the click right after it does not unmute (SEC-5)
     let mut mute_clicks = use_signal(MuteClicks::default);
     let clock = use_hook(|| {
@@ -118,7 +122,7 @@ pub fn App() -> Element {
                         }
                     };
                     match update {
-                        Ok(Update::Meters(..)) => moved = true,
+                        Ok(Update::Meters(..) | Update::Temperature(..)) => moved = true,
                         Ok(Update::Scan(Scan::Started)) => {
                             scanning.set(true);
                             scan_message.set(String::new());
@@ -263,6 +267,22 @@ pub fn App() -> Element {
                             on_preset: move |index: usize| {
                                 picked.set(index);
                                 page.set(Page::MixEq);
+                            },
+                            on_login: {
+                                let ids = ids.clone();
+                                move |index: usize| logging_in.set(ids.get(index).copied())
+                            },
+                            // an IPX is locked and unlocked at once, without a question (BEH-47)
+                            on_lock: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, locked): (usize, bool)| {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && !busy.read().contains_key(&id)
+                                    {
+                                        spawn(lock_amp(hub.clone(), id, locked, preset_errors, busy));
+                                    }
+                                }
                             },
                             // the mode changes which input feeds which output: it asks first (UX-24)
                             on_mode: {
@@ -482,6 +502,10 @@ pub fn App() -> Element {
                                     }
                                 }
                             },
+                            on_password: {
+                                let ids = ids.clone();
+                                move |index: usize| changing_password.set(ids.get(index).copied())
+                            },
                             on_rename: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
@@ -559,6 +583,32 @@ pub fn App() -> Element {
                     on_cancel: move |_| {
                         asking.set(None);
                     },
+                }
+            }
+            if let Some(id) = logging_in().filter(|_| page() == Page::Amplifiers) {
+                crate::login::LoginDialog {
+                    amp: hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_default(),
+                    on_login: {
+                        let hub = hub.clone();
+                        move |password: String| {
+                            logging_in.set(None);
+                            spawn(log_in(hub.clone(), id, password, preset_errors, busy));
+                        }
+                    },
+                    on_cancel: move |_| logging_in.set(None),
+                }
+            }
+            if let Some(id) = changing_password().filter(|_| page() == Page::Search) {
+                crate::login::PasswordDialog {
+                    amp: hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_default(),
+                    on_change: {
+                        let hub = hub.clone();
+                        move |password: String| {
+                            changing_password.set(None);
+                            spawn(change_password(hub.clone(), id, password, preset_errors, busy, ceiling_warnings));
+                        }
+                    },
+                    on_cancel: move |_| changing_password.set(None),
                 }
             }
             Toasts {
@@ -661,6 +711,48 @@ async fn working<T>(mut busy: Busy, id: AmpId, what: String, work: impl Future<O
     done
 }
 
+/// Log in to an IPD (UX-31). The password is used for this call and dropped. The amp does not say whether it was
+/// right, so a level and rights that are as before are reported.
+async fn log_in(hub: Hub, id: AmpId, password: String, errors: Errors, busy: Busy) {
+    let before = hub.access(id);
+    let done = working(busy, id, "Logging in".into(), hub.login(id, &password)).await;
+    drop(password);
+    let done = done.and_then(|after| match before {
+        Some(before) if before == after && after.needs_login() => Err(labrack_core::Error::Invalid(format!(
+            "Still at level {}: the password may be wrong",
+            after.user
+        ))),
+        _ => Ok(()),
+    });
+    said(errors, id, done);
+}
+
+/// Lock or unlock an IPX (BEH-47).
+async fn lock_amp(hub: Hub, id: AmpId, locked: bool, errors: Errors, busy: Busy) {
+    let what = if locked { "Locking" } else { "Unlocking" };
+    let done = working(busy, id, what.into(), hub.set_locked(id, locked)).await;
+    said(errors, id, done.map(|_| ()));
+}
+
+/// Change the password an IPD unlocks with (BEH-48). The password is used for this call and dropped. The amp does
+/// not say whether it took it, so the toast only says what was sent.
+async fn change_password(
+    hub: Hub,
+    id: AmpId,
+    password: String,
+    errors: Errors,
+    busy: Busy,
+    mut notices: Errors,
+) {
+    let done = working(busy, id, "Changing the password".into(), hub.change_password(id, &password)).await;
+    drop(password);
+    if done.is_ok() {
+        let name = hub.amps().into_iter().find(|a| a.id == id).map(|a| a.name).unwrap_or_default();
+        notices.write().insert(id, format!("Password of {name} sent. Try it before relying on it."));
+    }
+    said(errors, id, done);
+}
+
 /// Link or split one pair (UX-17).
 async fn set_link(hub: Hub, id: AmpId, side: Side, linked: bool, errors: Errors, busy: Busy) {
     let what = format!(
@@ -732,6 +824,8 @@ fn preset_view(hub: &Hub, id: AmpId, lists: &HashMap<AmpId, Vec<Preset>>) -> Pre
             .map(|p| (p.number, p.name)),
         modified: hub.modified(id),
         online: hub.status(id) == Some(labrack_core::Status::Online),
+        no_load: hub.access(id).is_some_and(|a| !a.rights.load_preset),
+        no_save: hub.access(id).is_some_and(|a| !a.rights.save_preset),
     }
 }
 
@@ -772,9 +866,24 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             view.preset = amp.preset.as_ref().map(|p| loaded_text(p.number, &p.name));
             view.mode = hub.device_mode(amp.id);
             view.modified = hub.modified(amp.id);
+            view.temperature = hub.temperature(amp.id);
+            let ipx = amp.protocol == labrack_core::Protocol::Ipx;
+            view.access = hub.access(amp.id).map(|access| crate::AccessView {
+                // an IPX is locked and unlocked with a button; only an IPD asks for a login
+                needs_login: access.needs_login() && !ipx,
+                can_lock: ipx,
+                locked: access.locked,
+                can_unmute: access.rights.output_channel,
+                user: access.user,
+            });
             view
         })
         .collect()
+}
+
+/// The top of a range as an empty ceiling box shows it; `amp max` while the amp is not ONLINE.
+fn range_text(range: Option<labrack_core::Range>) -> String {
+    range.and_then(|r| r.max).map_or_else(|| "amp max".into(), |max| crate::control::number_to(max, 2))
 }
 
 /// What the Search page draws: the switches, what the last scan did, and the known amplifiers.
@@ -799,6 +908,11 @@ pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
                 ip: amp.ip.clone(),
                 max_gain_db: amp.ceilings.max_output_gain_db,
                 max_limiter_dbu: amp.ceilings.max_limiter_dbu,
+                level: hub.access(amp.id).map_or_else(|| "—".into(), |access| access.user),
+                can_change_password: amp.protocol == labrack_core::Protocol::Ipd
+                    && hub.access(amp.id).is_some_and(|access| !access.needs_login()),
+                gain_default: range_text(hub.range(amp.id, &Param::Gain(Channel::Output(0)))),
+                limiter_default: range_text(hub.limiter_range(amp.id, 0, Unit::Dbu)),
                 source: match amp.source {
                     labrack_core::Source::Auto => "AUTO",
                     labrack_core::Source::Manual => "MANUAL",
@@ -942,6 +1056,23 @@ pub fn mixeq_view(
         asking: None,
         busy: None,
         unread: !hub.loaded(id),
+        denied: denied_tab(hub, id, tab),
+    }
+}
+
+/// The level the amp is at when its rights do not allow `tab` to be changed (BEH-14, UX-32): the outputs' right
+/// for the Levels and the output EQ tabs, the inputs' for the Mixer and the input EQ tabs, and both for Levels, which
+/// has the faders of both.
+fn denied_tab(hub: &Hub, id: AmpId, tab: MixTab) -> Option<String> {
+    let access = hub.access(id)?;
+    tab_denied(tab, access.rights.input_channel, access.rights.output_channel).then_some(access.user)
+}
+
+fn tab_denied(tab: MixTab, inputs: bool, outputs: bool) -> bool {
+    match tab {
+        MixTab::Levels => !(inputs && outputs),
+        MixTab::Mixer | MixTab::In1 | MixTab::In2 => !inputs,
+        MixTab::Out1 | MixTab::Out2 => !outputs,
     }
 }
 
@@ -1050,6 +1181,24 @@ mod tests {
         dom.rebuild_in_place();
         let out = dioxus_ssr::render(&dom);
         assert!(out.contains("<p>"), "the refusal is shown: {out}");
+    }
+
+    // BEH-14, UX-32: each tab needs the rights of the channels it changes
+    #[test]
+    fn a_tab_needs_the_rights_of_its_channels() {
+        use super::{MixTab, tab_denied};
+        for (tab, inputs, outputs, denied) in [
+            (MixTab::Levels, true, true, false),
+            (MixTab::Levels, false, true, true),
+            (MixTab::Levels, true, false, true),
+            (MixTab::Mixer, true, false, false),
+            (MixTab::Mixer, false, true, true),
+            (MixTab::In2, false, true, true),
+            (MixTab::Out1, false, true, false),
+            (MixTab::Out2, true, false, true),
+        ] {
+            assert_eq!(tab_denied(tab, inputs, outputs), denied, "{tab:?} inputs {inputs} outputs {outputs}");
+        }
     }
 
     // SEC-5: an unmute right after a click that muted the same channel is ignored; a mute never is

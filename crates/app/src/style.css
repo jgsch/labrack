@@ -81,6 +81,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .mode-button.on{background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .small-button{flex:0 0 auto;min-height:26px;padding:0 8px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .status{display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:0.08em}
+.amp-temp{font-size:11px;letter-spacing:0.08em;color:var(--muted)}
+.amp-temp.warm{color:#fab387}
+.amp-temp.hot{color:#f38ba8}
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}
 .label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .ip-input{flex:0 1 auto;min-width:0;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
@@ -147,6 +150,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .known-ceiling input{width:72px;height:32px;box-sizing:border-box;padding:0 8px;border-radius:4px;background:var(--panel);color:var(--text);border:1px solid var(--border);font-family:inherit;font-size:13px;font-weight:600}
 .known-ceiling input:focus{border-color:var(--border-strong)}
 .known-source{flex:0 0 64px;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
+.known-level{flex:0 0 78px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text)}
+.known-password{flex:0 0 auto;min-height:36px;padding:0 12px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
+.known-password:disabled{background:transparent;color:#6c7086;border-color:var(--border)}
 .known-remove{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:transparent;color:var(--muted);border:1px solid var(--border-strong)}
 .known-remove.armed{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 /* Mix & EQ (UX-16, UX-17, UX-19). Inputs are sapphire, outputs lavender (UX-7). */
@@ -285,6 +291,10 @@ input.preset-name::placeholder{color:var(--muted)}
 .modal{max-width:520px;display:flex;flex-direction:column;gap:12px;padding:20px 24px;border-radius:6px;background:var(--panel);border:2px solid var(--maroon)}
 .modal h3{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;letter-spacing:0.04em}
 .modal p{margin:0;font-size:13px;line-height:1.5;color:var(--text)}
+.modal input.password{width:100%;height:44px;box-sizing:border-box;padding:0 10px;border-radius:4px;background:var(--inset);color:var(--text);border:1px solid var(--border-strong);font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0.2em}
+.tab-guard{position:relative;display:flex;flex-direction:column}
+.locked-shield{position:absolute;inset:0;z-index:150;cursor:not-allowed}
+.locked-line{margin:0;padding:8px 12px;border-radius:4px;background:var(--inset);border:1px solid var(--peach);color:var(--peach);font-size:11px;letter-spacing:0.08em}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px}
 .button.confirm-yes{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 /* narrow windows (UX-10): what needs more room than the window has goes on a second line */

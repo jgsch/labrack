@@ -16,6 +16,21 @@ pub struct Level {
     pub gr: f64,
 }
 
+/// The user level of an IPD and what it allows (BEH-13, BEH-14).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccessView {
+    /// The level by name: `User`, `Locked`, ...
+    pub user: String,
+    /// The amp is locked (BEH-13).
+    pub locked: bool,
+    /// An IPD that is locked or has a right missing: a login is offered (BEH-15).
+    pub needs_login: bool,
+    /// An IPX: LOCK or UNLOCK is offered instead (BEH-47).
+    pub can_lock: bool,
+    /// The right of the output channels: without it nothing is unmuted (BEH-14).
+    pub can_unmute: bool,
+}
+
 /// One amplifier, as the page draws it. The hub fills this; the panel itself is pure, so it can be
 /// rendered and checked without a connection.
 #[derive(Clone, Debug, PartialEq)]
@@ -43,6 +58,10 @@ pub struct AmpView {
     pub mode: Option<String>,
     /// An action runs on the amp: its mode cannot be changed meanwhile.
     pub busy: bool,
+    /// The temperature the amp reports, in percent (BEH-46); `None` until it does and when not ONLINE.
+    pub temperature: Option<i32>,
+    /// The user level, for an ONLINE IPD (BEH-13).
+    pub access: Option<AccessView>,
 }
 
 impl AmpView {
@@ -67,7 +86,18 @@ impl AmpView {
             modified: false,
             mode: None,
             busy: false,
+            temperature: None,
+            access: None,
         }
+    }
+}
+
+/// The class of the temperature text (BEH-46): orange from 80% to 90%, red above 90%.
+pub fn temperature_class(percent: i32) -> &'static str {
+    match percent {
+        ..80 => "amp-temp",
+        80..=90 => "amp-temp warm",
+        _ => "amp-temp hot",
     }
 }
 
@@ -97,6 +127,8 @@ pub fn AmplifierPanel(
     #[props(default)] on_amp_mute: EventHandler<bool>,
     #[props(default)] on_preset: EventHandler<()>,
     #[props(default)] on_mode: EventHandler<String>,
+    #[props(default)] on_login: EventHandler<()>,
+    #[props(default)] on_lock: EventHandler<bool>,
 ) -> Element {
     let colour = status_colour(view.status);
     let preset = view.preset.clone().unwrap_or_else(|| "—".into());
@@ -109,6 +141,12 @@ pub fn AmplifierPanel(
     let mute_pending = view.mute_pending;
     let online = view.online;
     let mode = view.mode.clone();
+    let access = view.access.clone().filter(|_| online);
+    let needs_login = access.as_ref().is_some_and(|a| a.needs_login);
+    let can_lock = access.as_ref().is_some_and(|a| a.can_lock);
+    let locked = access.as_ref().is_some_and(|a| a.locked);
+    // without the right of the outputs nothing is unmuted; turning a mute on is never held back (SEC-6)
+    let may_unmute = access.as_ref().is_none_or(|a| a.can_unmute);
     rsx! {
         section { class: "amp-panel",
             div { class: "amp-head",
@@ -130,9 +168,31 @@ pub fn AmplifierPanel(
                             span { class: "dot", style: "background: {colour}" }
                             "{view.status.label()}"
                         }
+                        if let Some(percent) = view.temperature.filter(|_| online) {
+                            span { class: temperature_class(percent), "aria-label": "Temperature of {view.name}", "TEMP {percent}%" }
+                        }
+                        if let Some(access) = access.clone() {
+                            span { class: if access.needs_login || access.locked { "amp-temp warm" } else { "amp-temp" }, "LEVEL {access.user.to_uppercase()}" }
+                        }
                     }
                 }
                 div { class: "amp-actions",
+                    if can_lock {
+                        button {
+                            class: "small-button",
+                            "aria-label": if locked { "Unlock {view.name}" } else { "Lock {view.name}" },
+                            disabled: view.busy,
+                            onclick: move |_| on_lock.call(!locked),
+                            if locked { "UNLOCK" } else { "LOCK" }
+                        }
+                    } else if needs_login {
+                        button {
+                            class: "small-button",
+                            "aria-label": "Log in to {view.name}",
+                            onclick: move |_| on_login.call(()),
+                            "LOGIN"
+                        }
+                    }
                     button {
                         class: "small-button",
                         "aria-label": if view.status == Status::Disconnected { "Connect" } else { "Disconnect" },
@@ -141,7 +201,7 @@ pub fn AmplifierPanel(
                     }
                     button {
                         class: if view.amp_muted { "amp-mute muted" } else { "amp-mute" },
-                        disabled: !online,
+                        disabled: !online || (view.amp_muted && !may_unmute),
                         "aria-pressed": "{view.amp_muted}",
                         onclick: move |_| on_amp_mute.call(!view.amp_muted),
                         if view.amp_muted { "UNMUTE" } else { "MUTE" }
@@ -203,7 +263,7 @@ pub fn AmplifierPanel(
                                 } else {
                                     "m-button"
                                 },
-                                disabled: !online,
+                                disabled: !online || (muted[output] && !may_unmute),
                                 "aria-pressed": "{muted[output]}",
                                 "aria-label": if muted[output] {
                                     "Unmute output {output + 1} of {view.name}"
@@ -234,6 +294,8 @@ pub fn AmplifiersPage(
     #[props(default)] on_amp_mute: EventHandler<(usize, bool)>,
     #[props(default)] on_preset: EventHandler<usize>,
     #[props(default)] on_mode: EventHandler<(usize, String)>,
+    #[props(default)] on_login: EventHandler<usize>,
+    #[props(default)] on_lock: EventHandler<(usize, bool)>,
 ) -> Element {
     if amps.is_empty() {
         return rsx! {
@@ -254,6 +316,8 @@ pub fn AmplifiersPage(
                     on_amp_mute: move |muted| on_amp_mute.call((view.index, muted)),
                     on_preset: move |_| on_preset.call(view.index),
                     on_mode: move |mode| on_mode.call((view.index, mode)),
+                    on_login: move |_| on_login.call(view.index),
+                    on_lock: move |locked| on_lock.call((view.index, locked)),
                     view: view.clone(),
                 }
             }
@@ -305,6 +369,78 @@ mod tests {
         assert!(out.contains("ONLINE"));
         assert!(out.contains("192.168.1.21"));
         assert!(out.contains("DISCONNECT"));
+    }
+
+    // BEH-46, UX-11: an ONLINE amp that reports a temperature shows it in percent after its status
+    #[test]
+    fn a_panel_shows_the_temperature() {
+        let with = |status, temperature| {
+            let mut view = AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", status);
+            view.temperature = temperature;
+            panel_html(view)
+        };
+        assert!(with(Status::Online, Some(61)).contains(">TEMP 61%<"));
+        assert!(!with(Status::Online, None).contains("TEMP"));
+        // orange from 80% to 90%, red above
+        assert!(with(Status::Online, Some(79)).contains("class=\"amp-temp\""));
+        assert!(with(Status::Online, Some(80)).contains("class=\"amp-temp warm\""));
+        assert!(with(Status::Online, Some(90)).contains("class=\"amp-temp warm\""));
+        assert!(with(Status::Online, Some(91)).contains("class=\"amp-temp hot\""));
+        assert!(!with(Status::Reconnecting, Some(61)).contains("TEMP"));
+    }
+
+    // BEH-13, UX-30: an ONLINE IPD shows its level; a login is offered when one is needed, and unmuting needs the
+    // right of the outputs
+    #[test]
+    fn a_panel_shows_the_user_level_and_the_login() {
+        let with = |status, access| {
+            let mut view = AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", status);
+            view.access = access;
+            view.muted = [true, false];
+            view.mute_known = [true, true];
+            panel_html(view)
+        };
+        let user = |needs_login, can_unmute| {
+            Some(AccessView { user: "User".into(), locked: false, needs_login, can_lock: false, can_unmute })
+        };
+        let out = with(Status::Online, user(false, true));
+        assert!(out.contains(">LEVEL USER<") && !out.contains("LOGIN"), "{out}");
+        assert!(!out.contains("amp-temp warm"), "{out}");
+        let out = with(Status::Online, user(true, false));
+        assert!(out.contains("amp-temp warm\">LEVEL USER<") && out.contains(">LOGIN<"), "{out}");
+        // the muted output cannot be unmuted, the other can still be muted
+        let tag = |label: &str| {
+            let end = out.find(label).unwrap_or_else(|| panic!("{label}: {out}"));
+            let start = out[..end].rfind("<button").unwrap();
+            out[start..end + out[end..].find('>').unwrap()].to_string()
+        };
+        assert!(tag("Unmute output 1 of FOH Main L").contains("disabled"));
+        assert!(!tag("Mute output 2 of FOH Main L").contains("disabled"));
+        assert!(!tag("Log in to FOH Main L").contains("disabled"));
+        assert!(!with(Status::Online, None).contains("LEVEL"));
+        assert!(!with(Status::Reconnecting, user(true, false)).contains("LEVEL"));
+    }
+
+    // BEH-47, UX-30: an IPX has LOCK or UNLOCK where an IPD has LOGIN, and reads Locked or Unlocked
+    #[test]
+    fn an_ipx_panel_has_lock_and_unlock() {
+        let with = |locked| {
+            let mut view = AmpView::new(0, "Subs", "IPX", "192.168.1.31", Status::Online);
+            view.access = Some(AccessView {
+                user: if locked { "Locked" } else { "Unlocked" }.into(),
+                locked,
+                needs_login: false,
+                can_lock: true,
+                can_unmute: !locked,
+            });
+            panel_html(view)
+        };
+        let out = with(false);
+        assert!(out.contains(">LOCK<") && !out.contains("UNLOCK<") && !out.contains("LOGIN"), "{out}");
+        assert!(out.contains(">LEVEL UNLOCKED<") && !out.contains("amp-temp warm"), "{out}");
+        let out = with(true);
+        assert!(out.contains(">UNLOCK<") && !out.contains(">LOCK<") && !out.contains("LOGIN"), "{out}");
+        assert!(out.contains("amp-temp warm\">LEVEL LOCKED<"), "{out}");
     }
 
     // BEH-8: each status has its text, and its colour

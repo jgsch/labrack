@@ -185,7 +185,7 @@ Enums:
 | low pass | 136 | | |
 
 Users (CURRENT_USER): 0 AllDSP, 1 Factory, 2 Developer, 3 Admin, 4 User, 5 Locked.
-AMP_READINGS: bits 31-24, 23-16, 15-8 = load impedance of outputs 1-3 in 0.1 ohm (255 = open/unknown), bits 7-0 = temperature in degrees C.
+AMP_READINGS: bits 31-24, 23-16, 15-8 = load impedance of outputs 1-3 in 0.1 ohm (255 = open/unknown), bits 7-0 = temperature; the vendor app shows it as a percent (49 on an IPD2400, the same as the byte).
 HARDWARE_STATUS bits: 0x1 init done, 0x2 memory test failed, 0x4 standby, 0x8 codec/bus failure, 0x10 DSP not synced, 0x20 protect, 0x40 dim display, 0x80 display off, 0x400 AES backup, 0x8000 telnet enabled, 0x80000 amplifier protection/standby.
 ACCESS_RIGHTS bits: 0x1 input channel, 0x2 output channel, 0x4 load preset, 0x8 save preset, 0x10 front panel, 0x4000 display lock, 0x8000 language, 0x10000 user rights, 0x20000 locked rights, 0x40000 unit name, 0x80000 auto lock, 0x100000 unit configuration, 0x200000 load empty preset, 0x400000 admin rights, 0x800000 developer rights, 0x1000000 upgrade firmware, 0x2000000 full skin, 0x4000000 master volume, 0x8000000 tone control.
 
@@ -265,6 +265,7 @@ A command is confirmed by any RSP echo (the firmware may reset the value to 0); 
 
 ## Security notes
 
+- A write of CURRENT_USER (13, 38) is refused (not confirmed; tried 2026-11-12 with the amp at User): the amp is locked at its front panel and unlocked by CHECK_PASSWORD with the User password.
 - Reads and a gain write worked without logging in on the test unit; whether user levels are enforced by the firmware for other writes was not tested.
 - GET SET_PASSWORD (13, 28, level) returns every level's password in clear text, without logging in (confirmed for levels 1-4). Factory defaults: see device.
 - Passwords are at most 8 characters; the PIN is a short number.

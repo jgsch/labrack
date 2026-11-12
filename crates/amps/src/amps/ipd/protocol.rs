@@ -99,6 +99,8 @@ pub const USERS: [&str; 6] = ["AllDSP", "Factory", "Developer", "Admin", "User",
 
 /// The user level that is locked: the last of [`USERS`].
 pub const USER_LOCKED: i64 = 5;
+/// The level whose password unlocks the amp (BEH-48).
+pub const USER_LEVEL: u8 = 4;
 
 pub use crate::model::AccessRights;
 

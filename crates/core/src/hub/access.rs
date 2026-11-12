@@ -15,9 +15,19 @@ use crate::{Error, Result};
 /// A password is 1 to 8 printable ASCII characters; the amp pads a short one.
 const PASSWORD_LENGTH: std::ops::RangeInclusive<usize> = 1..=8;
 
+/// A password is 1 to 8 printable characters, checked before anything is sent.
+fn check_password(password: &str) -> Result<()> {
+    if !PASSWORD_LENGTH.contains(&password.chars().count())
+        || !password.chars().all(|c| c.is_ascii_graphic() || c == ' ')
+    {
+        return Err(Error::Invalid("The password has 1 to 8 letters, digits or symbols".into()));
+    }
+    Ok(())
+}
+
 impl Hub {
-    /// The user level of the amp and what it may do (BEH-13). `None` when the amp is not ONLINE, and
-    /// for an amp without user levels (the IPX), which is then not held back by any right.
+    /// The user level of the amp and what it may do (BEH-13); an IPX is `Locked` or `Unlocked`. `None` when the
+    /// amp is not ONLINE.
     pub fn access(&self, id: AmpId) -> Option<Access> {
         lock(&self.0.shared.live).get(&id)?.access.clone()
     }
@@ -28,14 +38,28 @@ impl Hub {
     /// only (BEH-16).
     pub async fn login(&self, id: AmpId, password: &str) -> Result<Access> {
         let session = self.session(id)?;
-        if !PASSWORD_LENGTH.contains(&password.chars().count())
-            || !password.chars().all(|c| c.is_ascii_graphic() || c == ' ')
-        {
-            return Err(Error::Invalid("The password has 1 to 8 letters, digits or symbols".into()));
-        }
+        check_password(password)?;
         let access = session.amp.login(password).await?;
         self.0.shared.set_access(id, &session.writer, &access);
         Ok(access)
+    }
+
+    /// Lock or unlock the amp (BEH-47) and return the access it has afterwards. An IPX only; no password. The
+    /// views are told ([`Update::Access`]).
+    pub async fn set_locked(&self, id: AmpId, locked: bool) -> Result<Access> {
+        let session = self.session(id)?;
+        let access = session.amp.set_locked(locked).await?;
+        self.0.shared.set_access(id, &session.writer, &access);
+        Ok(access)
+    }
+
+    /// Change the password the amp unlocks with (BEH-48), while it is unlocked. The password is used for this
+    /// call only and the amp is not asked for it (BEH-16).
+    pub async fn change_password(&self, id: AmpId, new: &str) -> Result<()> {
+        let session = self.session(id)?;
+        check_password(new)?;
+        self.permit(id, |rights| rights.complete())?;
+        Ok(session.amp.change_password(new).await?)
     }
 
     /// Refuse an intent the rights of the amp do not allow (BEH-14). With no access known there is

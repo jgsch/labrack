@@ -19,6 +19,13 @@ pub struct KnownAmp {
     /// The user ceilings (SEC-3): the highest output gain in dB, the highest limiter threshold in dBu.
     pub max_gain_db: Option<f64>,
     pub max_limiter_dbu: Option<f64>,
+    /// What an empty ceiling box shows (UX-15): the highest value the amp itself takes, once it is ONLINE.
+    pub gain_default: String,
+    pub limiter_default: String,
+    /// The user level or lock the amp has (UX-33): `—` while it is not ONLINE or has not told it.
+    pub level: String,
+    /// An IPD that is ONLINE and not locked: its password can be changed (BEH-48).
+    pub can_change_password: bool,
 }
 
 /// A ceiling as its box shows it: as typed, to 4 decimals, never rounded to the one decimal of a level. The box
@@ -163,6 +170,9 @@ pub fn SearchPage(
     /// A ceiling box of the amp at the index was changed: (index, max gain text, max limiter text) (SEC-3).
     #[props(default)]
     on_ceilings: EventHandler<(usize, String, String)>,
+    /// PASSWORD of the amp at the index was pressed (BEH-48).
+    #[props(default)]
+    on_password: EventHandler<usize>,
 ) -> Element {
     let count = view.amps.len();
     let mut name = use_signal(String::new);
@@ -280,13 +290,21 @@ pub fn SearchPage(
                         span { class: if amp.protocol == "IPD" { "badge ipd" } else { "badge ipx" }, "{amp.protocol}" }
                         span { class: "known-ip", "{amp.ip}" }
                         span { class: "known-source", "{amp.source}" }
+                        span { class: "known-level", "aria-label": "Level of amplifier {amp.index + 1}", "{amp.level}" }
+                        button {
+                            class: "known-password",
+                            "aria-label": "Change the password of amplifier {amp.index + 1}",
+                            disabled: !amp.can_change_password,
+                            onclick: move |_| on_password.call(amp.index),
+                            "PASSWORD"
+                        }
                         label { class: "known-ceiling",
                             "MAX GAIN dB"
                             input {
                                 r#type: "text",
                                 inputmode: "decimal",
                                 autocomplete: "off",
-                                placeholder: "none",
+                                placeholder: "{amp.gain_default}",
                                 "aria-label": "Highest output gain of amplifier {amp.index + 1}",
                                 value: ceiling_text(amp.max_gain_db),
                                 onchange: move |event| on_ceilings.call((amp.index, event.value(), ceiling_text(amp.max_limiter_dbu))),
@@ -298,7 +316,7 @@ pub fn SearchPage(
                                 r#type: "text",
                                 inputmode: "decimal",
                                 autocomplete: "off",
-                                placeholder: "none",
+                                placeholder: "{amp.limiter_default}",
                                 "aria-label": "Highest limiter threshold of amplifier {amp.index + 1}",
                                 value: ceiling_text(amp.max_limiter_dbu),
                                 onchange: move |event| on_ceilings.call((amp.index, ceiling_text(amp.max_gain_db), event.value())),
@@ -349,6 +367,10 @@ mod tests {
             source: source.into(),
             max_gain_db: None,
             max_limiter_dbu: None,
+            gain_default: "12".into(),
+            limiter_default: "34.78".into(),
+            level: "User".into(),
+            can_change_password: protocol == "IPD",
         }
     }
 
@@ -376,7 +398,34 @@ mod tests {
         let out = page_html(SearchView { amps: vec![amp], ..SearchView::default() }, "");
         assert!(out.contains("Highest output gain of amplifier 1"), "{out}");
         assert!(out.contains("Highest limiter threshold of amplifier 1"), "{out}");
-        assert!(out.contains("value=\"-6\"") && out.contains("placeholder=\"none\""), "{out}");
+        // the empty box shows what the amp itself takes, so no one reads it as having no maximum (UX-15)
+        assert!(out.contains("value=\"-6\"") && out.contains("placeholder=\"34.78\""), "{out}");
+        assert!(out.contains("placeholder=\"12\"") && !out.contains("placeholder=\"none\""), "{out}");
+    }
+
+    // BEH-13, BEH-48, UX-33: each row says the level of its amp, and an IPD that can has PASSWORD
+    #[test]
+    fn each_known_amplifier_shows_its_level_and_the_password_button() {
+        let mut off = known(1, "IPD", "AUTO");
+        off.level = "—".into();
+        off.can_change_password = false;
+        let mut ipx = known(2, "IPX", "AUTO");
+        ipx.level = "Locked".into();
+        let out = page_html(
+            SearchView { amps: vec![known(0, "IPD", "AUTO"), off, ipx], ..SearchView::default() },
+            "",
+        );
+        assert!(out.contains("Level of amplifier 1\">User<"), "{out}");
+        assert!(out.contains("Level of amplifier 2\">—<"), "{out}");
+        assert!(out.contains("Level of amplifier 3\">Locked<"), "{out}");
+        let tag = |n: u32| {
+            let end = out.find(&format!("Change the password of amplifier {n}")).unwrap();
+            let start = out[..end].rfind("<button").unwrap();
+            out[start..end + out[end..].find('>').unwrap()].to_string()
+        };
+        assert!(!tag(1).contains("disabled"), "an IPD that can");
+        assert!(tag(2).contains("disabled"), "not ONLINE");
+        assert!(tag(3).contains("disabled"), "an IPX has no password");
     }
 
     // UX-14, UX-25: both switches, with a status line that says what they are doing
@@ -437,7 +486,9 @@ mod tests {
         let out = page_html(view, "");
         assert_eq!(out.matches("Move amplifier").count(), 6, "{out}");
         assert!(out.contains("Move amplifier 2 up") && out.contains("Move amplifier 2 down"));
-        assert_eq!(out.matches("disabled").count(), 2, "the first up and the last down: {out}");
+        let moves_disabled =
+            out.split("<button").filter(|b| b.contains("known-move-button") && b.contains("disabled"));
+        assert_eq!(moves_disabled.count(), 2, "the first up and the last down: {out}");
         let first_up = out.find("Move amplifier 1 up").unwrap();
         assert!(out[first_up..first_up + 120].contains("disabled"), "{out}");
         let last_down = out.find("Move amplifier 3 down").unwrap();

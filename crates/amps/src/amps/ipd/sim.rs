@@ -452,6 +452,17 @@ impl SimServer {
         amp.values.insert(Key::new(S_PRESET, M_DEVICE_MODE, 0, 0), Raw::Int(number));
     }
 
+    /// The temperature the amp reports, as the amp leaves it in the readings.
+    pub fn set_temperature(&self, percent: u8) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        let key = GLOBAL(M_AMP_READINGS, 0);
+        let old = match amp.values.get(&key) {
+            Some(Raw::Int(r)) => *r,
+            _ => 0,
+        };
+        amp.values.insert(key, Raw::Int((old & !0xFF) | i64::from(percent)));
+    }
+
     /// From now on the model name is no longer sent along with the version.
     pub fn withhold_model_name(&self) {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).withhold_model_name = true;

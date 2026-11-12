@@ -81,8 +81,8 @@ statement with a `BEH-<n>` ID.
 
 - **BEH-13** The app reads and shows the amp's current user level (AllDSP, Factory, Developer,
   Admin, User, Locked) and its access rights when the amp goes ONLINE and after a login. A level
-  changed on the amp meanwhile is seen at the next connect. An IPX has no user levels: nothing is
-  shown and nothing is held back.
+  changed on the amp meanwhile is seen within a few seconds. An IPX has no levels, only a lock: its
+  level is `Locked` or `Unlocked`, and while it is locked it has no rights (`BEH-14`).
 - **BEH-14** Controls the amp's access rights do not allow (input channel, output channel, load
   preset, save preset, unit name) are disabled, and the app refuses the intent before sending
   anything. Input and output settings need the input or output channel right; preset recall the
@@ -90,7 +90,7 @@ statement with a `BEH-<n>` ID.
   both. Linking needs the right of its channels. Turning a mute **on** is never held back, because
   a muted output is never the dangerous state (`SEC-6`): the amp has the last word. Unmuting needs
   the output channel right.
-- **BEH-15** When the amp is locked or a right is missing, the app offers a login prompt
+- **BEH-15** When an IPD is locked or a right is missing, the app offers a login prompt
   (8-character password: 1 to 8 printable ASCII characters, a short one is padded; anything else is
   refused before it is sent). The amp does not say whether a password was right; the app reads the
   level and rights afterwards and shows them, so a wrong password leaves the level as it was.
@@ -201,6 +201,18 @@ statement with a `BEH-<n>` ID.
   the app asks first, mutes the outputs while it is done and puts them back as they were (`SEC-6`,
   `SEC-7`). A settings file never sets it. The IPX keeps it as a number of its own (MODEAES, field 0: 1 stereo,
   0 2 ways); it is asked for about once a second too.
+- **BEH-47** Lock. An IPX is locked and unlocked from the app with one button each, no password: the amp
+  does not check one and the app assumes a trusted network (`SEC-8`). The amp is read back after the write;
+  one that did not take it is an error. An IPD cannot be locked from the app (the amp refuses a write of its
+  user level): it is locked at its front panel and unlocked by `BEH-15`.
+- **BEH-48** Password. The password an IPD unlocks with, the one of the User level, is changed from the app: a
+  new one of 1 to 8 printable characters, typed twice, only while the amp is ONLINE and not locked. The amp
+  does not say whether it took it and the app never reads it back (`BEH-16`), so what the user typed twice is
+  the only record. An IPX has no password in the app.
+- **BEH-46** Temperature. An ONLINE amp shows the temperature it reports, in percent as the vendor app
+  shows it (the first of the IPX's readings; the IPD's one reading). The app asks for it every few
+  seconds once the state is read, keeps the last value when one answer is missing, and shows nothing when
+  the amp is not ONLINE. The text turns orange from 80% to 90% and red above 90%.
 
 ## Presets
 

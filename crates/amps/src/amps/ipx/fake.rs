@@ -134,6 +134,9 @@ async fn serve(mut sock: TcpStream, state: &Mutex<State>, cmd: &mut mpsc::Unboun
     }
 }
 
+/// Where the 11 dwords of the device configuration start in the state (`docs/ipx-protocol.md`).
+const DEVCFG_OFFSET: usize = 0x62C;
+
 fn padded(s: &str, n: usize) -> Vec<u8> {
     let mut v = s.as_bytes().to_vec();
     v.resize(n, 0);
@@ -157,6 +160,11 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
                 _ if st.drop_reads.contains(&a) => {
                     st.drop_reads.retain(|x| *x != a);
                     return vec![];
+                }
+                // the device configuration: 11 dwords in the state, from DEVCFG_OFFSET
+                Env::DEVCFG => {
+                    let o = DEVCFG_OFFSET + usize::from(a.field) * 4;
+                    st.sync[o..o + 4].to_vec()
                 }
                 Env::DEV_PRM_SYNC if st.synced && st.drop_syncs > 0 => {
                     st.drop_syncs -= 1;
@@ -185,6 +193,10 @@ fn answer(state: &Mutex<State>, fr: Frame) -> Vec<Vec<u8>> {
         Main::SETPRM => {
             let a = fr.address();
             st.setprm.push(a);
+            if a.env == Env::DEVCFG && !st.reject_writes.contains(&a) {
+                let o = DEVCFG_OFFSET + usize::from(a.field) * 4;
+                st.sync[o..o + 4].copy_from_slice(&fr.payload[..4]);
+            }
             if let Some(d) = audio_dword(a).filter(|_| !st.reject_writes.contains(&a)) {
                 let o = AUDIO + d * 4;
                 st.sync[o..o + fr.payload.len()].copy_from_slice(&fr.payload);

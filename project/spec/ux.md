@@ -42,12 +42,26 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   modes as two buttons (STEREO, 2 WAYS), the one the amp holds pressed (`BEH-44`), and PRESET in gray
   followed by the preset name (cut with an ellipsis when long; clicking it opens Mix & EQ), with a dot
   after it when the preset is modified (`BEH-11`). Clicking the other mode asks first (`UX-24`). Every amp
-  shows the MODE box; its buttons are disabled until the amp is ONLINE and its mode read.
+  shows the MODE box; its buttons are disabled until the amp is ONLINE and its mode read. On the status
+  line, after the status, `TEMP 61%` while the amp is ONLINE and reports one (`BEH-46`).
 - **UX-12** On the right of those boxes, one row per output, level with the box on its left. In each row:
   the channel name in bold with, under it in gray, the level in dB and the gain reduction (MUTED instead
   of the level while the output is muted), then the segmented level meter (green, yellow, red) with a
   thinner peach gain reduction bar under it.
 - **UX-13** At the end of each output row, one M button (36 × 36 px).
+- **UX-30** An ONLINE IPD shows its user level on the status line, after the status: `LEVEL USER`, in
+  orange while the amp is locked or a right is missing (`BEH-13`); an IPX reads `LEVEL LOCKED` or
+  `LEVEL UNLOCKED`. While an IPD needs a login (`BEH-15`) a LOGIN button stands before DISCONNECT; an IPX
+  has LOCK or UNLOCK there instead (`BEH-47`), pressed without a question. Without the right of the output channels, UNMUTE and the M
+  button of a muted output are disabled; turning a mute on never is (`BEH-14`, `SEC-6`).
+- **UX-31** LOGIN opens a small dialog like the confirmations (`UX-24`): a password box (1 to 8
+  characters, the text hidden, no suggestions), LOGIN (disabled while the box is empty) and CANCEL;
+  Enter logs in, Escape cancels. The password is dropped as soon as it is sent (`BEH-16`). The amp does not
+  say whether it was right: a toast says so when the level is still the one it was.
+- **UX-32** On Mix & EQ, LOAD and SAVE are disabled without the load and save rights. A tab whose
+  channels the amp does not allow to change (the outputs' for the Levels and the output EQ tabs, the inputs'
+  for the Mixer and the input EQ tabs; Levels needs both) shows a line, `LOCKED · level … · see the
+  Amplifiers page`, and cannot be clicked (`BEH-14`).
 
 ## Search page
 
@@ -57,8 +71,15 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   badge (IPD mauve, IPX sapphire), IP, source (AUTO / MANUAL) and REMOVE. After the index, an up and a
   down arrow move the row (`BEH-45`); the first row cannot go up and the last cannot go down.
   Before REMOVE, two boxes hold the user ceilings of the amp (`SEC-3`): MAX GAIN dB and MAX LIMITER dBu.
-  An empty box (shown as `none`) is no ceiling; a number sets it; text that is not a number is refused
+  An empty box is no ceiling and shows the highest value the amp itself takes (`amp max` while it is
+  not ONLINE), never `none`, so it is not read as having no maximum; a number sets it; text that is not a number is refused
   with an error toast and changes nothing.
+
+- **UX-33** Each row of Known amplifiers shows the level of its amp after the source: `User`, `Locked`,
+  `Unlocked`, or `—` while the amp is not ONLINE or has not told it (`BEH-13`). An IPD that is ONLINE and not
+  locked has a PASSWORD button that opens a dialog like the login's (`UX-31`): the new password and the
+  same again, hidden, 1 to 8 characters, CHANGE (disabled until both are filled and equal) and CANCEL
+  (`BEH-48`).
 
 ## Mix & EQ pages
 

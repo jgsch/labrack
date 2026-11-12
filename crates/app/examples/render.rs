@@ -110,6 +110,14 @@ fn controls() -> Element {
 /// Four amplifiers, as the Amplifiers page of the app is laid out, for the visual check of the panels.
 fn amplifiers_demo() -> Element {
     let mut a = AmpView::new(0, "IPD 2400", "IPD", "192.168.1.183", Status::Online);
+    a.temperature = Some(49);
+    a.access = Some(labrack_app::AccessView {
+        user: "User".into(),
+        locked: false,
+        needs_login: false,
+        can_lock: false,
+        can_unmute: true,
+    });
     a.levels[0] = Level { label: "OUT 1".into(), db: -37.0, gr: 0.0 };
     a.levels[1] = Level { label: "OUT 2".into(), db: -26.0, gr: 0.0 };
     a.preset = Some("alegra-ext".into());
@@ -117,15 +125,32 @@ fn amplifiers_demo() -> Element {
     a.mode = Some("stereo".into());
     let mut b = AmpView::new(1, "FOH Main R", "IPD", "192.168.1.22", Status::Online);
     b.preset = Some("Show".into());
+    b.temperature = Some(85);
+    b.access = Some(labrack_app::AccessView {
+        user: "Locked".into(),
+        locked: true,
+        needs_login: true,
+        can_lock: false,
+        can_unmute: false,
+    });
     b.mode = Some("stereo".into());
     b.amp_muted = true;
     b.muted = [true, true];
     let mut c = AmpView::new(2, "Subs", "IPX", "192.168.1.31", Status::Online);
+    c.temperature = Some(61);
+    c.access = Some(labrack_app::AccessView {
+        user: "Locked".into(),
+        locked: true,
+        needs_login: false,
+        can_lock: true,
+        can_unmute: false,
+    });
     c.levels[0] = Level { label: "OUT 1".into(), db: -12.0, gr: 3.0 };
     c.levels[1] = Level { label: "OUT 2".into(), db: -15.0, gr: 0.0 };
     c.preset = Some("Subs cardioid end-fire".into());
     c.mode = Some("two_way".into());
     let mut d = AmpView::new(3, "Delays", "IPX", "192.168.1.33", Status::Online);
+    d.temperature = Some(93);
     d.levels[0] = Level { label: "OUT 1".into(), db: -40.0, gr: 0.0 };
     d.levels[1] = Level { label: "OUT 2".into(), db: -36.0, gr: 0.0 };
     d.preset = Some("Factory default".into());
@@ -152,6 +177,10 @@ fn search_demo() -> Element {
                 source: "AUTO".into(),
                 max_gain_db: None,
                 max_limiter_dbu: None,
+                gain_default: "12".into(),
+                limiter_default: "35.99".into(),
+                level: "User".into(),
+                can_change_password: true,
             },
             KnownAmp {
                 index: 1,
@@ -161,6 +190,10 @@ fn search_demo() -> Element {
                 source: "AUTO".into(),
                 max_gain_db: None,
                 max_limiter_dbu: None,
+                gain_default: "12".into(),
+                limiter_default: "35.99".into(),
+                level: "Unlocked".into(),
+                can_change_password: false,
             },
             KnownAmp {
                 index: 2,
@@ -170,6 +203,10 @@ fn search_demo() -> Element {
                 source: "MANUAL".into(),
                 max_gain_db: None,
                 max_limiter_dbu: None,
+                gain_default: "12".into(),
+                limiter_default: "35.99".into(),
+                level: "—".into(),
+                can_change_password: false,
             },
         ],
         ..labrack_app::SearchView::default()
@@ -356,6 +393,8 @@ fn demo_presets() -> labrack_app::presets::PresetView {
         loaded: Some((1, "Factory default".into())),
         modified: false,
         online: true,
+        no_load: false,
+        no_save: false,
     }
 }
 

@@ -19,6 +19,11 @@ committed.
   range is the IPD 1200's and a default-named amp is named `IPD`. Wait for the name, or re-evaluate. Spec: BEH-5, BEH-20
 - The task started by `read_state_again` (presets.rs) is not ended with the connection; change events lost to
   a lagged channel (`pump`, hub.rs) are dropped without a re-read. Spec: BEH-43
+- Do the amps refuse network writes while locked? The app holds back its own writes (`BEH-14`) but that is
+  not known for the IPX (lock flag set, then a mute written) nor for the IPD (Locked level). Also: the IPD
+  `SET_PASSWORD` of the User level (`BEH-48`) was only tried against the simulator; its echo on the real amp is
+  unknown, so the app sends it and cannot confirm it. Try it on the IPD2400 with the front panel to unlock.
+  Spec: BEH-13, BEH-14, BEH-47, BEH-48
 - A scan probes IPX amps the user released with DISCONNECT, briefly taking their single controller slot.
   Skip addresses of known amps with `connected = false`. Spec: BEH-9, BEH-18
 

@@ -389,8 +389,16 @@ impl Client {
     /// Send a password (8 characters). The echo is masked, so this does not wait for one; read the
     /// current user afterwards.
     pub async fn login(&self, password: &str) -> Result<()> {
+        self.send_password(Key::new(S_GLOBAL, M_CHECK_PASSWORD, 0, 0), password).await
+    }
+
+    /// Set the password of user `level` (1 to 5). Like a login, it is sent without waiting for an echo.
+    pub async fn set_password(&self, level: u8, password: &str) -> Result<()> {
+        self.send_password(Key::new(S_GLOBAL, M_SET_PASSWORD, level, 0), password).await
+    }
+
+    async fn send_password(&self, key: Key, password: &str) -> Result<()> {
         self.shared.check_alive()?;
-        let key = Key::new(S_GLOBAL, M_CHECK_PASSWORD, 0, 0);
         let mut pw: String = password.chars().take(8).collect();
         while pw.len() < 8 {
             pw.push(' ');

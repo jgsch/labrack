@@ -18,6 +18,9 @@ pub struct PresetView {
     pub modified: bool,
     /// The amp is ONLINE: nothing can be done otherwise (BEH-10).
     pub online: bool,
+    /// The amp does not give the right to load or to save a preset (BEH-14).
+    pub no_load: bool,
+    pub no_save: bool,
 }
 
 /// The preset an amp runs: `03 · Show`, or only the name while the slot is not known (an IPD can say
@@ -259,7 +262,7 @@ pub fn PresetBar(
     });
     let stored = name_of(slot());
     let online = view.online;
-    let can_store = online && !draft().trim().is_empty();
+    let can_store = online && !view.no_save && !draft().trim().is_empty();
     rsx! {
         section { class: "preset-bar", "aria-label": "Presets",
             label { class: "preset-title", r#for: "preset-slot", "PRESET" }
@@ -293,7 +296,7 @@ pub fn PresetBar(
             }
             button {
                 class: "button preset-load",
-                disabled: !online || stored.is_none(),
+                disabled: !online || view.no_load || stored.is_none(),
                 onclick: {
                     let stored = stored.clone();
                     move |_| {
@@ -360,6 +363,8 @@ mod tests {
             loaded: Some((1, "Factory default".into())),
             modified: false,
             online: true,
+            no_load: false,
+            no_save: false,
         }
     }
 
@@ -433,6 +438,17 @@ mod tests {
 
         let off = html(|| rsx! { PresetBar { view: PresetView { online: false, ..view() } } });
         assert!(off.matches("disabled").count() >= 6, "{off}");
+
+        // BEH-14, UX-32: without the load right LOAD is closed, without the save right SAVE is
+        let tag = |out: &str, label: &str| {
+            let end = out.find(&format!(">{label}<")).unwrap();
+            let start = out[..end].rfind("<button").unwrap();
+            out[start..end].to_string()
+        };
+        let no_load = html(|| rsx! { PresetBar { view: PresetView { no_load: true, ..view() } } });
+        assert!(tag(&no_load, "LOAD").contains("disabled") && !tag(&no_load, "SAVE").contains("disabled"));
+        let no_save = html(|| rsx! { PresetBar { view: PresetView { no_save: true, ..view() } } });
+        assert!(tag(&no_save, "SAVE").contains("disabled") && !tag(&no_save, "LOAD").contains("disabled"));
     }
 
     // UX-24: the popup is an alert dialog with the question and both answers

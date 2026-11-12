@@ -128,6 +128,12 @@ impl IpxAmp {
         Ok(raw.as_chunks::<4>().0.iter().map(|c| i32::from_le_bytes(*c)).collect())
     }
 
+    /// The lock flag of the amp (DEVCFG field 1).
+    async fn locked(&self) -> Result<bool> {
+        let raw = self.client.get_raw(LOCK_UNIT).await?;
+        Ok(raw.get(..4).is_some_and(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]) != 0))
+    }
+
     pub async fn device_name(&self) -> Result<String> {
         Ok(cstr(&self.client.get_raw(Address::block(Env::DEVICE_NAME)).await?))
     }
@@ -165,6 +171,18 @@ fn changed(frame: &Frame) -> Option<AmpEvent> {
     let param = params::param_for(frame.address())?;
     let value = params::slot(param)?.decode(&frame.payload).ok()?;
     Some(AmpEvent::Changed(param.clone(), value))
+}
+
+/// The lock flag of the amp, DEVCFG field 1 (`docs/ipx-protocol.md`).
+const LOCK_UNIT: Address = Address::new(Env::DEVCFG, 0, 0, 1);
+
+/// What a lock means here: a locked IPX allows nothing, an unlocked one everything (BEH-13).
+fn lock_access(locked: bool) -> Access {
+    Access {
+        user: if locked { "Locked" } else { "Unlocked" }.into(),
+        locked,
+        rights: if locked { AccessRights::none() } else { AccessRights::all() },
+    }
 }
 
 async fn forward(mut rx: broadcast::Receiver<ClientEvent>, tx: broadcast::Sender<AmpEvent>) {
@@ -319,6 +337,24 @@ impl Amp for IpxAmp {
 
     fn meters(&self) -> Meters {
         self.client.meters().map(|m| (&m).into()).unwrap_or_default()
+    }
+
+    async fn temperature(&self) -> Result<Option<i32>> {
+        Ok(self.temperatures().await?.first().copied())
+    }
+
+    async fn access(&self) -> Result<Option<Access>> {
+        Ok(Some(lock_access(self.locked().await?)))
+    }
+
+    async fn set_locked(&self, locked: bool) -> Result<Access> {
+        self.client.set_raw(LOCK_UNIT, &i32::from(locked).to_le_bytes()).await?;
+        // the amp does not answer a write: it is read back
+        let now = self.locked().await?;
+        if now != locked {
+            return Err(Error::NotConfirmed(format!("lock: wrote {locked}, the amp reports {now}")));
+        }
+        Ok(lock_access(now))
     }
 
     fn subscribe(&self) -> broadcast::Receiver<AmpEvent> {

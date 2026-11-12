@@ -44,6 +44,10 @@ pub struct Timing {
     pub meter_interval: Duration,
     /// An IPD is asked for its output mutes this often: it answers one thing at a time and slowly.
     pub mute_poll_interval: Duration,
+    /// The lock or level of an ONLINE amp is asked for this often, for one changed at its front panel (BEH-13).
+    pub access_interval: Duration,
+    /// The temperature of an ONLINE amp is asked for this often (BEH-46).
+    pub temperature_interval: Duration,
     /// How long a scan searches. Over Wi-Fi an IPD can need a few seconds to answer a probe.
     pub scan_window: Duration,
     /// A parameter is written at most this often while it is being changed (SEC-4).
@@ -57,6 +61,8 @@ impl Default for Timing {
             retry_max: Duration::from_secs(15),
             meter_interval: Duration::from_millis(100),
             mute_poll_interval: Duration::from_millis(200),
+            access_interval: Duration::from_secs(3),
+            temperature_interval: Duration::from_secs(5),
             scan_window: Duration::from_secs(5),
             write_interval: Duration::from_millis(50),
         }
@@ -69,6 +75,8 @@ pub enum Update {
     Status(AmpId, Status),
     /// At most once per [`Timing::meter_interval`] per amp.
     Meters(AmpId, Meters),
+    /// The temperature of the amp changed ([`Hub::temperature`]).
+    Temperature(AmpId),
     /// A parameter changed on the amp (front panel, another controller).
     Changed(AmpId, Param, Value),
     /// The state of an amp that went ONLINE has been read ([`Hub::values`]).
@@ -135,6 +143,8 @@ impl Target {
 struct Live {
     status: Status,
     meters: Meters,
+    /// The temperature in percent, while ONLINE and once the amp has given one (BEH-46).
+    temperature: Option<i32>,
     /// The DSP state, while ONLINE. The IPD fills it as the amp answers; `loaded` says it is all there.
     values: HashMap<Param, Value>,
     loaded: bool,
@@ -204,6 +214,7 @@ impl Shared {
             amp.status = next;
             if next != Status::Online {
                 amp.meters = Meters::default();
+                amp.temperature = None;
                 amp.values.clear();
                 amp.loaded = false;
                 amp.modified = false;
@@ -470,6 +481,11 @@ impl Hub {
 
     pub fn status(&self, id: AmpId) -> Option<Status> {
         lock(&self.0.shared.live).get(&id).map(|amp| amp.status)
+    }
+
+    /// The temperature of the amp in percent (BEH-46); `None` when it is not ONLINE or has not given one.
+    pub fn temperature(&self, id: AmpId) -> Option<i32> {
+        lock(&self.0.shared.live).get(&id).and_then(|amp| amp.temperature)
     }
 
     /// The latest meters; empty when the amp is not ONLINE (BEH-10).
@@ -773,6 +789,7 @@ impl Hub {
                     let live = Live {
                         status,
                         meters: Meters::default(),
+                        temperature: None,
                         values: HashMap::new(),
                         loaded: false,
                         modified: false,
@@ -854,6 +871,8 @@ async fn session(
                     bulk.clone(),
                     gate.clone(),
                 ));
+                helpers.spawn(poll_temperature(shared.clone(), id, link.amp.clone()));
+                helpers.spawn(poll_access(shared.clone(), id, link.amp.clone(), writer.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,
@@ -996,6 +1015,50 @@ async fn poll_mutes(
                     continue;
                 }
                 shared.observed(id, param, &value, false);
+            }
+        }
+    }
+}
+
+/// The lock or level of the amp is asked for now and then, once the state is read: it is changed at the front panel
+/// and the amp does not say so (BEH-13). A login or a lock from the app sets it at once.
+async fn poll_access(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>, writer: Arc<Writer>) {
+    if !wait_loaded(&shared, id).await {
+        return;
+    }
+    let mut tick = interval(shared.timing.access_interval);
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        tick.tick().await;
+        if let Ok(Ok(Some(access))) = timeout(Duration::from_secs(3), amp.access()).await {
+            shared.set_access(id, &writer, &access);
+        }
+    }
+}
+
+/// The temperature is asked for now and then once the state is read (BEH-46). An answer that is missing leaves
+/// the last value.
+async fn poll_temperature(shared: Arc<Shared>, id: AmpId, amp: Arc<dyn labgruppen::Amp>) {
+    if !wait_loaded(&shared, id).await {
+        return;
+    }
+    let mut tick = interval(shared.timing.temperature_interval);
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        tick.tick().await;
+        if let Ok(Ok(Some(temperature))) = timeout(Duration::from_secs(3), amp.temperature()).await {
+            let changed = {
+                let mut live = lock(&shared.live);
+                match live.get_mut(&id) {
+                    Some(live) if live.session.is_some() && live.temperature != Some(temperature) => {
+                        live.temperature = Some(temperature);
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if changed {
+                shared.emit(Update::Temperature(id));
             }
         }
     }

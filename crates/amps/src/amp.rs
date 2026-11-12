@@ -57,7 +57,7 @@ pub trait Amp: Send + Sync {
 
     async fn status(&self) -> Result<Status>;
 
-    /// The current user level and what it may do; `None` for amps without user levels (the IPX).
+    /// The current user level and what it may do; for the IPX `Locked` with no rights or `Unlocked` with all.
     async fn access(&self) -> Result<Option<Access>> {
         Ok(None)
     }
@@ -67,6 +67,20 @@ pub trait Amp: Send + Sync {
     /// this call only. Errors: [`Error::Unsupported`] for amps without user levels.
     async fn login(&self, _password: &str) -> Result<Access> {
         Err(Error::Unsupported("user levels".into()))
+    }
+
+    /// Lock or unlock the amp and return the access it has afterwards (BEH-47). Errors: [`Error::Unsupported`]
+    /// where the amp cannot be locked over the network (the IPD), [`Error::NotConfirmed`] when the amp
+    /// does not take it.
+    async fn set_locked(&self, _locked: bool) -> Result<Access> {
+        Err(Error::Unsupported("locking the amp".into()))
+    }
+
+    /// Change the password the amp unlocks with (BEH-48): 1 to 8 characters, the amp pads a short one. The
+    /// amp does not say whether it took it, and the password is not read back. Errors:
+    /// [`Error::Unsupported`] for the IPX.
+    async fn change_password(&self, _new: &str) -> Result<()> {
+        Err(Error::Unsupported("a password".into()))
     }
 
     /// Usable preset slots, numbered as on the amp.
@@ -97,6 +111,12 @@ pub trait Amp: Send + Sync {
 
     /// Latest meter readings.
     fn meters(&self) -> Meters;
+
+    /// The temperature the amp reports now, in percent as the vendor app shows it; `None` when the amp has
+    /// no reading to give.
+    async fn temperature(&self) -> Result<Option<i32>> {
+        Ok(None)
+    }
 
     fn subscribe(&self) -> broadcast::Receiver<AmpEvent>;
 

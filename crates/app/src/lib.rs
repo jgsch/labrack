@@ -7,13 +7,14 @@ pub mod components;
 pub mod control;
 pub mod eq;
 mod header;
+pub mod login;
 pub mod mixeq;
 pub mod page;
 pub mod presets;
 pub mod search;
 mod style;
 
-pub use amplifiers::{AmpView, AmplifierPanel, AmplifiersPage, Level};
+pub use amplifiers::{AccessView, AmpView, AmplifierPanel, AmplifiersPage, Level};
 pub use app::App;
 pub use components::{ConfirmButton, ErrorText, Fader, Meter, Toasts, ValueField};
 pub use header::Header;

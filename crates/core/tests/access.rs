@@ -10,7 +10,7 @@ use labgruppen::amps::ipd::client::Options;
 use labgruppen::amps::ipd::protocol::{M_CHECK_PASSWORD, M_CHECK_PIN, M_PIN, M_SET_PASSWORD};
 use labgruppen::amps::ipd::sim::SimServer;
 use labgruppen::{Amp, Value};
-use labrack_core::{AmpId, Error, Hub, Protocol, Side, Status, Store, Unit, Update};
+use labrack_core::{AmpId, Error, Hub, Protocol, Side, Status, Store, Timing, Unit, Update};
 use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout};
 
@@ -19,6 +19,8 @@ const OUTPUT: u32 = 0x2;
 const LOAD: u32 = 0x4;
 const SAVE: u32 = 0x8;
 const ALL: u32 = 0xFFFF_FFFF;
+const TRUE: Value = Value::Bool(true);
+const FALSE: Value = Value::Bool(false);
 const USER: i64 = 4;
 const LOCKED: i64 = 5;
 
@@ -85,13 +87,115 @@ async fn the_user_level_is_shown_while_online() {
     assert_eq!(hub.access(gone), None);
 }
 
-// BEH-13: an IPX has no user levels: nothing to show, nothing refused, no login
+// BEH-13: an IPX has a lock, not levels: `Unlocked` with every right, nothing refused, and no login
 #[tokio::test(flavor = "multi_thread")]
-async fn an_ipx_has_no_levels() {
+async fn an_unlocked_ipx_has_every_right_and_no_login() {
     let (hub, id, _fake) = online_ipx(timing()).await;
-    assert_eq!(hub.access(id), None);
+    let access = hub.access(id).expect("an IPX says its lock");
+    assert_eq!((access.user.as_str(), access.locked, access.needs_login()), ("Unlocked", false, false));
     hub.set(id, param("out1.gain"), f(-3.0)).unwrap();
     assert!(matches!(hub.login(id, "Password").await, Err(Error::Amp(labgruppen::Error::Unsupported(_)))));
+}
+
+// BEH-47, BEH-14: an IPX is locked and unlocked from the app, no password; locked, it holds back what an IPD
+// without rights does, and a mute is still taken
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipx_is_locked_and_unlocked_from_the_app() {
+    let (hub, id, fake) = online_ipx(timing()).await;
+    let mut updates = hub.subscribe();
+    let writes = fake.writes();
+
+    let access = hub.set_locked(id, true).await.unwrap();
+    assert_eq!((access.user.as_str(), access.locked), ("Locked", true));
+    assert_eq!(hub.access(id).unwrap(), access);
+    assert!(next_access(&mut updates, id).await.is_some(), "the views are told");
+    assert!(
+        matches!(hub.set(id, param("out1.gain"), f(-3.0)), Err(Error::AccessDenied(user)) if user == "Locked")
+    );
+    assert!(matches!(hub.set(id, param("out1.mute"), FALSE), Err(Error::AccessDenied(_))));
+    hub.set(id, param("out1.mute"), TRUE).unwrap();
+    assert!(matches!(hub.recall_preset(id, 1).await, Err(Error::AccessDenied(_))));
+    assert_eq!(fake.writes(), writes + 1, "only the lock and the mute were written");
+
+    let access = hub.set_locked(id, false).await.unwrap();
+    assert_eq!((access.user.as_str(), access.locked), ("Unlocked", false));
+    hub.set(id, param("out1.gain"), f(-3.0)).unwrap();
+}
+
+// BEH-47: an IPD cannot be locked from the app
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ipd_cannot_be_locked_from_the_app() {
+    let (hub, id, _sim) = ipd_at(USER, ALL).await;
+    assert!(matches!(hub.set_locked(id, true).await, Err(Error::Amp(labgruppen::Error::Unsupported(_)))));
+    assert_eq!(user(&hub, id), "User");
+}
+
+// BEH-13: a lock or a level set at the front panel is seen within a few seconds, on an IPX and on an IPD
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lock_made_at_the_front_panel_is_seen() {
+    let quick = Timing { access_interval: Duration::from_millis(50), ..timing() };
+    let (hub, id, fake) = online_ipx(quick).await;
+    let mut updates = hub.subscribe();
+    fake.state().sync[0x62C + 4..0x62C + 8].copy_from_slice(&1i32.to_le_bytes());
+    assert!(next_access(&mut updates, id).await.is_some());
+    assert_eq!(user(&hub, id), "Locked");
+
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let (hub, local) = hub_with(Store::in_memory(), quick);
+    local.route("10.0.0.1", sim.addr.port());
+    let mut updates = hub.subscribe();
+    let id = hub.add_manual("Right", Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+    sim.set_access(LOCKED, 0);
+    assert!(next_access(&mut updates, id).await.is_some());
+    assert_eq!(user(&hub, id), "Locked");
+}
+
+// BEH-48: the password of an IPD is changed while it is unlocked; a bad one, a locked amp and an IPX are refused,
+// and the new password is neither read nor kept (BEH-16)
+#[tokio::test(flavor = "multi_thread")]
+async fn the_password_is_changed_while_unlocked_and_kept_nowhere() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let sim = SimServer::spawn("127.0.0.1:0".parse().unwrap(), true, 0).await.unwrap();
+    let (hub, local) = hub_with(Store::open(&path).unwrap(), timing());
+    local.route("10.0.0.1", sim.addr.port());
+    let mut updates = hub.subscribe();
+    let id = hub.add_manual("Right", Protocol::Ipd, "10.0.0.1").unwrap();
+    wait_loaded(&hub, id).await;
+
+    for bad in ["", "123456789", "pässword"] {
+        assert!(matches!(hub.change_password(id, bad).await, Err(Error::Invalid(_))), "{bad:?}");
+    }
+    assert_eq!(sim.writes().iter().filter(|k| k.member_id == M_SET_PASSWORD).count(), 0);
+    hub.change_password(id, "NewPass1").await.unwrap();
+    assert_eq!(sim.writes().iter().filter(|k| k.member_id == M_SET_PASSWORD).count(), 1);
+    // locked at the front panel: the new one unlocks, the old one does not
+    sim.set_access(LOCKED, 0);
+    assert!(hub.login(id, "Password").await.unwrap().locked);
+    assert!(!hub.login(id, "NewPass1").await.unwrap().locked);
+
+    sim.set_access(LOCKED, 0);
+    hub.login(id, "Wrong123").await.unwrap();
+    assert!(matches!(hub.change_password(id, "Other123").await, Err(Error::AccessDenied(_))));
+
+    let mut seen = vec![std::fs::read_to_string(&path).unwrap(), format!("{:?}", hub.values(id))];
+    while let Ok(update) = updates.try_recv() {
+        seen.push(format!("{update:?}"));
+    }
+    for text in &seen {
+        assert!(!text.contains("NewPass1") && !text.contains("Other123"), "{text}");
+    }
+    let secret = |k: &labgruppen::amps::ipd::protocol::Key| {
+        matches!(k.member_id, M_SET_PASSWORD | M_CHECK_PASSWORD | M_PIN | M_CHECK_PIN)
+    };
+    assert_eq!(sim.reads().into_iter().filter(secret).count(), 0, "never read back");
+
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    assert!(matches!(
+        hub.change_password(id, "NewPass1").await,
+        Err(Error::Amp(labgruppen::Error::Unsupported(_)))
+    ));
 }
 
 // BEH-14: a control the rights do not allow is refused, and nothing is sent for it

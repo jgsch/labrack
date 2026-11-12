@@ -154,6 +154,8 @@ pub struct MixeqView {
     /// The amp is offline or its state is not read yet: the page shows a figure it does not know, so
     /// nothing of it can be set (SEC-4).
     pub unread: bool,
+    /// The amp does not allow the open tab to be changed (BEH-14): the level it is at, for the line that says so.
+    pub denied: Option<String>,
 }
 
 impl Default for MixeqView {
@@ -173,6 +175,7 @@ impl Default for MixeqView {
             asking: None,
             busy: None,
             unread: false,
+            denied: None,
         }
     }
 }
@@ -912,13 +915,22 @@ pub fn MixeqPage(
                         }
                     }
                 }
-                match tab {
-                    MixTab::Levels => rsx! { LevelsPage { key: "{key}", view: view.clone(), on_gain, on_mute, on_limiter } },
-                    MixTab::Mixer => rsx! { MixerPage { key: "{key}", rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
-                    _ => match view.eq.clone() {
-                        Some(eq) => rsx! { EqPage { key: "{key}", eq, on_set, on_delay, on_copy } },
-                        None => rsx! { section { class: "tab-panel {side_class}" } },
-                    },
+                if let Some(user) = view.denied.clone() {
+                    p { class: "locked-line", role: "status", "LOCKED · level {user.to_uppercase()} · see the Amplifiers page" }
+                }
+                // the shield of a tab the amp does not allow covers it and not the tabs, which still switch (UX-32)
+                div { class: "tab-guard",
+                    if view.denied.is_some() {
+                        div { class: "locked-shield", "aria-hidden": "true" }
+                    }
+                    match tab {
+                        MixTab::Levels => rsx! { LevelsPage { key: "{key}", view: view.clone(), on_gain, on_mute, on_limiter } },
+                        MixTab::Mixer => rsx! { MixerPage { key: "{key}", rows: view.mixer.clone(), bounds: view.mixer_bounds, on_set, on_tab } },
+                        _ => match view.eq.clone() {
+                            Some(eq) => rsx! { EqPage { key: "{key}", eq, on_set, on_delay, on_copy } },
+                            None => rsx! { section { class: "tab-panel {side_class}" } },
+                        },
+                    }
                 }
             }
         }
@@ -984,6 +996,20 @@ mod tests {
             }],
             ..MixeqView::default()
         }
+    }
+
+    // BEH-14, UX-32: a tab the amp does not allow shows the line and a shield over it, not over the tab row
+    #[test]
+    fn a_locked_tab_is_shielded_and_says_so() {
+        let open = html(|| rsx! { MixeqPage { view: view(false) } });
+        assert!(!open.contains("LOCKED") && !open.contains("locked-shield"), "{open}");
+        let locked = html(|| {
+            rsx! { MixeqPage { view: MixeqView { denied: Some("Locked".into()), ..view(false) } } }
+        });
+        assert!(locked.contains("LOCKED · level LOCKED · see the Amplifiers page"), "{locked}");
+        let shield = locked.find("locked-shield").expect("a shield");
+        assert!(locked.find("tab-row").unwrap() < shield, "the tabs stay outside the shield: {locked}");
+        assert!(shield < locked.find("tab-panel").unwrap(), "the shield covers the tab: {locked}");
     }
 
     // SEC-3: the OUT fader and box end at the user's gain ceiling, the ruler stays the Levels'
