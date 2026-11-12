@@ -102,8 +102,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
-  scale line under the meters. The limiter's gain reduction is labelled from 0 down to 48 dB, every 12 dB
-  like the faders (`BEH-5`): that is the whole range its reduction can reach, so 24 dB is half the bar. A muted IN keeps a meter: the amp reports nothing for it, so it shows the
+  scale line under the meters. Each meter's scale says its unit, `dB`, in small type above its numbers. The
+  limiter's gain reduction is labelled from 0 down to 48 dB, every 12 dB like the faders (`BEH-5`): that is
+  the whole range its reduction can reach, so 24 dB is half the bar. A muted IN keeps a meter: the amp reports nothing for it, so it shows the
   loudest source that is on in the mixer, at the mixer and input gains (an estimate; a muted OUT shows
   what the amp reports). A muted channel dims its whole card (a linked card when both of its
   channels are muted), on Levels and on the Mixer alike.

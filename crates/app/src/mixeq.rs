@@ -352,6 +352,8 @@ pub fn LimiterCard(
                         }
                     }
                     div { class: "gr-scale",
+                        // UX-19: the scale says what its numbers are, above them
+                        span { class: "scale-unit", "dB" }
                         for db in GR_MARKS {
                             span { style: "top: {db / control::LIMITER_GR * 100.0}%", "{control::signed(-db)}" }
                         }
@@ -1279,6 +1281,10 @@ mod tests {
         for mark in ["0", "−12", "−24", "−36", "−48"] {
             assert!(out.contains(&format!(">{mark}<")), "{mark}: {out}");
         }
+        // UX-19: the scale says what its numbers are, above them
+        let unit = out.find("class=\"scale-unit\"").unwrap_or_else(|| panic!("the unit: {out}"));
+        let first_mark = out.find(">0<").unwrap();
+        assert!(unit < first_mark && out[unit..first_mark].contains(">dB<"), "{out}");
         assert!(!out.contains(">−3<") && !out.contains(">−9<"), "{out}");
         // half of the scale is half the bar: a 24 dB reduction
         assert_eq!(control::limiter_gr_fill(24.0), 0.5);

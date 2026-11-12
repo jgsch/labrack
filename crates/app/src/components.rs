@@ -72,6 +72,8 @@ pub fn Fader(
             }
             div { class: "fader-body", style: "--tick: calc(var(--fader-h) * {tick})",
             div { class: "fader-scale", "aria-hidden": "true",
+                // UX-19: the scale says what its numbers are, above them
+                span { class: "scale-unit", "dB" }
                 for (db, top) in marks.iter().map(|&db| (db, 100.0 - at(db))) {
                     span { style: "top: {top}%", "{control::signed(db)}" }
                 }
@@ -439,6 +441,10 @@ mod tests {
         assert!(out.contains("aria-valuetext=\"-6 dB\""));
         assert!(out.contains("tabindex=\"0\""));
         assert!(out.contains("inputmode=\"decimal\""), "the box takes a typed value");
+        // UX-19: the scale says what its numbers are, above them
+        let unit = out.find("class=\"scale-unit\"").unwrap_or_else(|| panic!("the unit: {out}"));
+        let first_mark = out.find(">+12<").unwrap();
+        assert!(unit < first_mark && out[unit..first_mark].contains(">dB<"), "{out}");
     }
 
     // UX-23: the box shows the value, not a draft
