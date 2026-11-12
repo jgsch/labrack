@@ -87,6 +87,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .status .dot{display:block;width:8px;height:8px;border-radius:50%}
 .label{flex:0 0 auto;font-size:10px;letter-spacing:0.1em;color:var(--muted)}
 .ip-input{flex:0 1 auto;min-width:0;height:24px;box-sizing:border-box;padding:0;border:0;background:transparent;color:var(--text);font-family:inherit;font-size:12px;font-weight:600}
+.ip-input.wrong{color:#f38ba8}
 .preset-link{font-size:9.6px}
 .preset-name{flex:0 1 auto;min-width:0;font-size:9.6px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modified{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--lavender)}

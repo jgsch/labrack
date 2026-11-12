@@ -132,9 +132,10 @@ pub fn AmplifierPanel(
 ) -> Element {
     let colour = status_colour(view.status);
     let preset = view.preset.clone().unwrap_or_else(|| "—".into());
-    let ip_colour = if ip_wrong(view.status) { "color: #f38ba8; " } else { "" };
+    // a class, not a colour in `style`: Dioxus keeps a style property that a new style leaves out
+    let ip_class = if ip_wrong(view.status) { "ip-input wrong" } else { "ip-input" };
     // as wide as the address, so the gaps to the protocol and to the status are the same
-    let ip_style = format!("{ip_colour}width: {}ch", view.ip.chars().count().max(7));
+    let ip_style = format!("width: {}ch", view.ip.chars().count().max(7));
     let muted = view.muted;
     let level_muted = view.muted;
     let mute_known = view.mute_known;
@@ -154,7 +155,7 @@ pub fn AmplifierPanel(
                     span { class: "amp-name", "{view.name}" }
                     div { class: "amp-status-row",
                         input {
-                            class: "ip-input",
+                            class: ip_class,
                             r#type: "text",
                             inputmode: "decimal",
                             autocomplete: "off",
@@ -468,9 +469,20 @@ mod tests {
     fn a_bad_address_is_red() {
         assert!(ip_wrong(Status::Unreachable) && ip_wrong(Status::CheckIp));
         assert!(!ip_wrong(Status::Online));
-        assert!(panel(Status::Unreachable).contains("color: #f38ba8"));
-        assert!(panel(Status::CheckIp).contains("color: #f38ba8"));
-        assert!(!panel(Status::Online).contains("color: #f38ba8"));
+        let ip_tag = |status| {
+            let html = panel(status);
+            let at = html.find("aria-label=\"IP address of").expect("the IP box");
+            let start = html[..at].rfind('<').unwrap();
+            html[start..at + html[at..].find('>').unwrap()].to_string()
+        };
+        assert!(ip_tag(Status::Unreachable).contains("class=\"ip-input wrong\""));
+        assert!(ip_tag(Status::CheckIp).contains("class=\"ip-input wrong\""));
+        assert!(ip_tag(Status::Online).contains("class=\"ip-input\""));
+        // the red is a class: Dioxus keeps a style property that a new style leaves out, so a colour in
+        // `style` stayed red after the amp came ONLINE
+        for status in [Status::Unreachable, Status::CheckIp, Status::Online] {
+            assert!(!ip_tag(status).contains("color"), "{status:?}");
+        }
     }
 
     // BEH-10, UX-13: a muted output says so, its button is pressed and its meter is empty
@@ -582,7 +594,7 @@ mod tests {
     fn the_address_box_is_as_wide_as_the_address() {
         assert!(panel(Status::Online).contains("width: 12ch"), "192.168.1.21 has 12 characters");
         let out = panel_html(AmpView::new(0, "FOH", "IPD", "192.168.1.183", Status::CheckIp));
-        assert!(out.contains("color: #f38ba8; width: 13ch"), "{out}");
+        assert!(out.contains("style=\"width: 13ch\""), "{out}");
     }
 
     // UX-11: an amp without a preset shows a dash
