@@ -838,9 +838,47 @@ async fn reading_the_state_of_an_ipd_is_not_a_modification() {
     let (hub, id, sim) = online_ipd().await;
     sleep(Duration::from_millis(500)).await;
     assert!(!hub.modified(id));
-    // the IPD tells nothing but the mutes, which are asked for
+    // the IPD tells nothing but the mutes, which are asked for, and a mute is not a change of the preset
     ipd_elsewhere_set(&sim, "out2.mute", FALSE).await;
+    sleep(Duration::from_millis(1200)).await;
+    assert!(!hub.modified(id));
+}
+
+// BEH-38: a mute is not a change of the preset: a preset stored with everything muted is not modified by
+// unmuting it, whether the app or someone else does it
+#[tokio::test]
+async fn a_mute_does_not_modify_the_preset() {
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    set_and_wait(&hub, id, "out1.mute", TRUE).await;
+    set_and_wait(&hub, id, "out2.mute", TRUE).await;
+    hub.store_preset(id, 6, "Muted").await.unwrap();
+    assert!(!hub.modified(id));
+
+    for output in ["out1.mute", "out2.mute"] {
+        set_and_wait(&hub, id, output, FALSE).await;
+        sleep(Duration::from_millis(300)).await;
+        assert!(!hub.modified(id), "unmuting {output} is no change");
+    }
+    hub.set(id, param("out1.mute"), TRUE).unwrap();
+    sleep(Duration::from_millis(500)).await;
+    assert!(!hub.modified(id), "muting is no change either");
+
+    // the settings are still a change
+    hub.set(id, param("out1.gain"), f(-9.0)).unwrap();
     wait_modified(&hub, id, true).await;
+}
+
+// BEH-38: a mute of a source in the mixer is no change of the preset either
+#[tokio::test]
+async fn a_source_mute_does_not_modify_the_preset() {
+    let (hub, id, _fake) = online_ipx(timing()).await;
+    hub.store_preset(id, 6, "Muted").await.unwrap();
+    assert!(!hub.modified(id));
+    let mute = param("in1.mixer.analog1.mute");
+    let muted = hub.value(id, &mute).unwrap_or(Value::Bool(false));
+    hub.set(id, mute, Value::Bool(!matches!(muted, Value::Bool(true)))).unwrap();
+    sleep(Duration::from_millis(500)).await;
+    assert!(!hub.modified(id));
 }
 
 // BEH-38, SEC-7: after a reconnect the flag is cleared, the mutes are as they were, nothing is written

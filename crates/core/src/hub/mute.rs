@@ -10,6 +10,16 @@ use crate::store::AmpId;
 
 const OUTPUTS: u8 = 2;
 
+/// Whether `param` is a mute, of an output, an input or a source of the mixer. A mute is safety state that
+/// the app never restores by itself (`SEC-7`), so it is no change of the preset (`BEH-38`).
+pub(super) fn is_mute(param: &Param) -> bool {
+    match param {
+        Param::Mute(_) => true,
+        Param::Mixer { field, .. } => *field == labgruppen::MixerField::Mute,
+        _ => false,
+    }
+}
+
 impl Hub {
     /// MUTE / UNMUTE of one output (`output` is 0 or 1).
     pub fn set_mute(&self, id: AmpId, output: u8, muted: bool) -> Result<()> {

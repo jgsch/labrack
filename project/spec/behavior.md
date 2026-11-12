@@ -243,7 +243,10 @@ statement with a `BEH-<n>` ID.
 - **BEH-38** MODIFIED means "changed since this app recalled or loaded the preset": any change made
   in the app, and any change from elsewhere (front panel, another controller) that the app sees.
   Recalling or storing a preset clears it; loading a file sets it, as the file is not the stored
-  preset. Reading the state of the amp is not a change.
+  preset. Reading the state of the amp is not a change. A mute is not a change: mutes are safety state the
+  app never restores by itself (`SEC-7`), so muting or unmuting an output, an input or a source of the mixer
+  never marks the preset modified, whether the app does it or someone at the amp; a preset stored with
+  everything muted can be unmuted to listen without appearing changed.
   The app does not compare with the stored preset, so:
   - after the app starts or reconnects, the flag is cleared (the app cannot know);
   - changes made elsewhere that the app does not see are missed.

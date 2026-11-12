@@ -277,7 +277,8 @@ impl Shared {
             let value = &value;
             let old = amp.values.insert(param.clone(), value.clone());
             let changed = old.as_ref() != Some(value);
-            let modifies = changed && (old.is_some() || own);
+            // a mute is no change of the preset (BEH-38): it is safety state, never restored by the app
+            let modifies = changed && (old.is_some() || own) && !mute::is_mute(param);
             let flipped = modifies && !amp.modified;
             amp.modified |= modifies;
             let twin = pair::mirrored(param)
