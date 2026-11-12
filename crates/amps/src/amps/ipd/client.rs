@@ -49,6 +49,20 @@ const POLL_IDLE: Duration = Duration::from_millis(100);
 const POLL_BUSY: Duration = Duration::from_millis(20);
 /// A NACK means "busy"; resending at once with the NACK's packet id works (waiting 0.5 s does too, slowly).
 const NACK_RESEND_DELAY: Duration = Duration::from_millis(10);
+/// How long a command waits for a reply before the session is given up. The amp answers late (a GET takes
+/// 0.6 to 3.8 s in our notes, a stall of 3 s was seen) and a lossy Wi-Fi link retransmits: 3 s killed
+/// sessions that would have recovered (measured 2026-11-12: the same client is steady for 15 min on a cable
+/// and drops within 30 s over Wi-Fi).
+const NO_REPLY: Duration = Duration::from_secs(10);
+/// A new connection replaces the old one only after this much silence, so a slow link is not answered with a
+/// storm of connections.
+const RECONNECT_AFTER: Duration = Duration::from_secs(5);
+/// A connection on a slow link takes longer than a few lost SYN and their retransmissions.
+const RECONNECT_TIMEOUT: Duration = Duration::from_secs(6);
+/// After a failed attempt at a new connection, wait this long before the next.
+const RECONNECT_PAUSE: Duration = Duration::from_millis(500);
+/// The amp needs a moment to notice that the probe connection closed (the IPX needed one too).
+const PROBE_PAUSE: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -169,7 +183,10 @@ pub async fn probe(host: &str, port: u16, limit: Duration) -> Option<Announcemen
                 Ok(n) => data.extend_from_slice(&buf[..n]),
             }
         }
-        parse_probe_reply(&data)
+        let reply = parse_probe_reply(&data);
+        // the vendor app says goodbye before it closes a connection, the probe's included
+        let _ = c.stream.write_all(RESET_CONNECTION).await;
+        reply
     };
     timeout(limit, work).await.ok().flatten()
 }
@@ -177,8 +194,11 @@ pub async fn probe(host: &str, port: u16, limit: Duration) -> Option<Announcemen
 impl Client {
     pub async fn connect(host: &str, port: u16, opts: Options) -> Result<Client> {
         let announcement = probe(host, port, opts.timeout.min(Duration::from_secs(5))).await;
-        let mk2 = opts.mk2.unwrap_or_else(|| announcement.as_ref().is_none_or(|a| a.mk2));
+        // no answer is an MK1: only the MK2 marker says otherwise (docs/ipd-protocol.md), and the wrong
+        // guess costs the whole session (an MK1 NACKs MK2 frames)
+        let mk2 = opts.mk2.unwrap_or_else(|| announcement.as_ref().is_some_and(|a| a.mk2));
         let hw_id = announcement.as_ref().map_or(0, |a| a.hw_packet_id);
+        sleep(PROBE_PAUSE).await;
         let conn = open(host, port, opts.timeout).await?;
         let (events, _) = broadcast::channel(256);
         let shared = Arc::new(Shared {
@@ -538,8 +558,8 @@ fn has_work(shared: &Shared) -> bool {
     !st.sets.is_empty() || !st.gets.is_empty()
 }
 
-/// Send one command and wait for its data reply. Resend after 0.5 s, reconnect after 1 s (twice),
-/// give up after 3 s.
+/// Send one command and wait for its data reply. Resend after 0.5 s; after 5 s of silence (`RECONNECT_AFTER`)
+/// replace the connection once; give up after 10 s (`NO_REPLY`).
 async fn exchange(
     shared: &Shared,
     conn: &mut Conn,
@@ -549,20 +569,25 @@ async fn exchange(
 ) -> Result<Option<Reply>> {
     let start = Instant::now();
     let mut sent = start;
-    let mut reconnects = 0u32;
+    let mut reopened = false;
+    let mut last_open: Option<Instant> = None;
     let mut cmd = build_command(items, shared.mk2, *hw_id, my_id)?;
     conn.stream.write_all(&cmd).await?;
     let mut buf = vec![0u8; 65536];
     while !shared.stop.load(Ordering::Acquire) {
         let now = Instant::now();
         let waited = now.duration_since(start);
-        if waited > Duration::from_secs(3) {
+        if waited > NO_REPLY {
             return Err(Error::Timeout(format!("no reply from {}", shared.host)));
         }
-        if waited > Duration::from_secs(1 + reconnects as u64) && reconnects < 2 {
-            reconnects += 1;
-            reopen(shared, conn, &cmd).await;
-            sent = now;
+        // one new connection after a long silence, not one per second: the old one is told goodbye first
+        if !reopened && waited > RECONNECT_AFTER {
+            reopened = true;
+            let _ = conn.stream.write_all(RESET_CONNECTION).await;
+            last_open = Some(now);
+            if reopen(shared, conn, &cmd).await {
+                sent = now;
+            }
         } else if now.duration_since(sent) > Duration::from_millis(500) {
             let _ = conn.stream.write_all(&cmd).await;
             sent = now;
@@ -570,12 +595,19 @@ async fn exchange(
         let n = match timeout(Duration::from_millis(100), conn.stream.read(&mut buf)).await {
             Err(_) => continue,
             Ok(Ok(n)) if n > 0 => n,
-            // closed or reset by the amp: open a new connection and keep trying until the 3 s are over
+            // closed or reset by the amp: open a new connection, at most one attempt per pause
             Ok(_) => {
-                if !reopen(shared, conn, &cmd).await {
-                    sleep(Duration::from_millis(100)).await;
+                // a closed socket answers at once: never spin while the next attempt has to wait
+                if last_open.is_none_or(|at| at.elapsed() >= RECONNECT_PAUSE) {
+                    last_open = Some(Instant::now());
+                    reopened = true;
+                    if !reopen(shared, conn, &cmd).await {
+                        sleep(RECONNECT_PAUSE).await;
+                    }
+                    sent = Instant::now();
+                } else {
+                    sleep(RECONNECT_PAUSE).await;
                 }
-                sent = Instant::now();
                 continue;
             }
         };
@@ -602,7 +634,7 @@ async fn exchange(
 }
 
 async fn reopen(shared: &Shared, conn: &mut Conn, cmd: &[u8]) -> bool {
-    match open(&shared.host, shared.port, Duration::from_secs(2)).await {
+    match open(&shared.host, shared.port, RECONNECT_TIMEOUT).await {
         Ok(c) => {
             *conn = c;
             conn.stream.write_all(cmd).await.is_ok()

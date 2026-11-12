@@ -119,6 +119,13 @@ pub struct SimAmp {
     withhold_model_name: bool,
     /// The lock password leaves the level as it is.
     ignore_lock: bool,
+    /// Until this moment nothing is answered, as an amp that stalls for a few seconds does.
+    silent_until: Option<Instant>,
+    /// The probe gets no answer, as on a link that loses it.
+    ignore_probe: bool,
+    /// How many connections were opened, and how many ended with `DDRESETCONNECTIO`.
+    connections: u32,
+    resets: u32,
     /// The network was told to restart (command 14): the connection is dropped after this answer.
     restart_network: bool,
 }
@@ -207,6 +214,10 @@ impl SimAmp {
             login_rights: 0xFFFF_FFFF,
             withhold_model_name: false,
             ignore_lock: false,
+            silent_until: None,
+            ignore_probe: false,
+            connections: 0,
+            resets: 0,
             restart_network: false,
         }
     }
@@ -301,8 +312,14 @@ impl SimAmp {
 
     /// Handle one request; `None` = no answer.
     pub fn handle(&mut self, data: &[u8]) -> Option<Vec<u8>> {
+        if self.silent_until.is_some_and(|until| Instant::now() < until) {
+            return None;
+        }
         let Some(cmd) = parse_command(data) else {
             if data.starts_with(b"4DPP") {
+                if self.ignore_probe {
+                    return None;
+                }
                 if self.mk2 {
                     return Some(build_announcement(true));
                 }
@@ -517,6 +534,23 @@ impl SimServer {
         amp.values.insert(GLOBAL(M_HARDWARE_STATUS, 0), Raw::Int(status));
     }
 
+    /// For `how long` from now, the amp answers nothing: a stall.
+    pub fn silence(&self, how_long: std::time::Duration) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        amp.silent_until = Some(Instant::now() + how_long);
+    }
+
+    /// From now on the probe gets no answer.
+    pub fn ignore_probe(&self) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).ignore_probe = true;
+    }
+
+    /// Connections opened so far, and how many of them ended with `DDRESETCONNECTIO`.
+    pub fn connections(&self) -> (u32, u32) {
+        let amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        (amp.connections, amp.resets)
+    }
+
     /// From now on the lock password leaves the level as it is.
     pub fn ignore_lock(&self) {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).ignore_lock = true;
@@ -539,6 +573,7 @@ impl Drop for SimServer {
 }
 
 async fn serve(amp: Arc<Mutex<SimAmp>>, mut conn: TcpStream, mut stopped: watch::Receiver<bool>) {
+    amp.lock().unwrap_or_else(|e| e.into_inner()).connections += 1;
     let mut buf = vec![0u8; 4096];
     loop {
         let n = tokio::select! {
@@ -546,6 +581,7 @@ async fn serve(amp: Arc<Mutex<SimAmp>>, mut conn: TcpStream, mut stopped: watch:
             n = conn.read(&mut buf) => match n { Ok(0) | Err(_) => return, Ok(n) => n },
         };
         if buf[..n].starts_with(b"DDRESET") {
+            amp.lock().unwrap_or_else(|e| e.into_inner()).resets += 1;
             return;
         }
         let (reply, latency, restart) = {

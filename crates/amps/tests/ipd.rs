@@ -392,6 +392,52 @@ async fn access_is_the_level_and_the_rights() {
     amp.close().await;
 }
 
+/// BEH-51: an amp that stops answering for a few seconds keeps its session: the command is sent again on the
+/// same connection, and no new connection is opened
+#[tokio::test(flavor = "multi_thread")]
+async fn a_silent_amp_keeps_its_session() {
+    let (srv, amp) = connect(false).await;
+    let (before, _) = srv.connections();
+    assert_eq!(amp.user().await.unwrap(), "User");
+
+    // four seconds of silence: longer than any one read waits on a good link, shorter than the app's patience
+    srv.silence(Duration::from_secs(4));
+    let started = std::time::Instant::now();
+    let user = amp.user().await.unwrap();
+    assert_eq!(user, "User");
+    assert!(started.elapsed() < Duration::from_secs(10), "took {:?}", started.elapsed());
+    assert!(amp.client().connected(), "the session survived");
+    let (after, _) = srv.connections();
+    assert_eq!(after, before, "the same connection served it");
+    amp.close().await;
+}
+
+/// A probe that gets no answer means an MK1 unit, as the vendor app assumes: the MK2 framing would be
+/// answered with NACKs and nothing would ever be confirmed
+#[tokio::test(flavor = "multi_thread")]
+async fn a_probe_without_an_answer_means_mk1() {
+    let srv = SimServer::spawn("127.0.0.1:0".parse().unwrap(), false, 0).await.unwrap();
+    srv.ignore_probe();
+    let options = Options { mk2: None, timeout: Duration::from_secs(10) };
+    let amp = IpdAmp::connect_with("127.0.0.1", srv.addr.port(), options).await.unwrap();
+    assert!(!amp.client().mk2());
+    assert_eq!(amp.user().await.unwrap(), "User", "an MK1 command is answered");
+    amp.close().await;
+}
+
+/// The probe connection is closed the way the vendor app closes one: `DDRESETCONNECTIO`, so the amp knows
+/// the controller is gone before the control connection arrives
+#[tokio::test(flavor = "multi_thread")]
+async fn the_probe_says_goodbye_before_the_control_connection() {
+    let (srv, amp) = connect(false).await;
+    let (connections, resets) = srv.connections();
+    assert!(connections >= 2, "the probe and the control connection: {connections}");
+    assert!(resets >= 1, "the probe said goodbye: {connections} connections, {resets} resets");
+    amp.close().await;
+    let (_, resets) = srv.connections();
+    assert!(resets >= 2, "so did the control connection, by close: {resets}");
+}
+
 /// BEH-47: an IPD is locked with the vendor app's lock password and reads Locked afterwards; it is unlocked by a
 /// login with its own password, not by `set_locked`
 #[tokio::test(flavor = "multi_thread")]

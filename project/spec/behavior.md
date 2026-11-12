@@ -222,6 +222,11 @@ statement with a `BEH-<n>` ID.
   between /8 and /30. The app writes the address and the mask, then tells the amp to use them; the amp drops
   the connection. With a fixed address the amp's row takes the new address and the app connects there;
   with automatic the row keeps the old one, and the user finds the amp with a scan. An IPX has no network
+- **BEH-51** A slow answer is not a lost connection. An amp that stops answering for a few seconds — its
+  firmware stalls, or a lossy Wi-Fi link makes the packets late — stays ONLINE: the app keeps the session,
+  sends the command again, and opens no new connection. It gives the amp about ten seconds before it
+  reconnects; after several seconds of silence it opens one new connection, and the old one is told goodbye
+  first. A unit whose probe gets no answer is taken for an MK1 (`BEH-1`).
   settings in the app.
 - **BEH-46** Temperature. An ONLINE amp shows the temperature it reports, in percent as the vendor app
   shows it (the first of the IPX's readings; the IPD's one reading). The app asks for it every few

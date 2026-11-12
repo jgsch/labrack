@@ -261,6 +261,13 @@ A command is confirmed by any RSP echo (the firmware may reset the value to 0); 
 - Timing (IPD2400, 2026-11-06): resending a SET only every 0.5 s, as the vendor app does, made a write take 0.15 to 5 s at random (output mute: up to 5 s, input gain: 60 ms), and a GET of two keys 0.6 to 3.8 s. Reading the value back every 150 ms between two sends of a write brought a mute write to about 0.3 s, and asking a read again after 200 ms instead of 500 ms brought a GET of two keys to 0.35 s every time. The amp seems to apply a write at once and to answer late. The library does both; passwords and PINs are never read back.
 - Routing (IPD2400 MK1, 2026-11-06): muting input A silenced both outputs (-112 dB) although input B carried sound, and muting input B silenced neither: both outputs were fed from input A. Nothing in this protocol explains it. CONFIGURATION (13, 36) and INPUT_SELECT (13, 44) are the keys that might, and this firmware does not answer them. The IPX behaves as expected: input n feeds output n.
 - Device mode (IPD2400 MK1, 2026-11-06): the unit's front-panel mode "2 ways" or "stereo" is bit 0x1000 of (9, 36, 0, 0), a number that also holds other bits: 35 (0x23) in stereo, 4131 (0x1023) in 2 ways. A write is accepted and holds (35 gave stereo back, the outputs followed their own inputs again). The unit streams the key by itself. A write must keep the other bits, so the library reads the number just before. Other modes (bridge, parallel) were not seen and may use other bits.
+- Stability (2026-11-12): over a direct cable the client held one session for 15 min at 10 Hz polling
+  (900 s, 900/900 ping, 0% loss, 1-10 ms); on the same network over Wi-Fi (10-15% ICMP loss, 100-256 ms
+  spikes) the old 3 s no-reply limit dropped the session within 30 s, then reconnected in a storm of 2 s
+  TCP connects. The client now waits 10 s for a reply, reconnects once after 5 s of silence (6 s connect
+  timeout) and gives the old connection `DDRESETCONNECTIO` first; the probe connection is closed the same
+  way, with a 200 ms pause before the control connection. A probe with no answer means MK1 (only the MK2
+  marker says otherwise): an MK1 NACKs MK2 frames, so a lost probe used to cost the whole session.
 - Lock, display, network (IPD2400 MK1, fw 1.2.6, 2026-11-12), as the decompiled vendor app does them:
   - Lock Unit is a login with the vendor app's lock password (`LOCK_PASSWORD` in `ipd/protocol.rs`, also in
     `re/ipd/NOTES.md`): CURRENT_USER reads 5 (Locked) within 0.5 s in the same session, still 5 from a new
