@@ -65,6 +65,8 @@ pub fn App() -> Element {
     let mut logging_in = use_signal(|| None::<AmpId>);
     // the amp whose new-password dialog is open (UX-33)
     let mut changing_password = use_signal(|| None::<AmpId>);
+    // the amp whose network dialog is open, with what it is set to (UX-34)
+    let mut networking = use_signal(|| None::<(AmpId, labgruppen::Network)>);
     // when a click last muted each output: the click right after it does not unmute (SEC-5)
     let mut mute_clicks = use_signal(MuteClicks::default);
     let clock = use_hook(|| {
@@ -272,7 +274,7 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |index: usize| logging_in.set(ids.get(index).copied())
                             },
-                            // an IPX is locked and unlocked at once, without a question (BEH-47)
+                            // locked at once, without a question; an IPX is unlocked the same way (BEH-47)
                             on_lock: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
@@ -506,6 +508,29 @@ pub fn App() -> Element {
                                 let ids = ids.clone();
                                 move |index: usize| changing_password.set(ids.get(index).copied())
                             },
+                            on_display: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |(index, display): (usize, labgruppen::DisplayMode)| {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && !busy.read().contains_key(&id)
+                                    {
+                                        spawn(set_display(hub.clone(), id, display, preset_errors, busy));
+                                    }
+                                }
+                            },
+                            // the dialog opens with what the amp is set to
+                            on_network: {
+                                let hub = hub.clone();
+                                let ids = ids.clone();
+                                move |index: usize| {
+                                    if let Some(id) = ids.get(index).copied()
+                                        && !busy.read().contains_key(&id)
+                                    {
+                                        spawn(open_network(hub.clone(), id, networking, preset_errors, busy));
+                                    }
+                                }
+                            },
                             on_rename: {
                                 let hub = hub.clone();
                                 let ids = ids.clone();
@@ -609,6 +634,20 @@ pub fn App() -> Element {
                         }
                     },
                     on_cancel: move |_| changing_password.set(None),
+                }
+            }
+            if let Some((id, current)) = networking().filter(|_| page() == Page::Search) {
+                crate::network::NetworkDialog {
+                    amp: hub.amps().iter().find(|a| a.id == id).map(|a| a.name.clone()).unwrap_or_default(),
+                    current,
+                    on_apply: {
+                        let hub = hub.clone();
+                        move |network: labgruppen::Network| {
+                            networking.set(None);
+                            spawn(change_network(hub.clone(), id, network, preset_errors, busy, ceiling_warnings));
+                        }
+                    },
+                    on_cancel: move |_| networking.set(None),
                 }
             }
             Toasts {
@@ -727,7 +766,7 @@ async fn log_in(hub: Hub, id: AmpId, password: String, errors: Errors, busy: Bus
     said(errors, id, done);
 }
 
-/// Lock or unlock an IPX (BEH-47).
+/// Lock an amp, or unlock an IPX (BEH-47).
 async fn lock_amp(hub: Hub, id: AmpId, locked: bool, errors: Errors, busy: Busy) {
     let what = if locked { "Locking" } else { "Unlocking" };
     let done = working(busy, id, what.into(), hub.set_locked(id, locked)).await;
@@ -749,6 +788,48 @@ async fn change_password(
     if done.is_ok() {
         let name = hub.amps().into_iter().find(|a| a.id == id).map(|a| a.name).unwrap_or_default();
         notices.write().insert(id, format!("Password of {name} sent. Try it before relying on it."));
+    }
+    said(errors, id, done);
+}
+
+/// Set the front-panel display (BEH-49).
+async fn set_display(hub: Hub, id: AmpId, display: labgruppen::DisplayMode, errors: Errors, busy: Busy) {
+    let done = working(busy, id, "Setting the display".into(), hub.set_display(id, display)).await;
+    said(errors, id, done);
+}
+
+/// Read the network settings of an IPD and open its dialog with them (UX-34).
+async fn open_network(
+    hub: Hub,
+    id: AmpId,
+    mut dialog: Signal<Option<(AmpId, labgruppen::Network)>>,
+    errors: Errors,
+    busy: Busy,
+) {
+    let read = working(busy, id, "Reading the network settings".into(), hub.network(id)).await;
+    match read {
+        Ok(current) => dialog.set(Some((id, current))),
+        Err(e) => said(errors, id, Err(e)),
+    }
+}
+
+/// Change the network of an IPD (BEH-50): the amp restarts its network, and the app follows a fixed address.
+async fn change_network(
+    hub: Hub,
+    id: AmpId,
+    network: labgruppen::Network,
+    errors: Errors,
+    busy: Busy,
+    mut notices: Errors,
+) {
+    let done = working(busy, id, "Changing the network".into(), hub.set_network(id, network)).await;
+    if done.is_ok() {
+        let name = hub.amps().into_iter().find(|a| a.id == id).map(|a| a.name).unwrap_or_default();
+        let text = match network.ip {
+            Some(ip) => format!("{name} restarts its network at {ip}."),
+            None => format!("{name} takes an address from the network. Find it with SCAN NOW."),
+        };
+        notices.write().insert(id, text);
     }
     said(errors, id, done);
 }
@@ -869,12 +950,11 @@ pub fn views(hub: &Hub) -> Vec<AmpView> {
             view.temperature = hub.temperature(amp.id);
             let ipx = amp.protocol == labrack_core::Protocol::Ipx;
             view.access = hub.access(amp.id).map(|access| crate::AccessView {
-                // an IPX is locked and unlocked with a button; only an IPD asks for a login
+                // an IPX is unlocked with a button; an IPD asks for its password
                 needs_login: access.needs_login() && !ipx,
-                can_lock: ipx,
+                unlock_asks: !ipx,
                 locked: access.locked,
                 can_unmute: access.rights.output_channel,
-                user: access.user,
             });
             view
         })
@@ -910,6 +990,10 @@ pub fn search_view(hub: &Hub, scanning: bool, message: String) -> SearchView {
                 max_limiter_dbu: amp.ceilings.max_limiter_dbu,
                 level: hub.access(amp.id).map_or_else(|| "—".into(), |access| access.user),
                 can_change_password: amp.protocol == labrack_core::Protocol::Ipd
+                    && hub.access(amp.id).is_some_and(|access| !access.needs_login()),
+                display: hub.display(amp.id),
+                can_set_display: hub.access(amp.id).is_some_and(|access| !access.needs_login()),
+                can_change_network: amp.protocol == labrack_core::Protocol::Ipd
                     && hub.access(amp.id).is_some_and(|access| !access.needs_login()),
                 gain_default: range_text(hub.range(amp.id, &Param::Gain(Channel::Output(0)))),
                 limiter_default: range_text(hub.limiter_range(amp.id, 0, Unit::Dbu)),

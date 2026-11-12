@@ -16,19 +16,28 @@ pub struct Level {
     pub gr: f64,
 }
 
-/// The user level of an IPD and what it allows (BEH-13, BEH-14).
+/// The lock of an amp and what it allows (BEH-13, BEH-14, BEH-47).
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessView {
-    /// The level by name: `User`, `Locked`, ...
-    pub user: String,
     /// The amp is locked (BEH-13).
     pub locked: bool,
     /// An IPD that is locked or has a right missing: a login is offered (BEH-15).
     pub needs_login: bool,
-    /// An IPX: LOCK or UNLOCK is offered instead (BEH-47).
-    pub can_lock: bool,
+    /// An IPD: unlocking takes its password, so UNLOCK opens the login (BEH-47).
+    pub unlock_asks: bool,
     /// The right of the output channels: without it nothing is unmuted (BEH-14).
     pub can_unmute: bool,
+}
+
+/// What UNLOCK does (UX-30).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Unlock {
+    AtOnce,
+    AskPassword,
+}
+
+pub fn unlock_action(access: &AccessView) -> Unlock {
+    if access.unlock_asks { Unlock::AskPassword } else { Unlock::AtOnce }
 }
 
 /// One amplifier, as the page draws it. The hub fills this; the panel itself is pure, so it can be
@@ -143,9 +152,10 @@ pub fn AmplifierPanel(
     let online = view.online;
     let mode = view.mode.clone();
     let access = view.access.clone().filter(|_| online);
-    let needs_login = access.as_ref().is_some_and(|a| a.needs_login);
-    let can_lock = access.as_ref().is_some_and(|a| a.can_lock);
     let locked = access.as_ref().is_some_and(|a| a.locked);
+    // an unlocked amp that misses a right: LOGIN instead of LOCK
+    let login = access.as_ref().is_some_and(|a| a.needs_login && !a.locked);
+    let unlock = access.as_ref().map(unlock_action);
     // without the right of the outputs nothing is unmuted; turning a mute on is never held back (SEC-6)
     let may_unmute = access.as_ref().is_none_or(|a| a.can_unmute);
     rsx! {
@@ -172,26 +182,26 @@ pub fn AmplifierPanel(
                         if let Some(percent) = view.temperature.filter(|_| online) {
                             span { class: temperature_class(percent), "aria-label": "Temperature of {view.name}", "TEMP {percent}%" }
                         }
-                        if let Some(access) = access.clone() {
-                            span { class: if access.needs_login || access.locked { "amp-temp warm" } else { "amp-temp" }, "LEVEL {access.user.to_uppercase()}" }
-                        }
                     }
                 }
                 div { class: "amp-actions",
-                    if can_lock {
-                        button {
-                            class: "small-button",
-                            "aria-label": if locked { "Unlock {view.name}" } else { "Lock {view.name}" },
-                            disabled: view.busy,
-                            onclick: move |_| on_lock.call(!locked),
-                            if locked { "UNLOCK" } else { "LOCK" }
-                        }
-                    } else if needs_login {
+                    if login {
                         button {
                             class: "small-button",
                             "aria-label": "Log in to {view.name}",
                             onclick: move |_| on_login.call(()),
                             "LOGIN"
+                        }
+                    } else if access.is_some() {
+                        button {
+                            class: "small-button",
+                            "aria-label": if locked { "Unlock {view.name}" } else { "Lock {view.name}" },
+                            disabled: view.busy,
+                            onclick: move |_| match (locked, unlock) {
+                                (true, Some(Unlock::AskPassword)) => on_login.call(()),
+                                _ => on_lock.call(!locked),
+                            },
+                            if locked { "UNLOCK" } else { "LOCK" }
                         }
                     }
                     button {
@@ -390,10 +400,10 @@ mod tests {
         assert!(!with(Status::Reconnecting, Some(61)).contains("TEMP"));
     }
 
-    // BEH-13, UX-30: an ONLINE IPD shows its level; a login is offered when one is needed, and unmuting needs the
-    // right of the outputs
+    // UX-30, BEH-15: the level is not on the panel; an unlocked IPD that misses a right offers a login, and
+    // unmuting needs the right of the outputs
     #[test]
-    fn a_panel_shows_the_user_level_and_the_login() {
+    fn a_panel_offers_the_login_and_shows_no_level() {
         let with = |status, access| {
             let mut view = AmpView::new(0, "FOH Main L", "IPD", "192.168.1.21", status);
             view.access = access;
@@ -402,13 +412,12 @@ mod tests {
             panel_html(view)
         };
         let user = |needs_login, can_unmute| {
-            Some(AccessView { user: "User".into(), locked: false, needs_login, can_lock: false, can_unmute })
+            Some(AccessView { locked: false, needs_login, unlock_asks: true, can_unmute })
         };
         let out = with(Status::Online, user(false, true));
-        assert!(out.contains(">LEVEL USER<") && !out.contains("LOGIN"), "{out}");
-        assert!(!out.contains("amp-temp warm"), "{out}");
+        assert!(out.contains(">LOCK<") && !out.contains("LOGIN") && !out.contains("LEVEL"), "{out}");
         let out = with(Status::Online, user(true, false));
-        assert!(out.contains("amp-temp warm\">LEVEL USER<") && out.contains(">LOGIN<"), "{out}");
+        assert!(out.contains(">LOGIN<") && !out.contains(">LOCK<") && !out.contains("LEVEL"), "{out}");
         // the muted output cannot be unmuted, the other can still be muted
         let tag = |label: &str| {
             let end = out.find(label).unwrap_or_else(|| panic!("{label}: {out}"));
@@ -418,30 +427,40 @@ mod tests {
         assert!(tag("Unmute output 1 of FOH Main L").contains("disabled"));
         assert!(!tag("Mute output 2 of FOH Main L").contains("disabled"));
         assert!(!tag("Log in to FOH Main L").contains("disabled"));
-        assert!(!with(Status::Online, None).contains("LEVEL"));
-        assert!(!with(Status::Reconnecting, user(true, false)).contains("LEVEL"));
+        assert!(!with(Status::Reconnecting, user(true, false)).contains("LOGIN"));
+        assert!(!with(Status::Reconnecting, user(false, true)).contains(">LOCK<"));
     }
 
-    // BEH-47, UX-30: an IPX has LOCK or UNLOCK where an IPD has LOGIN, and reads Locked or Unlocked
+    // BEH-47, UX-30: both families have LOCK or UNLOCK; UNLOCK unlocks an IPX at once and asks an IPD for its
+    // password
     #[test]
-    fn an_ipx_panel_has_lock_and_unlock() {
-        let with = |locked| {
-            let mut view = AmpView::new(0, "Subs", "IPX", "192.168.1.31", Status::Online);
+    fn lock_and_unlock_on_both_families() {
+        let with = |protocol: &str, locked| {
+            let mut view = AmpView::new(0, "Subs", protocol, "192.168.1.31", Status::Online);
+            let ipd = protocol == "IPD";
             view.access = Some(AccessView {
-                user: if locked { "Locked" } else { "Unlocked" }.into(),
                 locked,
-                needs_login: false,
-                can_lock: true,
+                needs_login: ipd && locked,
+                unlock_asks: ipd,
                 can_unmute: !locked,
             });
-            panel_html(view)
+            view
         };
-        let out = with(false);
-        assert!(out.contains(">LOCK<") && !out.contains("UNLOCK<") && !out.contains("LOGIN"), "{out}");
-        assert!(out.contains(">LEVEL UNLOCKED<") && !out.contains("amp-temp warm"), "{out}");
-        let out = with(true);
-        assert!(out.contains(">UNLOCK<") && !out.contains(">LOCK<") && !out.contains("LOGIN"), "{out}");
-        assert!(out.contains("amp-temp warm\">LEVEL LOCKED<"), "{out}");
+        for protocol in ["IPD", "IPX"] {
+            let out = panel_html(with(protocol, false));
+            assert!(out.contains(">LOCK<") && !out.contains("UNLOCK<") && !out.contains("LOGIN"), "{out}");
+            assert!(!out.contains("LEVEL"), "{out}");
+            let out = panel_html(with(protocol, true));
+            assert!(out.contains(">UNLOCK<") && !out.contains(">LOCK<") && !out.contains("LOGIN"), "{out}");
+        }
+        // what UNLOCK does: the login for an IPD, the unlock for an IPX
+        for protocol in ["IPD", "IPX"] {
+            let view = with(protocol, true);
+            assert_eq!(
+                unlock_action(view.access.as_ref().unwrap()),
+                if protocol == "IPD" { Unlock::AskPassword } else { Unlock::AtOnce }
+            );
+        }
     }
 
     // BEH-8: each status has its text, and its colour

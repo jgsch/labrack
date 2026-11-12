@@ -134,7 +134,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .button.add{min-height:48px;padding:0 22px;background:var(--lavender);color:var(--base);border-color:var(--lavender)}
 .known{gap:10px}
 .known-empty{padding:20px;background:none}
-.known-row{display:flex;align-items:center;gap:16px;min-height:52px;background:var(--inset);border:1px solid var(--border);border-radius:4px;padding:0 12px 0 16px}
+.known-row{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px;row-gap:6px;min-height:52px;background:var(--inset);border:1px solid var(--border);border-radius:4px;padding:8px 12px 0 16px}
 .known-index{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:600;line-height:1;color:var(--lavender);width:34px}
 .known-move{flex:0 0 auto;display:flex;flex-direction:column;gap:2px}
 .known-move-button{position:relative;width:30px;height:20px;padding:0;border-radius:3px;background:var(--button);border:1px solid var(--border-strong)}
@@ -154,6 +154,10 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .known-level{flex:0 0 78px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--text)}
 .known-password{flex:0 0 auto;min-height:36px;padding:0 12px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .known-password:disabled{background:transparent;color:#6c7086;border-color:var(--border)}
+.known-display{width:116px;min-height:32px;height:32px;font-size:10px;font-weight:600;letter-spacing:0.04em}
+.known-network{flex:0 0 82px}
+.known-settings{flex:1 0 100%;display:flex;align-items:flex-end;gap:12px;padding:0 0 10px 106px;box-sizing:border-box}
+.known-display:disabled{color:#6c7086;border-color:var(--border)}
 .known-remove{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;background:transparent;color:var(--muted);border:1px solid var(--border-strong)}
 .known-remove.armed{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 /* Mix & EQ (UX-16, UX-17, UX-19). Inputs are sapphire, outputs lavender (UX-7). */
@@ -296,6 +300,9 @@ input.preset-name::placeholder{color:var(--muted)}
 .tab-guard{position:relative;display:flex;flex-direction:column}
 .locked-shield{position:absolute;inset:0;z-index:150;cursor:not-allowed}
 .locked-line{margin:0;padding:8px 12px;border-radius:4px;background:var(--inset);border:1px solid var(--peach);color:var(--peach);font-size:11px;letter-spacing:0.08em}
+.modal-check{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:600;letter-spacing:0.1em;color:var(--text)}
+.modal-check input{width:18px;height:18px;margin:0}
+.field input:disabled{color:#6c7086;border-color:var(--border)}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px}
 .button.confirm-yes{background:var(--maroon);color:var(--base);border-color:var(--maroon)}
 /* narrow windows (UX-10): what needs more room than the window has goes on a second line */

@@ -549,6 +549,35 @@ impl Access {
     }
 }
 
+/// The front-panel display of an amp ([`crate::Amp::display`], BEH-49).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DisplayMode {
+    On,
+    /// Off after a while without use.
+    DelayedOff,
+    Dimmed,
+}
+
+impl DisplayMode {
+    pub const ALL: [DisplayMode; 3] = [DisplayMode::On, DisplayMode::DelayedOff, DisplayMode::Dimmed];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DisplayMode::On => "ON",
+            DisplayMode::DelayedOff => "DELAYED OFF",
+            DisplayMode::Dimmed => "DIMMED",
+        }
+    }
+}
+
+/// The network settings of an amp ([`crate::Amp::network`], BEH-50): a fixed address, or `None` for automatic
+/// (DHCP, else a self-assigned address).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Network {
+    pub ip: Option<std::net::Ipv4Addr>,
+    pub mask: std::net::Ipv4Addr,
+}
+
 #[derive(Clone, Debug)]
 pub enum AmpEvent {
     Meters(Meters),

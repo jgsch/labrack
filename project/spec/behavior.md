@@ -203,12 +203,26 @@ statement with a `BEH-<n>` ID.
   0 2 ways); it is asked for about once a second too.
 - **BEH-47** Lock. An IPX is locked and unlocked from the app with one button each, no password: the amp
   does not check one and the app assumes a trusted network (`SEC-8`). The amp is read back after the write;
-  one that did not take it is an error. An IPD cannot be locked from the app (the amp refuses a write of its
-  user level): it is locked at its front panel and unlocked by `BEH-15`.
+  one that did not take it is an error. An IPD is locked from the app as its vendor app does it, with no
+  question: the app sends the vendor app's lock password as a login and waits a few seconds for the level to
+  read Locked; one that does not is an error. A locked IPD is unlocked by a login with its password (`BEH-15`),
+  and is locked at its front panel too.
 - **BEH-48** Password. The password an IPD unlocks with, the one of the User level, is changed from the app: a
   new one of 1 to 8 printable characters, typed twice, only while the amp is ONLINE and not locked. The amp
   does not say whether it took it and the app never reads it back (`BEH-16`), so what the user typed twice is
   the only record. An IPX has no password in the app.
+- **BEH-49** Display. The front-panel display of an amp is On, Delayed Off (off after a while without use) or
+  Dimmed, read when the amp goes ONLINE and set from the app while it is ONLINE and not locked. The amp is
+  read back (IPX) or echoes (IPD) after the write; one that did not take it is an error and the display shows
+  what the amp has. An IPX keeps it in DEVCFG field 0 (0 On, 1 Delayed Off, 2 Dimmed); an IPD in two bits of
+  its hardware status, the rest of which is written back as read.
+- **BEH-50** Network. The address of an IPD is changed from the app while it is ONLINE and not locked: a fixed
+  IPv4 address with its mask, or automatic (DHCP, else a self-assigned address). A fixed address must be a
+  usable host address of its subnet and not one another amp of the list has; a mask must be contiguous and
+  between /8 and /30. The app writes the address and the mask, then tells the amp to use them; the amp drops
+  the connection. With a fixed address the amp's row takes the new address and the app connects there;
+  with automatic the row keeps the old one, and the user finds the amp with a scan. An IPX has no network
+  settings in the app.
 - **BEH-46** Temperature. An ONLINE amp shows the temperature it reports, in percent as the vendor app
   shows it (the first of the IPX's readings; the IPD's one reading). The app asks for it every few
   seconds once the state is read, keeps the last value when one answer is missing, and shows nothing when

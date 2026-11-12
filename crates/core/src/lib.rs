@@ -16,7 +16,7 @@ pub use connector::{Connector, Network};
 pub use discovery::{Finder, Lan};
 pub use dsp::Range;
 pub use error::{Error, Result};
-pub use hub::{Above, Hub, LoadReport, Scan, Timing, Update};
+pub use hub::{Above, Hub, LoadReport, Scan, Timing, Update, check_network};
 pub use limiter::{Limiter, Unit};
 pub use link::Side;
 pub use status::Status;

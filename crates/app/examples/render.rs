@@ -112,10 +112,9 @@ fn amplifiers_demo() -> Element {
     let mut a = AmpView::new(0, "IPD 2400", "IPD", "192.168.1.183", Status::Online);
     a.temperature = Some(49);
     a.access = Some(labrack_app::AccessView {
-        user: "User".into(),
         locked: false,
         needs_login: false,
-        can_lock: false,
+        unlock_asks: true,
         can_unmute: true,
     });
     a.levels[0] = Level { label: "OUT 1".into(), db: -37.0, gr: 0.0 };
@@ -127,10 +126,9 @@ fn amplifiers_demo() -> Element {
     b.preset = Some("Show".into());
     b.temperature = Some(85);
     b.access = Some(labrack_app::AccessView {
-        user: "Locked".into(),
         locked: true,
         needs_login: true,
-        can_lock: false,
+        unlock_asks: true,
         can_unmute: false,
     });
     b.mode = Some("stereo".into());
@@ -139,10 +137,9 @@ fn amplifiers_demo() -> Element {
     let mut c = AmpView::new(2, "Subs", "IPX", "192.168.1.31", Status::Online);
     c.temperature = Some(61);
     c.access = Some(labrack_app::AccessView {
-        user: "Locked".into(),
         locked: true,
         needs_login: false,
-        can_lock: true,
+        unlock_asks: false,
         can_unmute: false,
     });
     c.levels[0] = Level { label: "OUT 1".into(), db: -12.0, gr: 3.0 };
@@ -181,6 +178,9 @@ fn search_demo() -> Element {
                 limiter_default: "35.99".into(),
                 level: "User".into(),
                 can_change_password: true,
+                display: Some(labgruppen::DisplayMode::Dimmed),
+                can_set_display: true,
+                can_change_network: true,
             },
             KnownAmp {
                 index: 1,
@@ -194,6 +194,9 @@ fn search_demo() -> Element {
                 limiter_default: "35.99".into(),
                 level: "Unlocked".into(),
                 can_change_password: false,
+                display: Some(labgruppen::DisplayMode::On),
+                can_set_display: true,
+                can_change_network: false,
             },
             KnownAmp {
                 index: 2,
@@ -207,6 +210,9 @@ fn search_demo() -> Element {
                 limiter_default: "35.99".into(),
                 level: "—".into(),
                 can_change_password: false,
+                display: None,
+                can_set_display: false,
+                can_change_network: false,
             },
         ],
         ..labrack_app::SearchView::default()

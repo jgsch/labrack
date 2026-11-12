@@ -9,6 +9,7 @@ pub mod eq;
 mod header;
 pub mod login;
 pub mod mixeq;
+pub mod network;
 pub mod page;
 pub mod presets;
 pub mod search;

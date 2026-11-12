@@ -97,6 +97,11 @@ impl IpdAmp {
         Ok(user_name(raw.int().unwrap_or(-1)))
     }
 
+    async fn hardware_status(&self) -> Result<i64> {
+        let raw = self.client.get_raw(global(M_HARDWARE_STATUS), None).await?;
+        raw.int().ok_or_else(|| Error::Protocol("hardware status is not a number".into()))
+    }
+
     pub async fn access_rights(&self) -> Result<AccessRights> {
         let raw = self.client.get_raw(global(M_ACCESS_RIGHTS), None).await?;
         Ok(AccessRights::from_raw(raw.int().unwrap_or(0) as u32))
@@ -284,6 +289,78 @@ impl Amp for IpdAmp {
 
     async fn change_password(&self, new: &str) -> Result<()> {
         self.client.set_password(USER_LEVEL, new).await
+    }
+
+    /// Lock as the vendor app does: its lock password as a login, then the level is read until it is Locked.
+    async fn set_locked(&self, locked: bool) -> Result<Access> {
+        if !locked {
+            return Err(Error::Denied("an IPD is unlocked with its password".into()));
+        }
+        self.client.login(LOCK_PASSWORD).await?;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let access = self.access().await?.ok_or_else(|| Error::Protocol("no access".into()))?;
+            if access.locked {
+                return Ok(access);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err(Error::NotConfirmed(format!("lock: the amp is still at {}", access.user)));
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    async fn display(&self) -> Result<Option<DisplayMode>> {
+        let status = self.hardware_status().await?;
+        Ok(Some(if status & STATUS_DISPLAY_OFF != 0 {
+            DisplayMode::DelayedOff
+        } else if status & STATUS_DIM_DISPLAY != 0 {
+            DisplayMode::Dimmed
+        } else {
+            DisplayMode::On
+        }))
+    }
+
+    /// The vendor app's three choices: On clears both bits, Delayed Off sets the off bit and leaves the dim bit,
+    /// Dimmed clears the off bit and sets the dim bit. The rest of the status is written back as read.
+    async fn set_display(&self, display: DisplayMode) -> Result<()> {
+        let status = self.hardware_status().await?;
+        let new = match display {
+            DisplayMode::On => status & !(STATUS_DIM_DISPLAY | STATUS_DISPLAY_OFF),
+            DisplayMode::DelayedOff => status | STATUS_DISPLAY_OFF,
+            DisplayMode::Dimmed => (status & !STATUS_DISPLAY_OFF) | STATUS_DIM_DISPLAY,
+        };
+        self.client.set_raw(global(M_HARDWARE_STATUS), Raw::Int(new), None).await
+    }
+
+    async fn network(&self) -> Result<Network> {
+        let keys = [global(M_IP), global(M_SUBNET_MASK)];
+        let vals = self.client.get_many(&keys, Duration::from_secs(10)).await?;
+        let get = |i: usize| -> Result<u32> {
+            let raw = vals[i].as_ref().and_then(Raw::int);
+            raw.map(|v| v as u32).ok_or_else(|| Error::Timeout(format!("no value for key {}", keys[i])))
+        };
+        let (ip, mask) = (get(0)?, get(1)?);
+        Ok(Network { ip: (ip != 0).then(|| ip.into()), mask: mask.into() })
+    }
+
+    /// Address 0 is automatic; the vendor app then writes a mask too, which the amp does not use: it is left.
+    async fn set_network(&self, network: Network) -> Result<()> {
+        let written = match network.ip {
+            Some(ip) => {
+                let items = vec![
+                    (global(M_IP), Raw::Int(u32::from(ip).into())),
+                    (global(M_SUBNET_MASK), Raw::Int(u32::from(network.mask).into())),
+                ];
+                self.client.set_many_raw(items, None).await.into_iter().collect::<Result<Vec<()>>>().map(drop)
+            }
+            None => self.client.set_raw(global(M_IP), Raw::Int(0), None).await,
+        };
+        written?;
+        // the amp restarts its network at once and does not answer this
+        let _ = timeout(Duration::from_secs(2), self.client.command(CMD_ACTIVATE_NETWORK)).await;
+        self.close().await;
+        Ok(())
     }
 
     async fn status(&self) -> Result<Status> {

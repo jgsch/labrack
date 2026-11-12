@@ -8,7 +8,7 @@ Use Phases until v1 ships, then Now / Next / Later.
 ### Phase 1: v1, replace the vendor app [ ]
 
 - Goal: control IPD and IPX amplifiers from LAB.RACK safely, as specified.
-- Spec: BEH-1 to BEH-48, UX-1 to UX-33, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
+- Spec: BEH-1 to BEH-50, UX-1 to UX-34, ARCH-1 to ARCH-12, SEC-1 to SEC-8, PERF-1 to PERF-4
 - Status (2026-11-10): every page of the app is built and runs against the real IPD 2400 and IPX 1200.
   What is left is `v1-verification`.
 - Changes (`project/changes/active/`), in dependency order:

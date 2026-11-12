@@ -94,8 +94,9 @@ preset, 27/28 clear user/factory presets.
 Levels (`CURRENT_USER`): 0 AllDSP, 1 Factory, 2 Developer, 3 Admin, 4 User, 5 Locked.
 Login: SET `CHECK_PASSWORD (13, 29)` to the 8-character password. The app reads every level's password
 from the amp with GET `SET_PASSWORD (13, 28, level)`, so **passwords are readable over the network**.
-App defaults: initial password `Password`; a hard-coded `dq8r0mzu` is used when loading presets above
-user level; factory presets carry the tag `of9juc8hklcndrsnoc48uxow5uhrjdajxos84mpxayie000<type>`.
+App defaults: initial password `Password`; a hard-coded `dq8r0mzu` is the lock password: Lock Unit
+(`child_unit.LockUnit`) sends it as a CHECK_PASSWORD and polls CURRENT_USER until 5, and preset loads send it
+when the user is not at User level; factory presets carry the tag `of9juc8hklcndrsnoc48uxow5uhrjdajxos84mpxayie000<type>`.
 A separate numeric PIN exists (`PIN (13, 51)` / `CHECK_PIN (13, 52)`).
 Note: `network_customized.py` also contains the vendor's SMTP account credentials for support e-mail.
 

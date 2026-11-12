@@ -69,9 +69,9 @@ pub trait Amp: Send + Sync {
         Err(Error::Unsupported("user levels".into()))
     }
 
-    /// Lock or unlock the amp and return the access it has afterwards (BEH-47). Errors: [`Error::Unsupported`]
-    /// where the amp cannot be locked over the network (the IPD), [`Error::NotConfirmed`] when the amp
-    /// does not take it.
+    /// Lock or unlock the amp and return the access it has afterwards (BEH-47). Errors: [`Error::Denied`] for
+    /// unlocking an IPD, which takes its password ([`Amp::login`]), [`Error::NotConfirmed`] when the amp does
+    /// not take it.
     async fn set_locked(&self, _locked: bool) -> Result<Access> {
         Err(Error::Unsupported("locking the amp".into()))
     }
@@ -81,6 +81,30 @@ pub trait Amp: Send + Sync {
     /// [`Error::Unsupported`] for the IPX.
     async fn change_password(&self, _new: &str) -> Result<()> {
         Err(Error::Unsupported("a password".into()))
+    }
+
+    /// The front-panel display (BEH-49); `None` for an amp that does not have the setting.
+    async fn display(&self) -> Result<Option<DisplayMode>> {
+        Ok(None)
+    }
+
+    /// Set the front-panel display (BEH-49). Returns once the amp confirmed it. Errors:
+    /// [`Error::Unsupported`], [`Error::NotConfirmed`].
+    async fn set_display(&self, _display: DisplayMode) -> Result<()> {
+        Err(Error::Unsupported("the display setting".into()))
+    }
+
+    /// The address and mask the amp is set to (BEH-50). Errors: [`Error::Unsupported`] for the IPX.
+    async fn network(&self) -> Result<Network> {
+        Err(Error::Unsupported("network settings".into()))
+    }
+
+    /// Write the network settings and tell the amp to use them (BEH-50). The amp restarts its network and
+    /// drops the connection, so this ends with the amp closed. The values are checked by the caller.
+    /// Errors: [`Error::Unsupported`] for the IPX, [`Error::NotConfirmed`] when the address or mask is not
+    /// taken (then the amp is told nothing).
+    async fn set_network(&self, _network: Network) -> Result<()> {
+        Err(Error::Unsupported("network settings".into()))
     }
 
     /// Usable preset slots, numbered as on the amp.

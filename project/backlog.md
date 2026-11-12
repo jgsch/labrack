@@ -27,7 +27,21 @@ committed.
 - A scan probes IPX amps the user released with DISCONNECT, briefly taking their single controller slot.
   Skip addresses of known amps with `connected = false`. Spec: BEH-9, BEH-18
 
+- `an_ipx_is_locked_and_unlocked_from_the_app` (core `access.rs`) counts the fake's writes right after
+  queueing a mute that the write loop sends later; it failed once in a full run (2026-11-12). Wait for the
+  mute to be written, or count only the lock. Spec: BEH-47
+
 ## Features
+
+- IPX password: change the password an IPX unlocks with, as the IPD (`BEH-48`). The addresses are named
+  (USERPASSWORD env 24, item 0 field = level; ACK env 18 item 1 for the status; XOR key in the docs) but the
+  payload and the confirmation are not known: read them from IPX Controller, then try on the IPX 1200 (its
+  passwords can be read back from DEV_PRM_SYNC to check). Spec: BEH-48, UX-33
+- IPX network: change the address of an IPX from the Search page, as the IPD (`BEH-50`). DEV_PRM_SYNC shows
+  the settings at 0x8C (DHCP flag, port, IP, mask, gateway as text), but how IPX Controller writes them (env 3
+  NETWORK, SET_HARDWARE_CFG 23?) is not known. Spec: BEH-50, UX-34
+- The display of an amp changed at its front panel shows on the Search page only after a reconnect (it is
+  read once per connection). Spec: BEH-49
 
 ## Chores
 

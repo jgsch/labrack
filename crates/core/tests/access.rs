@@ -122,11 +122,19 @@ async fn an_ipx_is_locked_and_unlocked_from_the_app() {
     hub.set(id, param("out1.gain"), f(-3.0)).unwrap();
 }
 
-// BEH-47: an IPD cannot be locked from the app
+// BEH-47: an IPD is locked from the app and the views are told; it is unlocked by a login with its password,
+// not by an unlock
 #[tokio::test(flavor = "multi_thread")]
-async fn an_ipd_cannot_be_locked_from_the_app() {
+async fn an_ipd_is_locked_from_the_app_and_unlocked_by_a_login() {
     let (hub, id, _sim) = ipd_at(USER, ALL).await;
-    assert!(matches!(hub.set_locked(id, true).await, Err(Error::Amp(labgruppen::Error::Unsupported(_)))));
+    let mut updates = hub.subscribe();
+    let access = hub.set_locked(id, true).await.unwrap();
+    assert_eq!((access.user.as_str(), access.locked), ("Locked", true));
+    assert_eq!(user(&hub, id), "Locked");
+    assert!(next_access(&mut updates, id).await.is_some(), "the views are told");
+
+    assert!(matches!(hub.set_locked(id, false).await, Err(Error::Amp(labgruppen::Error::Denied(_)))));
+    assert!(!hub.login(id, "Password").await.unwrap().locked);
     assert_eq!(user(&hub, id), "User");
 }
 

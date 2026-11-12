@@ -113,7 +113,7 @@ Example: -2.5 dB is `00 00 20 C0`.
 | INPUT_RMS_LIMITER | 0 level f32, 1 release i32 | dB, ms |
 | XOVER filter | 0 enabled, 1 type, 2 freq i32 | Hz (20001 = off) |
 | OUTPUT_LIMITER | 0 Vpk f32 (setting), 1 load ohms f32, 2 watts f32, 3 dBu f32, 4 release i32 | V, ohm, W, dBu, ms |
-| DEVCFG | 0 display mode, 1 lock unit (a write of 0 or 1 over the network is taken without a password, verified 2026-11-12 on an IPX 1200 locked at its front panel), 2 power off, 3-4 unknown, 5 power-on preset (255 = last used), 6 read-only preset range, 7 auto power down, 8-10 access rights locked/user/admin | |
+| DEVCFG | 0 display mode (0 On, 1 Delayed Off, 2 Dimmed: read on an IPX 1200 while its front panel was switched, and a network write of 2 showed as Dimmed in its menu, 2026-11-12), 1 lock unit (a write of 0 or 1 over the network is taken without a password, verified 2026-11-12 on an IPX 1200 locked at its front panel), 2 power off, 3-4 unknown, 5 power-on preset (255 = last used), 6 read-only preset range, 7 auto power down, 8-10 access rights locked/user/admin | |
 
 Watts is derived: Vpk^2 / (2 * ohms). Quirk (verified live): a single GETPRM of field 2 returns it as an i32 (595), the bulk blocks (DEV_PRM_SYNC, GETPRESET) carry it as f32 (595.0) (69 Vpk into 4 ohm = 595 W, matches the fixture). Watts and dBu are derived by the vendor app, not by the amp: all four fields are plain stored values (verified live on an IPX 1200, outputs muted, state restored afterwards). Writing Vpk (field 0) or ohms (field 1) leaves Watts and dBu unchanged; writing field 3 changes only field 3; linking copies out1's dBu over out2's. Field 2 accepts a float write (`ipx raw 17 1 0 2 --float 450`), reads back as the integer 450 in a single reply and as 450.0 in the bulk block.
 

@@ -240,7 +240,7 @@ A command is confirmed by any RSP echo (the firmware may reset the value to 0); 
 - A SET is confirmed by an RSP echoing the same value; the app resends every 0.5 s up to 50 times.
 - Resend after 0.5 s without reply; the app reconnects at 1 s (3 times) and gives up at 2 s.
 - Some GETs are never sent as such; the firmware answers both keys: PIN / MODEL_NUMBER / MODEL_FIRMWARE via ACCESS_RIGHTS (13, 30), BUILD_NUMBER / MODEL_NAME via SW_VERSION (13, 33), AMP_READINGS(_2) via CURRENT_USER (13, 38).
-- Login: SET CHECK_PASSWORD (13, 29) to 8 characters, then read CURRENT_USER. Not tried on hardware. A separate PIN exists (13, 51 / 52).
+- Login: SET CHECK_PASSWORD (13, 29) to 8 characters (space-padded), then read CURRENT_USER; the echo is masked. The User password unlocks a locked IPD2400 (2026-11-12). A separate PIN exists (13, 51 / 52).
 - The vendor app shows the output threshold as Vpk, W rms and dBu and asks for a load impedance
   (default 4 ohm); the amp stores the threshold in dBV. See [Limiter threshold units](#limiter-threshold-units).
 - Before closing, send ASCII `DDRESETCONNECTIO`.
@@ -261,11 +261,26 @@ A command is confirmed by any RSP echo (the firmware may reset the value to 0); 
 - Timing (IPD2400, 2026-11-06): resending a SET only every 0.5 s, as the vendor app does, made a write take 0.15 to 5 s at random (output mute: up to 5 s, input gain: 60 ms), and a GET of two keys 0.6 to 3.8 s. Reading the value back every 150 ms between two sends of a write brought a mute write to about 0.3 s, and asking a read again after 200 ms instead of 500 ms brought a GET of two keys to 0.35 s every time. The amp seems to apply a write at once and to answer late. The library does both; passwords and PINs are never read back.
 - Routing (IPD2400 MK1, 2026-11-06): muting input A silenced both outputs (-112 dB) although input B carried sound, and muting input B silenced neither: both outputs were fed from input A. Nothing in this protocol explains it. CONFIGURATION (13, 36) and INPUT_SELECT (13, 44) are the keys that might, and this firmware does not answer them. The IPX behaves as expected: input n feeds output n.
 - Device mode (IPD2400 MK1, 2026-11-06): the unit's front-panel mode "2 ways" or "stereo" is bit 0x1000 of (9, 36, 0, 0), a number that also holds other bits: 35 (0x23) in stereo, 4131 (0x1023) in 2 ways. A write is accepted and holds (35 gave stereo back, the outputs followed their own inputs again). The unit streams the key by itself. A write must keep the other bits, so the library reads the number just before. Other modes (bridge, parallel) were not seen and may use other bits.
+- Lock, display, network (IPD2400 MK1, fw 1.2.6, 2026-11-12), as the decompiled vendor app does them:
+  - Lock Unit is a login with the vendor app's lock password (`LOCK_PASSWORD` in `ipd/protocol.rs`, also in
+    `re/ipd/NOTES.md`): CURRENT_USER reads 5 (Locked) within 0.5 s in the same session, still 5 from a new
+    connection, and the front panel is locked. The User password unlocks it. The app polls CURRENT_USER after
+    the write; closing the connection at once after the login once left the level as it was.
+  - Display: HARDWARE_STATUS (13, 35) is written back whole with 0x40 (Dimmed) or 0x80 (Delayed Off, the
+    vendor app's name; 0x40 is left as it was) set, both clear for On; the panel dimmed at once. The amp
+    changes the top byte on its own (0x5F, then 0x64), so an echo is compared without the bits 0xFF00003F, as
+    the vendor app does.
+  - Network: IP (13, 87) and SUBNET_MASK (13, 40) are big-endian u32 (192.168.1.88 = 0xC0A80158); command 14
+    then makes the amp use them: it stops answering that connection at once and answers on the new address a
+    few seconds later. An IP of 0 is automatic (DHCP, else ZeroConfig): moved from 192.168.1.184 to automatic,
+    the amp answered ping at its DHCP lease (192.168.1.183) within 5 s and its control port reliably after about
+    30 s; IP then reads 0. There is no gateway or DHCP flag. A mask of 0.0.0.0 (let through by the vendor app) left the amp answering over a
+    direct cable but not behind a router.
 - Inferred only (vendor app): MK2 framing (`DDW`, 34-entry table), `DDB` announcements, login, preset load/save, standby, locate, FACTORY SET, FIR, activity log, sensor and RS-485 opcodes.
 
 ## Security notes
 
-- A write of CURRENT_USER (13, 38) is refused (not confirmed; tried 2026-11-12 with the amp at User): the amp is locked at its front panel and unlocked by CHECK_PASSWORD with the User password.
+- A write of CURRENT_USER (13, 38) is refused (not confirmed; tried 2026-11-12 with the amp at User), and the vendor app never sends one: it locks with a login of its lock password (above) and unlocks with CHECK_PASSWORD and the User password.
 - Reads and a gain write worked without logging in on the test unit; whether user levels are enforced by the firmware for other writes was not tested.
 - GET SET_PASSWORD (13, 28, level) returns every level's password in clear text, without logging in (confirmed for levels 1-4). Factory defaults: see device.
 - Passwords are at most 8 characters; the PIN is a short number.

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use labgruppen::{Access, AmpEvent, Channel, Meters, Param, Value};
+use labgruppen::{Access, AmpEvent, Channel, DisplayMode, Meters, Param, Value};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{broadcast, watch};
 use tokio::task::JoinSet;
@@ -18,6 +18,8 @@ use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 mod access;
 mod ceilings;
+mod device;
+pub use device::check_network;
 mod limiter;
 mod link;
 mod mode;
@@ -92,6 +94,8 @@ pub enum Update {
     Preset(AmpId),
     /// The user level or the rights of an IPD changed ([`Hub::access`]).
     Access(AmpId),
+    /// The front-panel display of the amp is known or changed ([`Hub::display`]).
+    Display(AmpId),
     /// A setting the app keeps for the amp changed: a ceiling or a limiter load (`Hub::amps`).
     Settings(AmpId),
     /// Whether a pair is shown linked changed: the amp flags it linked and its channels now differ, or
@@ -156,6 +160,8 @@ struct Live {
     diverged: [bool; 2],
     /// The user level and rights, while ONLINE; `None` for an amp without levels (the IPX).
     access: Option<Access>,
+    /// The front-panel display, while ONLINE and once the amp has told it (BEH-49).
+    display: Option<DisplayMode>,
     /// The open connection, while ONLINE and until it ends.
     session: Option<Session>,
     /// Values [`Hub::set`] took that the amp has not confirmed yet, shown meanwhile ([`Hub::shown`]).
@@ -220,6 +226,7 @@ impl Shared {
                 amp.modified = false;
                 amp.diverged = [false; 2];
                 amp.access = None;
+                amp.display = None;
                 amp.session = None;
                 amp.pending.clear();
             }
@@ -795,6 +802,7 @@ impl Hub {
                         modified: false,
                         diverged: [false; 2],
                         access: None,
+                        display: None,
                         session: None,
                         pending: HashMap::new(),
                     };
@@ -873,6 +881,7 @@ async fn session(
                 ));
                 helpers.spawn(poll_temperature(shared.clone(), id, link.amp.clone()));
                 helpers.spawn(poll_access(shared.clone(), id, link.amp.clone(), writer.clone()));
+                helpers.spawn(device::read_display(shared.clone(), id, link.amp.clone(), writer.clone()));
                 let changed = tokio::select! {
                     changed = target.changed() => Some(changed.is_ok()),
                     () = pump(shared, id, &mut link.events) => None,

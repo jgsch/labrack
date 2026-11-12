@@ -392,11 +392,96 @@ async fn access_is_the_level_and_the_rights() {
     amp.close().await;
 }
 
-/// BEH-47, BEH-48: an IPD is not locked from the app; its User password is changed, and only the new one logs in
+/// BEH-47: an IPD is locked with the vendor app's lock password and reads Locked afterwards; it is unlocked by a
+/// login with its own password, not by `set_locked`
 #[tokio::test(flavor = "multi_thread")]
-async fn the_user_password_is_changed_and_an_ipd_is_not_locked() {
+async fn an_ipd_is_locked_from_the_app_and_unlocked_with_its_password() {
+    let (srv, amp) = connect(false).await;
+    let a = amp.set_locked(true).await.unwrap();
+    assert_eq!((a.user.as_str(), a.locked), ("Locked", true));
+    assert_eq!(srv.value(Key::new(S_GLOBAL, M_CURRENT_USER, 0, 0)), Some(Raw::Int(5)));
+    assert!(srv.writes().contains(&Key::new(S_GLOBAL, M_CHECK_PASSWORD, 0, 0)));
+
+    assert!(matches!(amp.set_locked(false).await, Err(labgruppen::Error::Denied(_))));
+    let a = amp.login("Password").await.unwrap();
+    assert_eq!((a.user.as_str(), a.locked), ("User", false));
+    amp.close().await;
+}
+
+/// BEH-47: a lock the IPD does not take is an error, not a success
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lock_the_ipd_does_not_take_is_an_error() {
     let (srv, amp) = connect(true).await;
-    assert!(matches!(amp.set_locked(true).await, Err(labgruppen::Error::Unsupported(_))));
+    srv.ignore_lock();
+    assert!(matches!(amp.set_locked(true).await, Err(labgruppen::Error::NotConfirmed(_))));
+    assert!(!amp.access().await.unwrap().unwrap().locked);
+    amp.close().await;
+}
+
+/// BEH-49: the display is two bits of the hardware status: Dimmed 0x40, Delayed Off 0x80, On neither; the
+/// other bits are written back as read, and an echo whose read-only bits moved still confirms
+#[tokio::test(flavor = "multi_thread")]
+async fn the_display_is_read_and_set_in_the_hardware_status() {
+    use labgruppen::DisplayMode;
+    let (srv, amp) = connect(true).await;
+    let status = || srv.value(Key::new(S_GLOBAL, M_HARDWARE_STATUS, 0, 0)).and_then(|r| r.int()).unwrap();
+    srv.set_hardware_status(0x5F00_8301);
+    assert_eq!(amp.display().await.unwrap(), Some(DisplayMode::On));
+
+    amp.set_display(DisplayMode::Dimmed).await.unwrap();
+    assert_eq!(status() & 0x00FF_FFFF, 0x8341, "dim set, the other bits kept");
+    assert_ne!(status() >> 24, 0x5F, "the simulator moves the top byte, as the amp does");
+    assert_eq!(amp.display().await.unwrap(), Some(DisplayMode::Dimmed));
+
+    amp.set_display(DisplayMode::DelayedOff).await.unwrap();
+    assert_eq!(status() & 0xC0, 0xC0, "as the vendor app: the off bit set, the dim bit left as it was");
+    assert_eq!(amp.display().await.unwrap(), Some(DisplayMode::DelayedOff));
+
+    amp.set_display(DisplayMode::On).await.unwrap();
+    assert_eq!(status() & 0x00FF_FFFF, 0x8301);
+    assert_eq!(amp.display().await.unwrap(), Some(DisplayMode::On));
+    amp.close().await;
+}
+
+/// BEH-50: the address and mask are written as big-endian numbers, then the amp is told to use them and
+/// drops the connection; automatic is address 0 with the mask left as it is
+#[tokio::test(flavor = "multi_thread")]
+async fn the_network_is_written_then_activated() {
+    use labgruppen::Network;
+    let (srv, amp) = connect(false).await;
+    let ip = Key::new(S_GLOBAL, M_IP, 0, 0);
+    let mask = Key::new(S_GLOBAL, M_SUBNET_MASK, 0, 0);
+    let fixed =
+        Network { ip: Some("192.168.1.183".parse().unwrap()), mask: "255.255.255.0".parse().unwrap() };
+    assert_eq!(amp.network().await.unwrap(), fixed);
+
+    let new = Network { ip: Some("10.1.2.3".parse().unwrap()), mask: "255.255.0.0".parse().unwrap() };
+    amp.set_network(new).await.unwrap();
+    assert_eq!(srv.value(ip), Some(Raw::Int(0x0A01_0203)));
+    assert_eq!(srv.value(mask), Some(Raw::Int(0xFFFF_0000)));
+    let writes = srv.writes();
+    let activate = Key::new(S_COMMAND, M_COMMAND, 0, CMD_ACTIVATE_NETWORK);
+    let at = |k: Key| writes.iter().position(|w| *w == k).unwrap();
+    assert!(at(ip) < at(activate) && at(mask) < at(activate), "{writes:?}");
+    assert!(!amp.client().connected(), "the amp dropped the connection");
+
+    let amp = IpdAmp::connect_with("127.0.0.1", srv.addr.port(), quick()).await.unwrap();
+    let mask_writes = || srv.writes().iter().filter(|w| **w == mask).count();
+    let before = mask_writes();
+    amp.set_network(Network { ip: None, mask: "255.255.0.0".parse().unwrap() }).await.unwrap();
+    assert_eq!(srv.value(ip), Some(Raw::Int(0)));
+    assert_eq!(srv.value(mask), Some(Raw::Int(0xFFFF_0000)));
+    assert_eq!(mask_writes(), before, "automatic does not write the mask");
+}
+
+fn quick() -> Options {
+    Options { mk2: None, timeout: Duration::from_secs(10) }
+}
+
+/// BEH-48: the User password is changed, and only the new one logs in
+#[tokio::test(flavor = "multi_thread")]
+async fn the_user_password_is_changed() {
+    let (srv, amp) = connect(true).await;
 
     amp.change_password("Fresh#7").await.unwrap();
     // locked at the front panel: the old password no longer unlocks, the new one does

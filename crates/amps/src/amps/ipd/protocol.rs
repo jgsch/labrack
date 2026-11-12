@@ -94,6 +94,17 @@ pub const CMD_SAVE_PRESET: u8 = 2;
 pub const CMD_GOTO_STANDBY: u8 = 4;
 pub const CMD_EXIT_STANDBY: u8 = 5;
 pub const CMD_LOCATE: u8 = 6;
+/// Use the address and mask just written (BEH-50); the amp restarts its network and drops the connection.
+pub const CMD_ACTIVATE_NETWORK: u8 = 14;
+
+/// HARDWARE_STATUS bits of the display (BEH-49): dimmed, and off after a while (vendor app's "Delayed Off").
+pub const STATUS_DIM_DISPLAY: i64 = 0x40;
+pub const STATUS_DISPLAY_OFF: i64 = 0x80;
+/// HARDWARE_STATUS bits the amp sets itself: an echo is compared without them (the top byte changes on its own).
+pub const STATUS_READ_ONLY: i64 = 0xFF00_003F;
+
+/// The vendor app's Lock Unit: this password, sent as a login, puts the amp at the Locked level (BEH-47).
+pub const LOCK_PASSWORD: &str = "dq8r0mzu";
 
 pub const USERS: [&str; 6] = ["AllDSP", "Factory", "Developer", "Admin", "User", "Locked"];
 

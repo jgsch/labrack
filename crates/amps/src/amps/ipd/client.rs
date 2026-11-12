@@ -614,9 +614,13 @@ async fn reopen(shared: &Shared, conn: &mut Conn, cmd: &[u8]) -> bool {
     }
 }
 
-fn same_value(a: &Raw, b: &Raw) -> bool {
+fn same_value(key: Key, a: &Raw, b: &Raw) -> bool {
     match (a, b) {
         (Raw::Text(x), Raw::Text(y)) => x.trim_end() == y.trim_end(),
+        // the amp sets some bits of its status itself (BEH-49)
+        (Raw::Int(x), Raw::Int(y)) if key == Key::new(S_GLOBAL, M_HARDWARE_STATUS, 0, 0) => {
+            x & !STATUS_READ_ONLY == y & !STATUS_READ_ONLY
+        }
         _ => a == b,
     }
 }
@@ -637,7 +641,7 @@ fn dispatch(shared: &Shared, reply: Reply) {
                     let confirmed = st
                         .sets
                         .get(&key)
-                        .is_some_and(|ps| ps.tries > 0 && (ps.any_echo || same_value(&ps.raw, &raw)));
+                        .is_some_and(|ps| ps.tries > 0 && (ps.any_echo || same_value(key, &ps.raw, &raw)));
                     if confirmed
                         && let Some(mut ps) = st.sets.remove(&key)
                         && let Some(tx) = ps.done.take()

@@ -464,6 +464,29 @@ async fn a_lock_the_ipx_does_not_take_is_an_error() {
     assert!(matches!(amp.set_locked(true).await, Err(Error::NotConfirmed(_))));
 }
 
+/// BEH-49, BEH-50: the display is DEVCFG field 0, 0 On, 1 Delayed Off, 2 Dimmed (read on an IPX 1200 while its
+/// front panel was switched), written and read back; one the amp does not take is an error. An IPX has no
+/// network settings in the app.
+#[tokio::test]
+async fn the_ipx_display_is_read_and_set() {
+    use labgruppen::DisplayMode;
+    let fake = FakeAmp::start().await;
+    let amp = fake.connect().await;
+    let field = || i32::from_le_bytes(fake.state().sync[0x62C..0x62C + 4].try_into().unwrap());
+    fake.state().sync[0x62C..0x62C + 4].copy_from_slice(&2i32.to_le_bytes());
+    assert_eq!(amp.display().await.unwrap(), Some(DisplayMode::Dimmed));
+
+    for (display, number) in [(DisplayMode::On, 0), (DisplayMode::DelayedOff, 1), (DisplayMode::Dimmed, 2)] {
+        amp.set_display(display).await.unwrap();
+        assert_eq!(field(), number, "{display:?}");
+        assert_eq!(amp.display().await.unwrap(), Some(display));
+    }
+
+    fake.state().reject_writes.insert(Address::new(Env::DEVCFG, 0, 0, 0));
+    assert!(matches!(amp.set_display(DisplayMode::On).await, Err(Error::NotConfirmed(_))));
+    assert!(matches!(amp.network().await, Err(Error::Unsupported(_))));
+}
+
 #[tokio::test]
 async fn status_presets_and_recall() {
     let fake = FakeAmp::start().await;

@@ -49,11 +49,11 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   of the level while the output is muted), then the segmented level meter (green, yellow, red) with a
   thinner peach gain reduction bar under it.
 - **UX-13** At the end of each output row, one M button (36 × 36 px).
-- **UX-30** An ONLINE IPD shows its user level on the status line, after the status: `LEVEL USER`, in
-  orange while the amp is locked or a right is missing (`BEH-13`); an IPX reads `LEVEL LOCKED` or
-  `LEVEL UNLOCKED`. While an IPD needs a login (`BEH-15`) a LOGIN button stands before DISCONNECT; an IPX
-  has LOCK or UNLOCK there instead (`BEH-47`), pressed without a question. Without the right of the output channels, UNMUTE and the M
-  button of a muted output are disabled; turning a mute on never is (`BEH-14`, `SEC-6`).
+- **UX-30** The status line does not show the user level (the Search page does, `UX-33`). An ONLINE amp has
+  LOCK or UNLOCK before DISCONNECT (`BEH-47`). LOCK is pressed without a question; UNLOCK unlocks an IPX at
+  once and opens the login dialog for an IPD (`UX-31`). An unlocked IPD that misses a right (`BEH-15`) has
+  LOGIN there instead. Without the right of the output channels, UNMUTE and the M button of a muted output
+  are disabled; turning a mute on never is (`BEH-14`, `SEC-6`).
 - **UX-31** LOGIN opens a small dialog like the confirmations (`UX-24`): a password box (1 to 8
   characters, the text hidden, no suggestions), LOGIN (disabled while the box is empty) and CANCEL;
   Enter logs in, Escape cancels. The password is dropped as soon as it is sent (`BEH-16`). The amp does not
@@ -70,7 +70,8 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-15** Below, Known amplifiers: one row per amp with index, an editable name field, a protocol
   badge (IPD mauve, IPX sapphire), IP, source (AUTO / MANUAL) and REMOVE. After the index, an up and a
   down arrow move the row (`BEH-45`); the first row cannot go up and the last cannot go down.
-  Before REMOVE, two boxes hold the user ceilings of the amp (`SEC-3`): MAX GAIN dB and MAX LIMITER dBu.
+  The settings of the amp take a second line of the row, under the name: PASSWORD, DISPLAY and NETWORK
+  (`UX-33`, `UX-34`), then two boxes that hold the user ceilings of the amp (`SEC-3`): MAX GAIN dB and MAX LIMITER dBu.
   An empty box is no ceiling and shows the highest value the amp itself takes (`amp max` while it is
   not ONLINE), never `none`, so it is not read as having no maximum; a number sets it; text that is not a number is refused
   with an error toast and changes nothing.
@@ -80,6 +81,13 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
   locked has a PASSWORD button that opens a dialog like the login's (`UX-31`): the new password and the
   same again, hidden, 1 to 8 characters, CHANGE (disabled until both are filled and equal) and CANCEL
   (`BEH-48`).
+- **UX-34** After PASSWORD, each row has DISPLAY, a choice of ON, DELAYED OFF and DIMMED under a caption,
+  showing what the amp has (`BEH-49`), and NETWORK. Both are disabled while the amp is not ONLINE or is locked;
+  DISPLAY shows `—` while the amp has not told it, and NETWORK is there for an IPD only (an IPX row keeps its
+  place empty, so the columns line up). NETWORK opens a dialog like the
+  login's: AUTOMATIC (DHCP), the address and the mask (filled with what the amp has, unused while AUTOMATIC
+  is ticked), a line saying the amp restarts its network and the app follows it to the new address, APPLY
+  (disabled while an address or mask is not valid, `BEH-50`) and CANCEL; Escape cancels.
 
 ## Mix & EQ pages
 

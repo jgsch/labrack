@@ -117,6 +117,10 @@ pub struct SimAmp {
     login_rights: u32,
     /// The amp never sends its model name along with the version, as a real IPD 2400 often does not.
     withhold_model_name: bool,
+    /// The lock password leaves the level as it is.
+    ignore_lock: bool,
+    /// The network was told to restart (command 14): the connection is dropped after this answer.
+    restart_network: bool,
 }
 
 /// The settings a linked pair shares (docs/ipd-protocol.md: gain and EQ seen on a real IPD). Mutes and
@@ -176,6 +180,8 @@ impl SimAmp {
         set(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(0xFFFF_FFFF));
         set(GLOBAL(M_AMP_READINGS, 0), Raw::Int((80 << 24) | (82 << 16) | (255 << 8) | 41));
         set(GLOBAL(M_SET_PASSWORD, 4), Raw::Text("Password".into()));
+        set(GLOBAL(M_IP, 0), Raw::Int(0xC0A8_01B7));
+        set(GLOBAL(M_SUBNET_MASK, 0), Raw::Int(0xFFFF_FF00));
         for (i, n) in ["Default", "Sub", "Top"].iter().enumerate() {
             set(Key::new(S_PRESET, M_SHORT_NAME, i as u8 + 1, 0), Raw::Text((*n).into()));
         }
@@ -200,6 +206,8 @@ impl SimAmp {
             reads: Vec::new(),
             login_rights: 0xFFFF_FFFF,
             withhold_model_name: false,
+            ignore_lock: false,
+            restart_network: false,
         }
     }
 
@@ -286,6 +294,7 @@ impl SimAmp {
             CMD_EXIT_STANDBY => {
                 self.values.insert(hw, Raw::Int(status & !4));
             }
+            CMD_ACTIVATE_NETWORK => self.restart_network = true,
             _ => {}
         }
     }
@@ -329,6 +338,10 @@ impl SimAmp {
                 } else if key.member_id == M_CHECK_PASSWORD {
                     // the echo is masked, as on the real amp: the password is not kept
                     self.values.insert(*key, Raw::Text("********".into()));
+                    if v.text().is_some_and(|t| t == LOCK_PASSWORD) && !self.ignore_lock {
+                        self.values.insert(GLOBAL(M_CURRENT_USER, 0), Raw::Int(USER_LOCKED));
+                        self.values.insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(0));
+                    }
                     for level in 1..=5u8 {
                         let stored = self.values.get(&GLOBAL(M_SET_PASSWORD, level));
                         if stored
@@ -340,6 +353,13 @@ impl SimAmp {
                                 .insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(self.login_rights as i64));
                         }
                     }
+                } else if *key == GLOBAL(M_HARDWARE_STATUS, 0) {
+                    // the amp keeps its own bits, and the top byte moves on its own (seen on an IPD 2400)
+                    let old = self.values.get(key).and_then(Raw::int).unwrap_or(0);
+                    let top = ((old >> 24) + 1) & 0xFF;
+                    let kept = old & STATUS_READ_ONLY & 0x00FF_FFFF;
+                    let new = (top << 24) | kept | (v.int().unwrap_or(0) & !STATUS_READ_ONLY);
+                    self.values.insert(*key, Raw::Int(new));
                 } else if is_shared(key.struct_id) && key.channel & 0x7F == 1 && self.linked(key.channel) {
                     // like the real firmware: echoed, but channel 2 keeps channel 1's value
                     self.link_violations.push(*key);
@@ -486,6 +506,22 @@ impl SimServer {
         amp.values.insert(GLOBAL(M_ACCESS_RIGHTS, 0), Raw::Int(rights as i64));
     }
 
+    /// The value the amp holds for `key`.
+    pub fn value(&self, key: Key) -> Option<Raw> {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).values.get(&key).cloned()
+    }
+
+    /// The hardware status as the amp would report it (display bits included).
+    pub fn set_hardware_status(&self, status: i64) {
+        let mut amp = self.amp.lock().unwrap_or_else(|e| e.into_inner());
+        amp.values.insert(GLOBAL(M_HARDWARE_STATUS, 0), Raw::Int(status));
+    }
+
+    /// From now on the lock password leaves the level as it is.
+    pub fn ignore_lock(&self) {
+        self.amp.lock().unwrap_or_else(|e| e.into_inner()).ignore_lock = true;
+    }
+
     /// The access rights a successful login gives (all of them unless set).
     pub fn set_login_rights(&self, rights: u32) {
         self.amp.lock().unwrap_or_else(|e| e.into_inner()).login_rights = rights;
@@ -512,10 +548,15 @@ async fn serve(amp: Arc<Mutex<SimAmp>>, mut conn: TcpStream, mut stopped: watch:
         if buf[..n].starts_with(b"DDRESET") {
             return;
         }
-        let (reply, latency) = {
+        let (reply, latency, restart) = {
             let mut amp = amp.lock().unwrap_or_else(|e| e.into_inner());
-            (amp.handle(&buf[..n]), amp.latency)
+            let reply = amp.handle(&buf[..n]);
+            (reply, amp.latency, std::mem::take(&mut amp.restart_network))
         };
+        if restart {
+            // as the real amp: no answer, the connection goes
+            return;
+        }
         if !latency.is_zero() {
             tokio::time::sleep(latency).await;
         }

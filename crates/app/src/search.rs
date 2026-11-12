@@ -3,6 +3,7 @@
 //! (BEH-17 to BEH-23).
 
 use dioxus::prelude::*;
+use labgruppen::DisplayMode;
 
 use crate::control::{self, CONFIRM_WINDOW, Click, SecondClick};
 
@@ -26,6 +27,12 @@ pub struct KnownAmp {
     pub level: String,
     /// An IPD that is ONLINE and not locked: its password can be changed (BEH-48).
     pub can_change_password: bool,
+    /// The front-panel display, once the amp has told it (BEH-49).
+    pub display: Option<DisplayMode>,
+    /// ONLINE and not locked: the display can be set (UX-34).
+    pub can_set_display: bool,
+    /// An IPD that is ONLINE and not locked: its network can be changed (BEH-50).
+    pub can_change_network: bool,
 }
 
 /// A ceiling as its box shows it: as typed, to 4 decimals, never rounded to the one decimal of a level. The box
@@ -173,6 +180,12 @@ pub fn SearchPage(
     /// PASSWORD of the amp at the index was pressed (BEH-48).
     #[props(default)]
     on_password: EventHandler<usize>,
+    /// A display was picked for the amp at the index (BEH-49).
+    #[props(default)]
+    on_display: EventHandler<(usize, DisplayMode)>,
+    /// NETWORK of the amp at the index was pressed (BEH-50).
+    #[props(default)]
+    on_network: EventHandler<usize>,
 ) -> Element {
     let count = view.amps.len();
     let mut name = use_signal(String::new);
@@ -291,38 +304,72 @@ pub fn SearchPage(
                         span { class: "known-ip", "{amp.ip}" }
                         span { class: "known-source", "{amp.source}" }
                         span { class: "known-level", "aria-label": "Level of amplifier {amp.index + 1}", "{amp.level}" }
-                        button {
-                            class: "known-password",
-                            "aria-label": "Change the password of amplifier {amp.index + 1}",
-                            disabled: !amp.can_change_password,
-                            onclick: move |_| on_password.call(amp.index),
-                            "PASSWORD"
-                        }
-                        label { class: "known-ceiling",
-                            "MAX GAIN dB"
-                            input {
-                                r#type: "text",
-                                inputmode: "decimal",
-                                autocomplete: "off",
-                                placeholder: "{amp.gain_default}",
-                                "aria-label": "Highest output gain of amplifier {amp.index + 1}",
-                                value: ceiling_text(amp.max_gain_db),
-                                onchange: move |event| on_ceilings.call((amp.index, event.value(), ceiling_text(amp.max_limiter_dbu))),
-                            }
-                        }
-                        label { class: "known-ceiling",
-                            "MAX LIMITER dBu"
-                            input {
-                                r#type: "text",
-                                inputmode: "decimal",
-                                autocomplete: "off",
-                                placeholder: "{amp.limiter_default}",
-                                "aria-label": "Highest limiter threshold of amplifier {amp.index + 1}",
-                                value: ceiling_text(amp.max_limiter_dbu),
-                                onchange: move |event| on_ceilings.call((amp.index, ceiling_text(amp.max_gain_db), event.value())),
-                            }
-                        }
                         RemoveButton { number: amp.index + 1, on_remove: move |_| on_remove.call(amp.index) }
+                        // the settings of the amp, on a line of their own (UX-15, UX-34)
+                        div { class: "known-settings",
+                            button {
+                                class: "known-password",
+                                "aria-label": "Change the password of amplifier {amp.index + 1}",
+                                disabled: !amp.can_change_password,
+                                onclick: move |_| on_password.call(amp.index),
+                                "PASSWORD"
+                            }
+                            label { class: "known-ceiling",
+                                "DISPLAY"
+                                select {
+                                    class: "known-display",
+                                    "aria-label": "Display of amplifier {amp.index + 1}",
+                                    disabled: !amp.can_set_display || amp.display.is_none(),
+                                    onchange: move |event| {
+                                        if let Some(d) = DisplayMode::ALL.into_iter().find(|d| d.label() == event.value()) {
+                                            on_display.call((amp.index, d));
+                                        }
+                                    },
+                                    if amp.display.is_none() {
+                                        option { value: "", selected: true, disabled: true, "—" }
+                                    }
+                                    for d in DisplayMode::ALL {
+                                        option { value: d.label(), selected: amp.display == Some(d), {d.label()} }
+                                    }
+                                }
+                            }
+                            if amp.protocol == "IPD" {
+                                button {
+                                    class: "known-password known-network",
+                                    "aria-label": "Network settings of amplifier {amp.index + 1}",
+                                    disabled: !amp.can_change_network,
+                                    onclick: move |_| on_network.call(amp.index),
+                                    "NETWORK"
+                                }
+                            } else {
+                                // an IPX has none: the place stays, so the columns line up
+                                span { class: "known-network", "aria-hidden": "true" }
+                            }
+                            label { class: "known-ceiling",
+                                "MAX GAIN dB"
+                                input {
+                                    r#type: "text",
+                                    inputmode: "decimal",
+                                    autocomplete: "off",
+                                    placeholder: "{amp.gain_default}",
+                                    "aria-label": "Highest output gain of amplifier {amp.index + 1}",
+                                    value: ceiling_text(amp.max_gain_db),
+                                    onchange: move |event| on_ceilings.call((amp.index, event.value(), ceiling_text(amp.max_limiter_dbu))),
+                                }
+                            }
+                            label { class: "known-ceiling",
+                                "MAX LIMITER dBu"
+                                input {
+                                    r#type: "text",
+                                    inputmode: "decimal",
+                                    autocomplete: "off",
+                                    placeholder: "{amp.limiter_default}",
+                                    "aria-label": "Highest limiter threshold of amplifier {amp.index + 1}",
+                                    value: ceiling_text(amp.max_limiter_dbu),
+                                    onchange: move |event| on_ceilings.call((amp.index, ceiling_text(amp.max_gain_db), event.value())),
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -371,6 +418,9 @@ mod tests {
             limiter_default: "34.78".into(),
             level: "User".into(),
             can_change_password: protocol == "IPD",
+            display: None,
+            can_set_display: true,
+            can_change_network: protocol == "IPD",
         }
     }
 
@@ -426,6 +476,48 @@ mod tests {
         assert!(!tag(1).contains("disabled"), "an IPD that can");
         assert!(tag(2).contains("disabled"), "not ONLINE");
         assert!(tag(3).contains("disabled"), "an IPX has no password");
+    }
+
+    // UX-34, BEH-49, BEH-50: DISPLAY shows what the amp has and is disabled while it cannot be set; NETWORK is
+    // there for an IPD only, enabled while it can be changed
+    #[test]
+    fn each_known_amplifier_has_display_and_network() {
+        let mut online = known(0, "IPD", "AUTO");
+        online.display = Some(DisplayMode::Dimmed);
+        let mut off = known(1, "IPD", "AUTO");
+        (off.can_set_display, off.can_change_network) = (false, false);
+        let mut ipx = known(2, "IPX", "AUTO");
+        ipx.display = Some(DisplayMode::DelayedOff);
+        ipx.can_change_network = false;
+        let out = page_html(SearchView { amps: vec![online, off, ipx], ..SearchView::default() }, "");
+        let tag = |label: &str, kind: &str| {
+            let end = out.find(label).unwrap_or_else(|| panic!("{label}: {out}"));
+            let start = out[..end].rfind(kind).unwrap();
+            out[start..end + out[end..].find('>').unwrap()].to_string()
+        };
+        let select = |n: u32| {
+            let label = format!("Display of amplifier {n}");
+            let start = out.find(&label).unwrap();
+            out[start..start + out[start..].find("</select>").unwrap()].to_string()
+        };
+        for label in ["ON", "DELAYED OFF", "DIMMED"] {
+            assert!(select(1).contains(&format!(">{label}<")), "{label}: {}", select(1));
+        }
+        assert!(
+            select(1).contains("selected=true>DIMMED<") || select(1).contains("selected>DIMMED<"),
+            "{}",
+            select(1)
+        );
+        assert!(!tag("Display of amplifier 1", "<select").contains("disabled"));
+        assert!(tag("Display of amplifier 2", "<select").contains("disabled"), "not ONLINE");
+        assert!(select(2).contains(">—<"), "not told: {}", select(2));
+        assert!(
+            select(3).contains("selected=true>DELAYED OFF<") || select(3).contains("selected>DELAYED OFF<")
+        );
+
+        assert!(!tag("Network settings of amplifier 1", "<button").contains("disabled"));
+        assert!(tag("Network settings of amplifier 2", "<button").contains("disabled"), "not ONLINE");
+        assert!(!out.contains("Network settings of amplifier 3"), "an IPX has none: {out}");
     }
 
     // UX-14, UX-25: both switches, with a status line that says what they are doing
@@ -495,7 +587,10 @@ mod tests {
         assert!(out[last_down..last_down + 120].contains("disabled"), "{out}");
 
         let one = SearchView { amps: vec![known(0, "IPD", "AUTO")], ..SearchView::default() };
-        assert_eq!(page_html(one, "").matches("disabled").count(), 2, "alone, it cannot move");
+        let out = page_html(one, "");
+        let moves_disabled =
+            out.split("<button").filter(|b| b.contains("known-move-button") && b.contains("disabled"));
+        assert_eq!(moves_disabled.count(), 2, "alone, it cannot move");
     }
 
     // BEH-20 to BEH-22: the form has its three fields, and the error sits beside them

@@ -134,6 +134,13 @@ impl IpxAmp {
         Ok(raw.get(..4).is_some_and(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]) != 0))
     }
 
+    async fn display_number(&self) -> Result<i32> {
+        let raw = self.client.get_raw(DISPLAY_MODE).await?;
+        raw.get(..4)
+            .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .ok_or_else(|| Error::Protocol("display mode: short reply".into()))
+    }
+
     pub async fn device_name(&self) -> Result<String> {
         Ok(cstr(&self.client.get_raw(Address::block(Env::DEVICE_NAME)).await?))
     }
@@ -175,6 +182,10 @@ fn changed(frame: &Frame) -> Option<AmpEvent> {
 
 /// The lock flag of the amp, DEVCFG field 1 (`docs/ipx-protocol.md`).
 const LOCK_UNIT: Address = Address::new(Env::DEVCFG, 0, 0, 1);
+
+/// The front-panel display, DEVCFG field 0 (BEH-49), in the order of its numbers: 0 On, 1 Delayed Off, 2 Dimmed.
+const DISPLAY_MODE: Address = Address::new(Env::DEVCFG, 0, 0, 0);
+const DISPLAY_MODES: [DisplayMode; 3] = [DisplayMode::On, DisplayMode::DelayedOff, DisplayMode::Dimmed];
 
 /// What a lock means here: a locked IPX allows nothing, an unlocked one everything (BEH-13).
 fn lock_access(locked: bool) -> Access {
@@ -355,6 +366,23 @@ impl Amp for IpxAmp {
             return Err(Error::NotConfirmed(format!("lock: wrote {locked}, the amp reports {now}")));
         }
         Ok(lock_access(now))
+    }
+
+    /// A number the app does not know is no display it can show.
+    async fn display(&self) -> Result<Option<DisplayMode>> {
+        let n = self.display_number().await?;
+        Ok(usize::try_from(n).ok().and_then(|i| DISPLAY_MODES.get(i).copied()))
+    }
+
+    async fn set_display(&self, display: DisplayMode) -> Result<()> {
+        let n = DISPLAY_MODES.iter().position(|d| *d == display).unwrap_or(0) as i32;
+        self.client.set_raw(DISPLAY_MODE, &n.to_le_bytes()).await?;
+        // the amp does not answer a write: it is read back
+        let now = self.display_number().await?;
+        if now != n {
+            return Err(Error::NotConfirmed(format!("display: wrote {n}, the amp reports {now}")));
+        }
+        Ok(())
     }
 
     fn subscribe(&self) -> broadcast::Receiver<AmpEvent> {
