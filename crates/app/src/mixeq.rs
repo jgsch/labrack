@@ -5,10 +5,10 @@ use dioxus::prelude::*;
 use labgruppen::{Channel, EQ_TYPES, EqField, MixerField, Param, Value, XOVER_TYPES, XoverField};
 use labrack_core::{Limiter, Side, Unit};
 
-use crate::control::{self, Bounds, Scale};
+use crate::control::{self, Bounds, MeterScale, Scale};
 use crate::eq::{self, Band, Filter};
 use crate::presets::{Ask, ConfirmDialog, PresetBar, PresetView};
-use crate::{ConfirmButton, Fader, ValueField};
+use crate::{ConfirmButton, Fader, SignalMeter, ValueField};
 
 /// The six tabs of UX-16. They never change: a link does not merge EQs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +64,8 @@ pub struct AmpCard {
     pub name: String,
     pub level_db: f64,
     pub gr_db: f64,
+    /// The scale of the level bar: the one of the amp's front panel (UX-12).
+    pub meter: MeterScale,
 }
 
 /// An IN or OUT card of the Levels tab: its gain, the signal level its meter shows, and its mute.
@@ -205,9 +207,9 @@ pub const LIMITER_BOXES: [(Unit, &str, &str); 4] = [
 /// The gain reduction scale of a limiter, in dB of reduction (UX-19: as long as the faders).
 const GR_MARKS: [f64; 5] = [0.0, 12.0, 24.0, 36.0, 48.0];
 
-/// An IN or OUT card, or a source of the Mixer: the fader with its meter, and the dB box and MUTE of
-/// the same size beside it (UX-18, UX-19). `out` draws it in the outputs' colour; a muted OUT is dimmed
-/// whole, a muted source only its fader (`mixer`).
+/// An IN or OUT card, or a source of the Mixer: the GAIN fader and the SIGNAL meter, each on its own
+/// ruler, and the dB box and MUTE of the same size beside them (UX-18, UX-19). `out` draws it in the
+/// outputs' colour; a muted OUT is dimmed whole, a muted source only its fader (`mixer`).
 #[component]
 pub fn LevelCard(
     strip: Strip,
@@ -221,6 +223,9 @@ pub fn LevelCard(
     /// stay per channel (BEH-31). The fader and box are channel 1's, which channel 2 follows.
     #[props(default)]
     second: Option<Strip>,
+    /// The SIGNAL ruler: the front panel's scale of this channel (UX-12, UX-19).
+    #[props(default = MeterScale::INPUT)]
+    meter: MeterScale,
     #[props(default)] on_gain: EventHandler<f64>,
     #[props(default)] on_mute: EventHandler<bool>,
     #[props(default)] on_mute_second: EventHandler<bool>,
@@ -239,16 +244,19 @@ pub fn LevelCard(
             span { class: "legend", "{strip.label}" }
             div { class: if both_muted { "card-body dim" } else { "card-body" },
                 div { class: "card-fader",
-                    Fader {
-                        label: "{strip.label}",
-                        value: strip.db,
-                        bounds,
-                        scale,
-                        show_label: false,
-                        show_box: false,
-                        levels,
-                        on_change: move |db| on_gain.call(db),
+                    div { class: "card-column gain",
+                        span { class: "column-title", "GAIN" }
+                        Fader {
+                            label: "{strip.label}",
+                            value: strip.db,
+                            bounds,
+                            scale,
+                            show_label: false,
+                            show_box: false,
+                            on_change: move |db| on_gain.call(db),
+                        }
                     }
+                    SignalMeter { levels, scale: meter }
                 }
                 div { class: "card-side",
                     ValueField { label: "{strip.label}", value: strip.db, bounds, on_change: move |db| on_gain.call(db) }
@@ -738,6 +746,7 @@ pub fn LevelsPage(
     let pair = view.rows.len() == 2;
     let (linked_in, linked_out) = (pair && view.linked_inputs, pair && view.linked_outputs);
     let named = |s: &Strip, label: &str| Strip { label: label.into(), ..s.clone() };
+    let out_meter = view.amps.get(view.selected).map_or_else(MeterScale::default, |a| a.meter);
     rsx! {
         section { class: "tab-panel out",
             for (channel, row) in view.rows.iter().enumerate() {
@@ -770,6 +779,7 @@ pub fn LevelsPage(
                                 out: true,
                                 bounds: view.output_bounds,
                                 scale: Some(MIX_GAIN),
+                                meter: out_meter,
                                 on_gain: move |db| on_gain.call((0, 1, db)),
                                 on_mute: move |m| on_mute.call((0, 1, m)),
                                 on_mute_second: move |m| on_mute.call((1, 1, m)),
@@ -785,6 +795,7 @@ pub fn LevelsPage(
                                 out: true,
                                 bounds: view.output_bounds,
                                 scale: Some(MIX_GAIN),
+                                meter: out_meter,
                                 on_gain: move |db| on_gain.call((channel, 1, db)),
                                 on_mute: move |muted| on_mute.call((channel, 1, muted)),
                             }
@@ -858,7 +869,7 @@ pub fn MixeqPage(
                         }
                         span { class: "picker-bars", "aria-hidden": "true",
                             span { class: "picker-level",
-                                span { style: "width: {control::meter_fill(amp.level_db) * 100.0}%" }
+                                span { style: "width: {amp.meter.fill(amp.level_db) * 100.0}%" }
                             }
                             span { class: "picker-gr",
                                 span { style: "width: {control::gr_fill(amp.gr_db) * 100.0}%" }
@@ -984,7 +995,7 @@ mod tests {
             mute_pending: false,
         };
         MixeqView {
-            amps: vec![AmpCard { name: "FOH".into(), level_db: -20.0, gr_db: 0.0 }],
+            amps: vec![AmpCard { name: "FOH".into(), level_db: -20.0, gr_db: 0.0, meter: MeterScale::IPX }],
             linked_inputs,
             rows: vec![LevelRow {
                 input: strip("IN 1"),
@@ -998,6 +1009,23 @@ mod tests {
             }],
             ..MixeqView::default()
         }
+    }
+
+    // UX-12: the picker's level bar has the scale of the amp's front panel
+    #[test]
+    fn the_picker_level_has_the_scale_of_the_front_panel() {
+        let out = html(|| {
+            let card = |name: &str, meter| AmpCard { name: name.into(), level_db: -18.0, gr_db: 0.0, meter };
+            let amps = vec![card("IPD", MeterScale::IPD), card("IPX", MeterScale::IPX)];
+            rsx! { MixeqPage { view: MixeqView { amps, ..view(false) } } }
+        });
+        let bar = |name: &str| {
+            let at = out.find(&format!(">{name}<")).unwrap_or_else(|| panic!("{name}: {out}"));
+            let level = at + out[at..].find("picker-level").unwrap();
+            out[level..level + out[level..].find("</span>").unwrap()].to_string()
+        };
+        assert!(bar("IPD").contains("width: 50%"), "{}", bar("IPD"));
+        assert!(bar("IPX").contains("width: 70"), "{}", bar("IPX"));
     }
 
     // BEH-14, UX-32: a tab the amp does not allow shows the line and a shield over it, not over the tab row
@@ -1240,8 +1268,12 @@ mod tests {
         }
         assert_eq!(out.matches("role=\"slider\"").count(), 8);
         assert!(out.contains("aria-valuemax=\"0\""), "the mixer's range: {out}");
-        assert_eq!(out.matches(">+12<").count(), 8, "the Levels' ruler, +12 to -48: {out}");
-        assert_eq!(out.matches(">\u{2212}48<").count(), 8);
+        // UX-19: the GAIN ruler is the Levels', +12 to -48, and the SIGNAL ruler an input's, the same numbers
+        assert_eq!(out.matches(">+12<").count(), 16, "two rulers per source: {out}");
+        assert_eq!(out.matches(">\u{2212}48<").count(), 16);
+        assert_eq!(out.matches(">GAIN<").count(), 8);
+        assert_eq!(out.matches(">SIGNAL<").count(), 8);
+        assert_eq!(out.matches("signal-bar mono").count(), 8, "a muted source keeps its meter (UX-18)");
         assert_eq!(out.matches("card-body dim").count(), 6, "a muted source is dimmed whole");
         assert!(out.contains("Open the EQ of IN 1") && out.contains("Open the EQ of IN 2"));
         assert!(!out.contains("link-button"), "no link on the Mixer (UX-17): {out}");
@@ -1329,8 +1361,8 @@ mod tests {
         }
         assert!(!out.contains(">IN 2<") && !out.contains(">OUT 2<"), "one row: {out}");
         assert_eq!(out.matches("role=\"slider\"").count(), 2, "one fader for IN, one for OUT");
-        assert_eq!(out.matches("fader-meter left").count(), 2);
-        assert_eq!(out.matches("fader-meter right").count(), 2);
+        assert_eq!(out.matches("signal-bar left").count(), 2);
+        assert_eq!(out.matches("signal-bar right").count(), 2);
         assert_eq!(out.matches("class=\"gr-bar half\"").count(), 2, "{out}");
         assert!(out.contains("Mute OUT 1 + 2 channel 1") && out.contains("Unmute OUT 1 + 2 channel 2"));
         assert!(out.contains("Mute IN 1 + 2 channel 2"));
@@ -1382,7 +1414,7 @@ mod tests {
         let out = page_html(v);
         assert!(out.contains(">IN 2<") && out.contains(">LIMITER 2<"), "{out}");
         assert_eq!(out.matches("role=\"slider\"").count(), 4);
-        assert_eq!(out.matches("fader-meter mono").count(), 4);
+        assert_eq!(out.matches("signal-bar mono").count(), 4);
         assert!(!out.contains("gr-bar half") && !out.contains("mute-pair"));
         assert!(out.contains("⛓ LINK INPUTS") && out.contains("⛓ LINK OUTPUTS"));
     }
@@ -1410,7 +1442,7 @@ mod tests {
             assert_eq!(out.matches(&format!("class=\"legend\">{name}<")).count(), 1, "{name}: {out}");
         }
         assert_eq!(out.matches("role=\"slider\"").count(), 2, "IN and OUT have a fader, not the limiter");
-        assert_eq!(out.matches("fader-meter mono").count(), 2, "{out}");
+        assert_eq!(out.matches("signal-bar mono").count(), 2, "{out}");
         assert_eq!(out.matches("class=\"card-side\"").count(), 2);
         for name in ["Load", "V peak", "Power", "Level"] {
             assert!(out.contains(&format!("class=\"box-name\">{name}<")), "{name}: {out}");
@@ -1418,5 +1450,54 @@ mod tests {
         assert!(out.contains("value=\"31.3\""), "the dBu: {out}");
         assert!(out.contains("height: 6.25%"), "3 dB of the 48 dB gain reduction scale: {out}");
         assert!(out.contains("Mute OUT 1"));
+    }
+
+    // UX-19: each unit sits on the outer side of its ruler, GAIN's dB on the left and SIGNAL's on the right
+    #[test]
+    fn the_units_are_on_the_outer_side() {
+        let css = crate::style::stylesheet();
+        let rule = |head: &str| css.lines().find(|l| l.starts_with(head)).unwrap_or_else(|| panic!("{head}"));
+        assert!(rule(".signal-scale .scale-unit{").contains("right:0"), "the SIGNAL unit on the right");
+        let gain = rule(".card-column .fader-scale .scale-unit{");
+        assert!(gain.contains("left:0") && gain.contains("right:auto"), "the GAIN unit on the left: {gain}");
+        // the titles too, above their units
+        assert!(rule(".card-column.gain .column-title{").contains("align-self:flex-start"));
+        assert!(rule(".card-column.signal .column-title{").contains("align-self:flex-end"));
+        let out = page_html(view(false));
+        assert!(out.contains("card-column gain") && out.contains("card-column signal"), "{out}");
+        // the 0 dB line of the fader stops short of the ticks on both sides of the track (3 to 9 px in)
+        assert!(rule(".fader-zero{").contains("left:15px;right:15px"), "{}", rule(".fader-zero{"));
+    }
+
+    // UX-19: an IN or OUT card has a GAIN column, the fader with nothing in its track, and a SIGNAL column
+    // with its own ruler: the front panel's, -60..0 dB for an IPX output, -48..+12 dB for an input and for
+    // an IPD output
+    #[test]
+    fn gain_and_signal_have_their_own_rulers() {
+        let card = |out: &str, name: &str| {
+            let at =
+                out.find(&format!("class=\"legend\">{name}<")).unwrap_or_else(|| panic!("{name}: {out}"));
+            let end = out[at..].find("class=\"card-side\"").unwrap();
+            out[at..at + end].to_string()
+        };
+        let ruler = |card: &str| {
+            let at = card.find("signal-scale").unwrap_or_else(|| panic!("a SIGNAL ruler: {card}"));
+            card[at..].to_string()
+        };
+        let ipx = page_html(view(false));
+        for name in ["IN 1", "OUT 1"] {
+            let c = card(&ipx, name);
+            assert!(c.contains(">GAIN<") && c.contains(">SIGNAL<"), "{name}: {c}");
+            assert!(!c.contains("fader-meter"), "no meter in the fader's track: {c}");
+        }
+        let out = ruler(&card(&ipx, "OUT 1"));
+        assert!(out.contains(">0<") && out.contains(">−60<") && !out.contains(">+12<"), "{out}");
+        let input = ruler(&card(&ipx, "IN 1"));
+        assert!(input.contains(">+12<") && input.contains(">−48<"), "{input}");
+
+        let amps = vec![AmpCard { name: "IPD".into(), level_db: -20.0, gr_db: 0.0, meter: MeterScale::IPD }];
+        let ipd = page_html(MixeqView { amps, ..view(false) });
+        let out = ruler(&card(&ipd, "OUT 1"));
+        assert!(out.contains(">+12<") && out.contains(">−48<") && !out.contains(">−60<"), "{out}");
     }
 }

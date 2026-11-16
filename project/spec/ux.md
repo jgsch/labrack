@@ -47,7 +47,9 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-12** On the right of those boxes, one row per output, level with the box on its left. In each row:
   the channel name in bold with, under it in gray, the level in dB and the gain reduction (MUTED instead
   of the level while the output is muted), then the segmented level meter (green, yellow, red) with a
-  thinner peach gain reduction bar under it.
+  thinner peach gain reduction bar under it. The meter has the scale of the amp's own front panel: −60 to
+  0 dB for an IPX (yellow from −24 dB, red from −9 dB), −48 to +12 dB for an IPD, 0 dB at 80 % of the bar
+  (yellow from −12 dB, red above 0 dB). The level bar of each amp in the Mix & EQ picker has the same scale.
 - **UX-13** At the end of each output row, one M button (36 × 36 px).
 - **UX-30** The status line does not show the user level (the Search page does, `UX-33`). An ONLINE amp has
   LOCK or UNLOCK before DISCONNECT (`BEH-47`). LOCK is pressed without a question; UNLOCK unlocks an IPX at
@@ -102,7 +104,13 @@ UI reference: `project/mockup/mockup.html` (render it with `mise run mockup`).
 - **UX-19** Levels: two rows. Row 1: IN 1, OUT 1, LIMITER 1. Row 2: IN 2, OUT 2, LIMITER 2. Each
   panel is titled with its own name. The dB box and the MUTE button to the right of each meter
   have the same size, the limiter meter has the same length as the other two, and there is no dB
-  scale line under the meters. Each meter's scale says its unit, `dB`, in small type above its numbers. The
+  scale line under the meters. Each meter's scale says its unit, `dB`, in small type above its numbers.
+  An IN or OUT card, and a source card of the Mixer, has two columns, each titled in small type and with
+  its own ruler: GAIN, the fader (the gain set, -48 to +12 dB on the ruler), and beside it SIGNAL, the
+  level meter (the signal measured; two bars for a linked pair). The fader's track holds no meter. The
+  SIGNAL ruler is the scale of the amp's front panel: an output's is the one of `UX-12`, an input's and a
+  source's -48 to +12 dB with 0 dB at 80 % (yellow from -12 dB, red above 0 dB). A card too narrow for
+  the two columns and its box puts the dB box and MUTE under them. The
   limiter's gain reduction is labelled from 0 down to 48 dB, every 12 dB like the faders (`BEH-5`): that is
   the whole range its reduction can reach, so 24 dB is half the bar. A muted IN keeps a meter: the amp reports nothing for it, so it shows the
   loudest source that is on in the mixer, at the mixer and input gains (an estimate; a muted OUT shows

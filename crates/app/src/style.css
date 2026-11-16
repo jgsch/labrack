@@ -32,17 +32,29 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .fader-scale .scale-unit{right:9px;top:-13px;color:var(--muted)}
 .fader-track{position:relative;flex:0 0 auto;width:52px;height:var(--fader-h);border-radius:4px;cursor:ns-resize;touch-action:none;outline:none}
 .fader-track:focus-visible{outline:2px solid var(--lavender);outline-offset:2px}
-.fader-groove,.fader-meter{position:absolute;top:0;bottom:0;left:calc(50% - 9px);width:18px}
-.fader-groove{background:var(--button)}
-.fader-meter.left,.fader-groove.left{left:calc(50% - 15px);width:14px}
-.fader-meter.right,.fader-groove.right{left:calc(50% + 1px);width:14px}
-.fader-meter-cover{position:absolute;left:0;right:0;top:0;background:var(--button)}
-.fader-groove::after,.fader-meter::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 5px,var(--inset) 5px 7px)}
+.fader-groove{position:absolute;top:0;bottom:0;left:calc(50% - 3px);width:6px;border-radius:3px;background:var(--button)}
+/* the SIGNAL column of a card (UX-19): the bars, then their own ruler on the right */
+.card-column{display:flex;flex-direction:column;align-items:center;gap:20px}
+.column-title{font-size:9px;font-weight:600;letter-spacing:0.12em;color:var(--muted)}
+.signal-meter{display:flex;gap:6px;height:var(--fader-h)}
+.signal-bars{display:flex;gap:2px}
+.signal-bar{position:relative;width:18px}
+.signal-bar.left,.signal-bar.right{width:11px}
+.signal-cover{position:absolute;left:0;right:0;top:0;background:var(--button)}
+.signal-bar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to top,transparent 0 5px,var(--inset) 5px 7px)}
+.signal-scale{position:relative;width:30px;background:linear-gradient(rgba(205,214,244,0.5),rgba(205,214,244,0.5)) left bottom/6px 1px no-repeat}
+.signal-scale::after{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:repeating-linear-gradient(to bottom,rgba(205,214,244,0.5) 0 1px,transparent 1px var(--tick))}
+.signal-scale span{position:absolute;left:9px;transform:translateY(-50%);font-size:9px;color:var(--muted)}
+.signal-scale .scale-unit{left:auto;right:0;top:-13px}
+/* each title and unit on the outer side of its column: GAIN's on the left, SIGNAL's on the right */
+.card-column .fader-scale .scale-unit{right:auto;left:0}
+.card-column.gain .column-title{align-self:flex-start}
+.card-column.signal .column-title{align-self:flex-end}
 .fader-ticks{position:absolute;inset:0;pointer-events:none}
 .fader-ticks::before,.fader-ticks::after{content:"";position:absolute;top:0;bottom:0;width:6px;background:repeating-linear-gradient(to bottom,rgba(205,214,244,0.4) 0 1px,transparent 1px var(--tick))}
 .fader-ticks::before{left:3px}
 .fader-ticks::after{right:3px}
-.fader-zero{position:absolute;left:0;right:0;height:0;border-top:1px dashed rgba(205,214,244,0.55);pointer-events:none}
+.fader-zero{position:absolute;left:15px;right:15px;height:0;border-top:1px dashed rgba(205,214,244,0.55);pointer-events:none}
 .fader-cap{position:absolute;left:0;right:0;height:16px;box-sizing:border-box;border-radius:3px;background:var(--text);border:1px solid var(--base);box-shadow:0 1px 3px rgba(0,0,0,0.7);pointer-events:none}
 .fader-cap::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;margin-top:-1px;background:var(--base)}
 .value-field{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -60,7 +72,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .eq-row > .confirm-dialog,.eq-extra-row > .confirm-dialog{left:0;flex-direction:row;align-items:center}
 .confirm-dialog .no{background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .meter{display:flex;flex-direction:column;gap:5px;min-width:0}
-.meter-level{position:relative;height:14px;background:linear-gradient(to right,var(--green) 0%,var(--green) 60%,var(--yellow) 60%,var(--yellow) 85%,var(--red) 85%,var(--red) 100%)}
+.meter-level{position:relative;height:14px;background:linear-gradient(to right,var(--green) 0%,var(--green) var(--meter-yellow,60%),var(--yellow) var(--meter-yellow,60%),var(--yellow) var(--meter-red,85%),var(--red) var(--meter-red,85%),var(--red) 100%)}
 .meter-cover{position:absolute;top:0;bottom:0;right:0;background:var(--button);transition:width 0.09s linear}
 .meter-gr{position:relative;height:7px;background:var(--button)}
 .meter-gr-fill{position:absolute;top:0;bottom:0;right:0;background:var(--peach);transition:width 0.09s linear}
@@ -195,8 +207,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #b4befe;outline-offset:2p
 .level-card.limiter{border:1px dashed #7f849c}
 .level-card .legend{position:absolute;top:-8px;left:10px;padding:0 6px;background:var(--base);color:var(--muted);font-size:10px;font-weight:600;letter-spacing:0.12em}
 .level-card.out .legend,.level-card.limiter .legend{color:var(--lavender)}
-.card-body{flex:1 1 auto;display:flex;align-items:flex-end;justify-content:center;gap:28px}
+.card-body{flex:1 1 auto;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:12px 28px}
 .card-body.dim{opacity:0.4}
+.card-fader{display:flex;align-items:flex-end;gap:14px}
 .card-side{display:flex;flex-direction:column;align-items:center;gap:6px}
 .card-button{width:100px;min-height:44px;border-radius:4px;font-size:13px;font-weight:700;letter-spacing:0.04em;background:var(--button);color:var(--text);border:1px solid var(--border-strong)}
 .card-button.muted{background:var(--maroon);color:var(--base);border-color:var(--maroon)}

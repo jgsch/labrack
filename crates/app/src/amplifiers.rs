@@ -54,6 +54,8 @@ pub struct AmpView {
     /// MUTE / UNMUTE of the whole amp (BEH-24).
     pub amp_muted: bool,
     pub levels: [Level; 2],
+    /// The scale of the level meters: the one of the amp's front panel (UX-12).
+    pub meter: control::MeterScale,
     pub muted: [bool; 2],
     /// The amp has told the mute of each output. An IPD takes seconds after ONLINE to do it; until then
     /// the output is not shown as unmuted (SEC-7).
@@ -88,6 +90,7 @@ impl AmpView {
                 Level { label: "OUT 1".into(), db: control::METER_FLOOR, gr: 0.0 },
                 Level { label: "OUT 2".into(), db: control::METER_FLOOR, gr: 0.0 },
             ],
+            meter: control::MeterScale::for_protocol(protocol),
             muted: [false, false],
             mute_known: [false, false],
             mute_pending: [false, false],
@@ -263,7 +266,7 @@ pub fn AmplifierPanel(
                                     }
                                 }
                             }
-                            crate::Meter { level_db: if online && !level_muted[output] { level.db } else { control::METER_FLOOR }, gain_reduction_db: level.gr }
+                            crate::Meter { level_db: if online && !level_muted[output] { level.db } else { view.meter.floor }, gain_reduction_db: level.gr, scale: view.meter }
                             button {
                                 class: if mute_pending[output] {
                                     "m-button pending"
@@ -516,6 +519,25 @@ mod tests {
         assert!(out.contains("aria-pressed=\"true\""), "{out}");
         assert!(out.contains("m-button muted"), "{out}");
         assert!(out.contains("Mute output 2 of Subs"), "the other output offers to mute: {out}");
+    }
+
+    // UX-12: the meter has the scale of the amp's front panel, -48 to +12 dB on an IPD, -60 to 0 dB on an IPX
+    #[test]
+    fn the_meter_has_the_scale_of_the_front_panel() {
+        let with = |protocol| {
+            let mut view = AmpView::new(0, "FOH", protocol, "192.168.1.21", Status::Online);
+            view.mute_known = [true, true];
+            view.levels[0].db = -18.0;
+            panel_html(view)
+        };
+        let ipd = with("IPD");
+        assert!(ipd.contains("aria-valuemin=\"-48\" aria-valuemax=\"12\" aria-valuenow=\"-18\""), "{ipd}");
+        assert!(ipd.contains("style=\"width: 50%\""), "-18 dB is half of the IPD's bar: {ipd}");
+        assert!(ipd.contains("--meter-yellow: 60%; --meter-red: 80%"), "{ipd}");
+        let ipx = with("IPX");
+        assert!(ipx.contains("aria-valuemin=\"-60\" aria-valuemax=\"0\" aria-valuenow=\"-18\""), "{ipx}");
+        assert!(ipx.contains("style=\"width: 30"), "-18 dB is 70 % of the IPX's bar: {ipx}");
+        assert!(ipx.contains("--meter-yellow: 60%; --meter-red: 85%"), "{ipx}");
     }
 
     // SEC-6: a MUTE the amp has not confirmed is not shown as in force

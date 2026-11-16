@@ -8,8 +8,8 @@ use crate::control::{self, Bounds, Click, Scale, SecondClick};
 
 /// A vertical fader with its dB scale, its box and its label, as on the Mix & EQ pages: a click never
 /// moves the cap, dragging moves it from where the drag started, keys and the wheel step it (UX-22).
-/// The level meters (`levels`, in dB on the fader's own scale; two for a stereo pair) run inside the
-/// track, behind the cap. `scale` is what the ruler shows when it is wider than what may be set
+/// The signal it sets is measured by a [`SignalMeter`] beside it, on a ruler of its own (UX-19).
+/// `scale` is what the ruler shows when it is wider than what may be set
 /// (the Mixer's ruler is the Levels' +12 to -48, its faders stop at the model's 0 dB).
 #[component]
 pub fn Fader(
@@ -23,7 +23,6 @@ pub fn Fader(
     /// The Levels cards put the box beside the fader themselves.
     #[props(default = true)]
     show_box: bool,
-    #[props(default)] levels: Vec<f64>,
     #[props(default)] scale: Option<Bounds>,
     #[props(default)] on_change: EventHandler<f64>,
 ) -> Element {
@@ -45,20 +44,6 @@ pub fn Fader(
     // a tick every 6 dB, on a track as tall as --fader-h
     let tick = 6.0 / span;
     let zero = ruler.contains(0.0).then(|| at(0.0));
-    // green to -12 dB, yellow to 0 dB, red above, wherever those sit on this fader's scale
-    let colours = format!(
-        "linear-gradient(to top,var(--green) 0%,var(--green) {y}%,var(--yellow) {y}%,var(--yellow) {r}%,var(--red) {r}%,var(--red) 100%)",
-        y = at(-12.0),
-        r = at(0.0)
-    );
-    let lanes = control::meter_lanes(levels.len());
-    // the dark track of each meter, and one in the middle without any
-    let grooves: &[&str] = if lanes.is_empty() { control::meter_lanes(1) } else { lanes };
-    let meters: Vec<(String, f64)> = levels
-        .iter()
-        .zip(lanes)
-        .map(|(&db, lane)| (lane.to_string(), if db.is_finite() { 100.0 - at(db) } else { 100.0 }))
-        .collect();
 
     let set = move |next: f64| {
         if next != value {
@@ -135,15 +120,7 @@ pub fn Fader(
                         set(next);
                     }
                 },
-                for lane in grooves.iter() {
-                    div { class: "fader-groove {lane}", "aria-hidden": "true" }
-                }
-                for (lane, cover) in meters {
-                    // the colours never change; only the dark cover on top of them moves
-                    div { class: "fader-meter {lane}", "aria-hidden": "true", style: "background: {colours}",
-                        div { class: "fader-meter-cover", style: "height: {cover}%" }
-                    }
-                }
+                div { class: "fader-groove", "aria-hidden": "true" }
                 div { class: "fader-ticks", "aria-hidden": "true" }
                 if let Some(z) = zero {
                     div { class: "fader-zero", "aria-hidden": "true", style: "bottom: {z}%" }
@@ -153,6 +130,44 @@ pub fn Fader(
             }
             if show_box {
                 ValueField { label: box_label, value, bounds, unit, on_change }
+            }
+        }
+    }
+}
+
+/// The SIGNAL column of a card (UX-19): the measured level, one bar or two for a linked pair, on its own
+/// ruler, the scale of the amp's front panel, every 12 dB down from the top with a tick every 6 dB.
+#[component]
+pub fn SignalMeter(levels: Vec<f64>, scale: control::MeterScale) -> Element {
+    let at = move |db: f64| scale.fill(db) * 100.0;
+    let colours = format!(
+        "linear-gradient(to top,var(--green) 0%,var(--green) {y}%,var(--yellow) {y}%,var(--yellow) {r}%,var(--red) {r}%,var(--red) 100%)",
+        y = control::number(at(scale.yellow)),
+        r = control::number(at(scale.red))
+    );
+    let tick = 6.0 / (scale.top - scale.floor);
+    let marks = control::scale_marks(Bounds::new(scale.floor, scale.top));
+    let lanes = control::meter_lanes(levels.len());
+    let bars: Vec<(&str, String)> =
+        levels.iter().zip(lanes).map(|(&db, &lane)| (lane, control::number(100.0 - at(db)))).collect();
+    rsx! {
+        div { class: "card-column signal",
+            span { class: "column-title", "SIGNAL" }
+            div { class: "signal-meter", "aria-hidden": "true", style: "--tick: calc(var(--fader-h) * {tick})",
+                div { class: "signal-bars",
+                    for (lane, cover) in bars {
+                        // the colours never change; only the dark cover on top of them moves
+                        div { class: "signal-bar {lane}", style: "background: {colours}",
+                            div { class: "signal-cover", style: "height: {cover}%" }
+                        }
+                    }
+                }
+                div { class: "signal-scale",
+                    span { class: "scale-unit", "dB" }
+                    for (db, top) in marks.iter().map(|&db| (db, 100.0 - at(db))) {
+                        span { style: "top: {top}%", "{control::signed(db)}" }
+                    }
+                }
             }
         }
     }
@@ -346,18 +361,27 @@ pub fn ConfirmButton(
 /// One output's meter: a segmented bar in green, yellow and red, with the peach gain reduction bar
 /// under it (UX-8, UX-12). The label on the left and the figures on the right are the caller's.
 #[component]
-pub fn Meter(level_db: f64, #[props(default = 0.0)] gain_reduction_db: f64) -> Element {
-    let level = control::meter_fill(level_db);
+pub fn Meter(
+    level_db: f64,
+    #[props(default = 0.0)] gain_reduction_db: f64,
+    #[props(default)] scale: control::MeterScale,
+) -> Element {
+    let level = scale.fill(level_db);
     let gr = control::gr_fill(gain_reduction_db);
+    let stops = format!(
+        "--meter-yellow: {}%; --meter-red: {}%",
+        control::number(scale.fill(scale.yellow) * 100.0),
+        control::number(scale.fill(scale.red) * 100.0)
+    );
     rsx! {
         div {
             class: "meter",
             role: "meter",
             "aria-label": "Level",
-            "aria-valuemin": "{control::METER_FLOOR}",
-            "aria-valuemax": "0",
+            "aria-valuemin": "{control::number(scale.floor)}",
+            "aria-valuemax": "{control::number(scale.top)}",
             "aria-valuenow": "{control::number(level_db)}",
-            div { class: "meter-level",
+            div { class: "meter-level", style: "{stops}",
                 div { class: "meter-cover", style: "width: {(1.0 - level) * 100.0}%" }
             }
             div { class: "meter-gr",
@@ -445,6 +469,26 @@ mod tests {
         let unit = out.find("class=\"scale-unit\"").unwrap_or_else(|| panic!("the unit: {out}"));
         let first_mark = out.find(">+12<").unwrap();
         assert!(unit < first_mark && out[unit..first_mark].contains(">dB<"), "{out}");
+    }
+
+    // UX-19: the SIGNAL meter has its own ruler, the scale it is given, and fills on it
+    #[test]
+    fn the_signal_meter_has_its_own_ruler() {
+        let out = html(|| rsx! { SignalMeter { levels: vec![-30.0], scale: control::MeterScale::IPX } });
+        assert!(out.contains(">SIGNAL<"), "{out}");
+        let unit = out.find(">dB<").unwrap_or_else(|| panic!("the unit: {out}"));
+        assert!(unit < out.find(">0<").unwrap(), "the unit above the numbers: {out}");
+        assert!(out.contains(">−60<") && !out.contains(">+12<"), "0 at the top, -60 at the bottom: {out}");
+        assert!(out.contains("signal-bar mono") && out.contains("height: 50%"), "-30 dB is half lit: {out}");
+
+        let out =
+            html(|| rsx! { SignalMeter { levels: vec![-18.0, -6.0], scale: control::MeterScale::INPUT } });
+        assert!(out.contains(">+12<") && out.contains(">−48<"), "{out}");
+        assert!(out.contains("signal-bar left") && out.contains("signal-bar right"), "{out}");
+        assert!(
+            out.contains("height: 50%") && out.contains("height: 30%"),
+            "-18 and -6 dB on -48..+12: {out}"
+        );
     }
 
     // UX-23: the box shows the value, not a draft

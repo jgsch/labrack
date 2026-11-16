@@ -219,6 +219,14 @@ So the amp converts dBV to dBu itself for its display. The IPD 1200 and 4800 hav
 
 Carried in every data reply as fragments 01, 02, 07, 08, 0B, 0C (see Opcodes); signed int8 dB per channel (inputs A/B, outputs 1/2). On MK1 hardware the data packets alternate between meter fragments and up to 4 RSP fragments.
 
+The front panel draws VU in and VU out as horizontal bars from -48 to +12 dB, with a mark every 6 dB and the
+0 dB mark at 80 % of the bar. Checked on an IPD 2400 MK1, firmware 1.2.6, with music playing (2026-11-16): the
+bars in photos of the panel matched the values read here within 1 to 2 dB (inputs about -35 dB, outputs -35
+to -30 dB, input gain -15 dB, output gain 0 dB). Drawn on the IPX's -60 to 0 dB, the same values look about
+12 dB louder than on the panel. The vendor app's skins give other ranges (`level_out0` -4..35 on the 2400,
+-8..31 on the 1200; `level_ina` -49..23; `raw_level_ina` -61..17) and the app clamps the value to them
+without an offset; how that fits the panel was not checked.
+
 ## Presets and control commands
 
 Slots 1..100, names via GET (9, 16, n). Load: SET (9, 18, 0, 0) = n, then command 1. Save (vendor app, decompiled; not tried on hardware): SET (9, 18, 0, 0) = target slot, SET (9, 16, 0, 0) = the name, command 2 (the app sets it to 1, waits 0.5 s, sets it to 0), then reads (9, 16, slot) until it shows the name, resending the command every few tries. The app refuses to save when ACCESS_RIGHTS lacks the save bit, and to slots 1..range below Developer level, with range = (STARTUP_PRESET (13, 43) & 0xFF00) >> 8.

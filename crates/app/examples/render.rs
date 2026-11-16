@@ -274,7 +274,12 @@ fn levels_page(linked_inputs: bool, linked_outputs: bool) -> Element {
         figures: Some(labrack_core::Limiter::from_vpk(80.0, 4.0)),
         bounds: [Bounds::new(0.0, 100_000.0); 4],
     };
-    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard {
+        name: name.into(),
+        level_db,
+        gr_db: 0.0,
+        meter: Default::default(),
+    };
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         presets: demo_presets(),
@@ -332,7 +337,12 @@ fn eq_demo(tab: labrack_app::MixTab, gains: [f64; 10]) -> Element {
             lpf: Bounds::new(20.0, 20001.0),
         },
     };
-    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard {
+        name: name.into(),
+        level_db,
+        gr_db: 0.0,
+        meter: Default::default(),
+    };
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab,
@@ -373,7 +383,12 @@ fn mixer_demo() -> Element {
             })
             .collect(),
     };
-    let card = |name: &str, level_db: f64| labrack_app::AmpCard { name: name.into(), level_db, gr_db: 0.0 };
+    let card = |name: &str, level_db: f64| labrack_app::AmpCard {
+        name: name.into(),
+        level_db,
+        gr_db: 0.0,
+        meter: Default::default(),
+    };
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L", -33.0), card("FOH Main R", -27.0), card("Subs", -21.0)],
         tab: labrack_app::MixTab::Mixer,
@@ -406,7 +421,12 @@ fn demo_presets() -> labrack_app::presets::PresetView {
 
 /// The popup of a recall, over the Levels tab, for the visual check of UX-24.
 fn ask_demo() -> Element {
-    let card = |name: &str| labrack_app::AmpCard { name: name.into(), level_db: -30.0, gr_db: 0.0 };
+    let card = |name: &str| labrack_app::AmpCard {
+        name: name.into(),
+        level_db: -30.0,
+        gr_db: 0.0,
+        meter: Default::default(),
+    };
     let view = labrack_app::MixeqView {
         amps: vec![card("FOH Main L")],
         presets: demo_presets(),

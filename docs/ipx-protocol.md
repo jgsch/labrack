@@ -176,6 +176,11 @@ Total 0x152 dwords = 0x548 bytes. The same audio config appears in a GETPRESET r
 | 8-9 | gain reduction set 1 (`gain_reduction_a`) | stayed at -0.01 dB while the output limiter acted (2026-11-11): not the output limiter; the input or compressor stage is untested |
 | 10-11 | gain reduction set 2 (`gain_reduction_b`): the output limiter | verified on an IPX 1200 (2026-11-11): reads about -0.01 dB when idle and 1.5 to 1.6 dB (positive) while the out1 limiter acted, read on the first value of the pair (out1); the second value (out2) was not driven |
 
+The front panel of an IPX 1200 (photo with music playing, 2026-11-16) draws two scales on one grid of marks
+every 6 dB: the two input rows have their 0 dB mark at 80 % of the bar (-48 to +12 dB, as the IPD's panel),
+the OUT 1 / OUT 2 rows have theirs at the right end (-60 to 0 dB, 0 dB the top). The live values were not read
+at the time (the amp was busy with another controller).
+
 TEMPERATURE (env 22) is pushed as one i32; ALL_TEMPERATURES (env 28) returns an i32 array (sensor map not verified; the first value is the percent the vendor app shows: 61 on an IPX 1200 that showed 61%).
 
 ## Presets and control commands (main 3, sub = `u16 cmd, u16 0`)

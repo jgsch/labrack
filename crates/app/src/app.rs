@@ -8,7 +8,7 @@ use labrack_core::{AmpId, Hub, Lan, Network, Preset, Scan, Side, Store, Timing, 
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::amplifiers::{AmpView, Level};
-use crate::control::Bounds;
+use crate::control::{Bounds, MeterScale};
 use crate::eq::{self, Band, Filter};
 use crate::mixeq::{
     AmpCard, EqBounds, EqView, LIMITER_BOXES, LevelRow, LimiterStrip, MixRow, MixTab, MixeqView,
@@ -1079,6 +1079,11 @@ pub fn mixeq_view(
                 name: a.name.clone(),
                 level_db: meters.output.iter().copied().fold(-120.0, f64::max),
                 gr_db: gr.iter().copied().fold(0.0, f64::max),
+                meter: if a.protocol == labrack_core::Protocol::Ipd {
+                    MeterScale::IPD
+                } else {
+                    MeterScale::IPX
+                },
             }
         })
         .collect();

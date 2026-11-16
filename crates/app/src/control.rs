@@ -236,12 +236,43 @@ pub const GR_TOP: f64 = 12.0;
 /// The bottom of a limiter's gain reduction bar, in dB of reduction: the range the amps' limiters work in.
 pub const LIMITER_GR: f64 = 48.0;
 
-/// How much of a meter is lit, 0 to 1 (UX-8, UX-12). Silent and below the floor light nothing.
-pub fn meter_fill(level_db: f64) -> f64 {
-    if !level_db.is_finite() {
-        return 0.0;
+/// The scale of an output's level meter: the one the amp's own front panel draws (UX-12).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MeterScale {
+    /// The bottom and the top of the bar, in dB.
+    pub floor: f64,
+    pub top: f64,
+    /// Where the bar turns yellow, then red, in dB.
+    pub yellow: f64,
+    pub red: f64,
+}
+
+impl MeterScale {
+    /// An IPX output: -60 to 0 dB, 0 dB at the top, as on its front panel (IPX 1200, 2026-11-16).
+    pub const IPX: MeterScale = MeterScale { floor: METER_FLOOR, top: 0.0, yellow: -24.0, red: -9.0 };
+    /// An IPD output: -48 to +12 dB, 0 dB at 80 % of the bar, as on its front panel (IPD 2400, 2026-11-16).
+    pub const IPD: MeterScale = MeterScale { floor: -48.0, top: 12.0, yellow: -12.0, red: 0.0 };
+    /// An input or a source, on either family: the scale of the IPD's, which both front panels give the inputs.
+    pub const INPUT: MeterScale = MeterScale::IPD;
+
+    /// The output scale of an amp of this protocol, as the Amplifiers page names it (IPD, IPX).
+    pub fn for_protocol(protocol: &str) -> MeterScale {
+        if protocol == "IPD" { MeterScale::IPD } else { MeterScale::IPX }
     }
-    ((level_db - METER_FLOOR) / -METER_FLOOR).clamp(0.0, 1.0)
+
+    /// How much of the meter is lit, 0 to 1 (UX-8, UX-12). Silent and below the floor light nothing.
+    pub fn fill(self, level_db: f64) -> f64 {
+        if !level_db.is_finite() {
+            return 0.0;
+        }
+        ((level_db - self.floor) / (self.top - self.floor)).clamp(0.0, 1.0)
+    }
+}
+
+impl Default for MeterScale {
+    fn default() -> MeterScale {
+        MeterScale::IPX
+    }
 }
 
 /// How much of the peach gain reduction bar is lit, 0 to 1.
@@ -499,12 +530,15 @@ mod tests {
     // UX-8, UX-12: the meter is green, then yellow, then red; the gain reduction bar is separate
     #[test]
     fn the_meter_fills_from_the_floor() {
-        assert_eq!(meter_fill(-60.0), 0.0);
-        assert_eq!(meter_fill(-100.0), 0.0);
-        assert_eq!(meter_fill(-30.0), 0.5);
-        assert_eq!(meter_fill(0.0), 1.0);
-        assert_eq!(meter_fill(6.0), 1.0, "above 0 dB stays full");
-        assert_eq!(meter_fill(f64::NEG_INFINITY), 0.0);
+        let ipx = MeterScale::IPX;
+        assert_eq!(ipx.fill(-60.0), 0.0);
+        assert_eq!(ipx.fill(-100.0), 0.0);
+        assert_eq!(ipx.fill(-30.0), 0.5);
+        assert_eq!(ipx.fill(0.0), 1.0);
+        assert_eq!(ipx.fill(6.0), 1.0, "above 0 dB stays full");
+        assert_eq!(ipx.fill(f64::NEG_INFINITY), 0.0);
+        assert_eq!((ipx.fill(ipx.yellow), ipx.fill(ipx.red)), (0.6, 0.85));
+        assert_eq!(MeterScale::default(), ipx);
 
         assert_eq!(meter_colour(0.2), "#a6e3a1");
         assert_eq!(meter_colour(0.6), "#a6e3a1");
@@ -524,6 +558,23 @@ mod tests {
         assert_eq!(limiter_gr_fill(48.0), 1.0);
         assert_eq!(limiter_gr_fill(60.0), 1.0);
         assert_eq!(limiter_gr_fill(f64::NAN), 0.0);
+    }
+
+    // UX-12: an IPD's meter is its front panel's, -48 to +12 dB with 0 dB at 80 %: the same level fills it
+    // less than an IPX's -60 to 0 dB
+    #[test]
+    fn an_ipd_meter_has_the_scale_of_its_front_panel() {
+        let ipd = MeterScale::IPD;
+        assert_eq!(ipd.fill(-48.0), 0.0);
+        assert_eq!(ipd.fill(-18.0), 0.5);
+        assert_eq!(ipd.fill(0.0), 0.8);
+        assert_eq!(ipd.fill(12.0), 1.0);
+        assert_eq!(ipd.fill(20.0), 1.0);
+        assert_eq!(ipd.fill(f64::NEG_INFINITY), 0.0);
+        assert_eq!((ipd.fill(ipd.yellow), ipd.fill(ipd.red)), (0.6, 0.8), "yellow from -12 dB, red above 0");
+        assert!(ipd.fill(-34.0) < MeterScale::IPX.fill(-34.0));
+        assert_eq!(MeterScale::for_protocol("IPD"), ipd);
+        assert_eq!(MeterScale::for_protocol("IPX"), MeterScale::IPX);
     }
 
     // UX-19: the fader's scale is labelled every 12 dB, as on the mockup, whatever the model's range
